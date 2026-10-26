@@ -5,6 +5,7 @@ import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator
 import com.badlogic.gdx.utils.Disposable
+import com.badlogic.gdx.utils.LongMap
 
 /** The three bundled OFL families from the POC. */
 enum class Face(val file: String) {
@@ -23,13 +24,13 @@ enum class Face(val file: String) {
  */
 class Fonts(private var density: Float) : Disposable {
     private val generators = HashMap<Face, FreeTypeFontGenerator>()
-    private val cache = HashMap<Long, BitmapFont>()
+    private val cache = LongMap<BitmapFont>() // primitive keys: get() runs hundreds of times a frame
 
     /** A font of [face] at [sizeDp], rendered crisp for the current density. */
     fun get(face: Face, sizeDp: Float, chars: String = TEXT): BitmapFont {
         val px = Math.round(sizeDp * density).coerceAtLeast(6)
         val key = (face.ordinal.toLong() shl 40) or (px.toLong() shl 20) or (chars.hashCode().toLong() and 0xFFFFF)
-        return cache.getOrPut(key) { generate(face, px, chars) }
+        return cache.get(key) ?: generate(face, px, chars).also { cache.put(key, it) }
     }
 
     private fun generate(face: Face, px: Int, chars: String): BitmapFont {
@@ -54,12 +55,12 @@ class Fonts(private var density: Float) : Disposable {
     fun setDensity(d: Float) {
         if (d == density) return
         density = d
-        cache.values.forEach { it.dispose() }
+        cache.values().forEach { it.dispose() }
         cache.clear()
     }
 
     override fun dispose() {
-        cache.values.forEach { it.dispose() }
+        cache.values().forEach { it.dispose() }
         cache.clear()
         generators.values.forEach { it.dispose() }
         generators.clear()

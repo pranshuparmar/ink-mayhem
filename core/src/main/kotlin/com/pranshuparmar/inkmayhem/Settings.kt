@@ -2,39 +2,35 @@ package com.pranshuparmar.inkmayhem
 
 import com.badlogic.gdx.Preferences
 
-/** Persisted settings, calibration and best score (libGDX Preferences "ink-mayhem"). */
+/**
+ * Persisted settings, calibration and best score (libGDX Preferences "ink-mayhem"). Values are
+ * cached in memory because the game reads several of them every frame; writes go straight through.
+ */
 class Settings(private val prefs: Preferences) {
-    var sound: Boolean
-        get() = prefs.getBoolean("sound", true)
-        set(v) = put { putBoolean("sound", v) }
+    var sound: Boolean = prefs.getBoolean("sound", true)
+        set(v) { field = v; put { putBoolean("sound", v) } }
 
     /** "Colour ink by type": rope green, spring amber, beam red. */
-    var tint: Boolean
-        get() = prefs.getBoolean("tint", false)
-        set(v) = put { putBoolean("tint", v) }
+    var tint: Boolean = prefs.getBoolean("tint", false)
+        set(v) { field = v; put { putBoolean("tint", v) } }
 
     /** "Pen readout": the debug overlay. */
-    var penReadout: Boolean
-        get() = prefs.getBoolean("penReadout", false)
-        set(v) = put { putBoolean("penReadout", v) }
+    var penReadout: Boolean = prefs.getBoolean("penReadout", false)
+        set(v) { field = v; put { putBoolean("penReadout", v) } }
 
     /** Debug builds only: fingers and mouse draw at a fixed pressure. */
-    var allowFinger: Boolean
-        get() = prefs.getBoolean("allowFinger", false)
-        set(v) = put { putBoolean("allowFinger", v) }
+    var allowFinger: Boolean = prefs.getBoolean("allowFinger", false)
+        set(v) { field = v; put { putBoolean("allowFinger", v) } }
 
-    var haptics: Boolean
-        get() = prefs.getBoolean("haptics", true)
-        set(v) = put { putBoolean("haptics", v) }
+    var haptics: Boolean = prefs.getBoolean("haptics", true)
+        set(v) { field = v; put { putBoolean("haptics", v) } }
 
     /** Median raw signature pressure, or null if the player never calibrated or skipped. */
-    var calibration: Float?
-        get() = if (prefs.contains("cal")) prefs.getFloat("cal") else null
-        set(v) = put { if (v == null) remove("cal") else putFloat("cal", v) }
+    var calibration: Float? = if (prefs.contains("cal")) prefs.getFloat("cal") else null
+        set(v) { field = v; put { if (v == null) remove("cal") else putFloat("cal", v) } }
 
-    var best: Int
-        get() = prefs.getInteger("best", 0)
-        set(v) = put { putInteger("best", v) }
+    var best: Int = prefs.getInteger("best", 0)
+        set(v) { field = v; put { putInteger("best", v) } }
 
     private inline fun put(block: Preferences.() -> Unit) {
         prefs.block()

@@ -20,12 +20,10 @@ import kotlin.math.roundToInt
 class DebugOverlay {
     private val lines = ArrayList<String>()
     private var lastBuild = -1.0
-    private var extra: List<String> = emptyList()
-
-    fun update(now: Double, r: PenReadout, cal: Float, extraLines: List<String>) {
+    /** [extraLines] is only invoked when the text is rebuilt (5 times a second). */
+    fun update(now: Double, r: PenReadout, cal: Float, extraLines: () -> List<String>) {
         if (now - lastBuild < 0.2 && lines.isNotEmpty()) return
         lastBuild = now
-        extra = extraLines
         lines.clear()
         val tool = when (r.tool) {
             ToolType.STYLUS -> "stylus"
@@ -42,7 +40,7 @@ class DebugOverlay {
         lines += "hover     ${if (r.hovering) "yes" else "no "}  ${r.hoverEventsPerSec} ev/s  ${r.hoverSamplesPerSec} smp/s"
         lines += "moves     ${r.moveEventsPerSec} ev/s  ${r.moveSamplesPerSec} smp/s"
         lines += "calib     median ${f3(cal)}"
-        lines += extra
+        lines += extraLines()
     }
 
     /** Draws the panel; [right] and [top] are the anchor in dp. Call between shape/text passes via the lambdas. */

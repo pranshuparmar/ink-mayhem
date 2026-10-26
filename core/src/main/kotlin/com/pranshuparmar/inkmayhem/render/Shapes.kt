@@ -1,6 +1,8 @@
 package com.pranshuparmar.inkmayhem.render
 
+import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.math.Matrix4
 import com.badlogic.gdx.utils.Disposable
@@ -26,6 +28,9 @@ class Shapes : Disposable {
 
     fun begin(projection: Matrix4, pxPerUnit: Float) {
         this.pxPerUnit = pxPerUnit
+        // SpriteBatch.end() turns blending off, so every shape pass re-enables it.
+        Gdx.gl.glEnable(GL20.GL_BLEND)
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA)
         sr.projectionMatrix = projection
         sr.begin(ShapeRenderer.ShapeType.Filled)
     }
@@ -88,6 +93,37 @@ class Shapes : Disposable {
             val b = a + step
             sr.rectLine(x + cos(a) * r, y + sin(a) * r, x + cos(b) * r, y + sin(b) * r, width)
             a = b
+        }
+    }
+
+    /** Filled ellipse centred on (x, y). */
+    fun ellipse(x: Float, y: Float, rx: Float, ry: Float) {
+        val n = segs(max(rx, ry))
+        val step = (2 * PI / n).toFloat()
+        var px = x + rx
+        var py = y
+        for (i in 1..n) {
+            val a = i * step
+            val nx = x + cos(a) * rx
+            val ny = y + sin(a) * ry
+            sr.triangle(x, y, px, py, nx, ny)
+            px = nx; py = ny
+        }
+    }
+
+    /** Stroked arc of an ellipse-scaled circle: angle [a0]..[a1] rotated by [rot], scaled by sx, sy. */
+    fun arcScaled(x: Float, y: Float, r: Float, width: Float, a0: Float, a1: Float, rot: Float, sx: Float, sy: Float) {
+        val n = max(2, (segs(r) * 2 * abs(a1 - a0) / (2 * PI)).toInt())
+        val step = (a1 - a0) / n
+        var a = a0 + rot
+        var px = x + cos(a) * r * sx
+        var py = y + sin(a) * r * sy
+        for (i in 0 until n) {
+            a += step
+            val nx = x + cos(a) * r * sx
+            val ny = y + sin(a) * r * sy
+            sr.rectLine(px, py, nx, ny, width)
+            px = nx; py = ny
         }
     }
 

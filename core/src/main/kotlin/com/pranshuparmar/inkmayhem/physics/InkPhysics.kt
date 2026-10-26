@@ -1,6 +1,7 @@
 package com.pranshuparmar.inkmayhem.physics
 
 import com.badlogic.gdx.math.Vector2
+import com.pranshuparmar.inkmayhem.fastEach
 import com.badlogic.gdx.physics.box2d.Body
 import com.badlogic.gdx.physics.box2d.BodyDef
 import com.badlogic.gdx.physics.box2d.Box2D
@@ -64,7 +65,7 @@ class InkPhysics(
 
     fun distToRects(px: Float, py: Float): Float {
         var best = Float.POSITIVE_INFINITY
-        for (r in rects) {
+        rects.fastEach { r ->
             val dx = max(max(r.x - px, 0f), px - (r.x + r.w))
             val dy = max(max(r.y - py, 0f), py - (r.y + r.h))
             best = min(best, hypot(dx, dy))
@@ -224,10 +225,10 @@ class InkPhysics(
 
     /** Destroys stroke bodies that fell far below the page (InkCore's CULL_Y). */
     private fun cullFallen() {
-        for (s in strokes) {
-            for (g in s.groups) {
-                val b = g.body ?: continue
-                if (b.position.y > cullY) destroyGroup(g)
+        strokes.fastEach { s ->
+            s.groups.fastEach { g ->
+                val b = g.body
+                if (b != null && b.position.y > cullY) destroyGroup(g)
             }
         }
         strokes.removeAll { !it.hasBodies }
@@ -271,7 +272,8 @@ class InkPhysics(
         var i = strokes.size
         while (--i >= 0) {
             val s = strokes[i]
-            for (sg in s.segs) {
+            for (si in s.segs.indices) {
+                val sg = s.segs[si]
                 val g = sg.group
                 if (g.body == null) continue
                 val ax = g.worldX(sg.lax, sg.lay)

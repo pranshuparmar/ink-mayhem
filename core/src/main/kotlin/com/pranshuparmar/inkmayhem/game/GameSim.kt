@@ -1,6 +1,7 @@
 package com.pranshuparmar.inkmayhem.game
 
 import com.badlogic.gdx.math.Vector2
+import com.pranshuparmar.inkmayhem.fastEach
 import com.badlogic.gdx.physics.box2d.Body
 import com.badlogic.gdx.physics.box2d.Contact
 import com.badlogic.gdx.physics.box2d.ContactImpulse
@@ -82,6 +83,8 @@ class GameSim(
         private set
     /** Screen dp per metre; only the scratch volume uses it. */
     var scale = 34f
+    /** "Colour ink by type": snap particles take the ink's colour instead of plain ink. */
+    var tint = false
 
     var dist = 0f
         private set
@@ -330,7 +333,7 @@ class GameSim(
     /** Deepest ground level within ±10 m of [x]. */
     fun levelNear(x: Float): Float {
         var lv = Float.NEGATIVE_INFINITY
-        for (b in blocks) if (b.x < x + 10f && b.x + b.w > x - 10f) lv = max(lv, b.level)
+        blocks.fastEach { b -> if (b.x < x + 10f && b.x + b.w > x - 10f) lv = max(lv, b.level) }
         return if (lv == Float.NEGATIVE_INFINITY) level else lv
     }
 
@@ -512,7 +515,7 @@ class GameSim(
                     runner.stuck = 0f
                 }
             }
-            for (bo in boulders) {
+            boulders.fastEach { bo ->
                 val bw = bo.body.angularVelocity
                 val bt = runSpeed * 1.4f / BOULDER_R
                 bo.body.applyTorque((25f * (bt - bw)).coerceIn(-90f, 90f), true)
@@ -529,9 +532,9 @@ class GameSim(
                 events.sound(Sfx.BOING)
             }
             pendingBounce = false
-            for (bb in boulderBounce) {
-                val bo = boulders.firstOrNull { it.body === bb } ?: continue
-                if (!bo.bounceUntil.isNaN() && simT < bo.bounceUntil) continue
+            boulderBounce.fastEach { bb ->
+                val bo = boulders.firstOrNull { it.body === bb } ?: return@fastEach
+                if (!bo.bounceUntil.isNaN() && simT < bo.bounceUntil) return@fastEach
                 val v = bb.linearVelocity
                 bb.setLinearVelocity(max(v.x, runSpeed * 1.3f), -9.6f)
                 bo.bounceUntil = simT + 0.3f
@@ -551,7 +554,7 @@ class GameSim(
             while (ink.events.isNotEmpty()) {
                 val ev = ink.events.removeFirst()
                 snaps++
-                events.burst(ev.x, ev.y, 14, 3f, snapColor(ev.kind))
+                events.burst(ev.x, ev.y, 14, 3f, if (tint) snapColor(ev.kind) else Tok.INK)
                 events.sound(Sfx.SNAP)
                 events.haptic(Haptic.SNAP)
                 events.shake(0.12f)
@@ -569,7 +572,8 @@ class GameSim(
                 events.sound(Sfx.SPEED_UP)
             }
             // boulder triggers
-            for (b in blocks) {
+            for (bi in blocks.indices) {
+                val b = blocks[bi]
                 if (!b.boulderTrigger.isNaN() && !b.triggered && px > b.boulderTrigger) {
                     b.triggered = true
                     spawnBoulder(px - 10f, b.level - BOULDER_R - 0.05f, runSpeed * 1.3f)
@@ -578,12 +582,12 @@ class GameSim(
                     events.shake(0.15f)
                 }
             }
-            for (bo in boulders) {
+            boulders.fastEach { bo ->
                 val q = bo.body.position
                 if (hypot(q.x - px, q.y - py) < BOULDER_R + RUNNER_R + 0.04f) die("Flattened", DeathKind.BOULDER)
             }
-            for (dr in drops) {
-                if (dr.taken) continue
+            drops.fastEach { dr ->
+                if (dr.taken) return@fastEach
                 if (hypot(dr.x - px, dr.y - py) < 0.85f) {
                     dr.taken = true
                     inkLeft = min(INK_MAX, inkLeft + dr.value)
@@ -615,15 +619,16 @@ class GameSim(
         if (state != GameState.TITLE) generate()
 
         runner.squash = max(0f, runner.squash - dt * 4f)
-        for (dr in drops) dr.t += dt
+        drops.fastEach { it.t += dt }
     }
 
     private fun judgeHazards(px: Float, py: Float) {
-        for (hz in hazards) {
+        for (hi in hazards.indices) {
+            val hz = hazards[hi]
             if (hz.done || px < hz.x1 + 0.6f || state != GameState.RUN) continue
             hz.done = true
             var heavy = -1
-            for (s in ink.strokes) if (!s.x1.isNaN() && s.x1 >= hz.x0 - 3f && s.x0 <= hz.x1 + 1f) heavy = max(heavy, s.heaviest)
+            ink.strokes.fastEach { s -> if (!s.x1.isNaN() && s.x1 >= hz.x0 - 3f && s.x0 <= hz.x1 + 1f) heavy = max(heavy, s.heaviest) }
             val par = hz.par.weight
             val cx = (hz.x0 + hz.x1) / 2f
             val cy = py - 1.6f
@@ -647,10 +652,12 @@ class GameSim(
         }
     }
 
+    /** POC tok[ev.kind] || tok.ink: anchors have no colour token of their own. */
     private fun snapColor(kind: JointKind) = when (kind) {
         JointKind.ROPE -> Tok.ROPE
         JointKind.SPRING -> Tok.SPRING
-        JointKind.BEAM, JointKind.ANCHOR -> Tok.BEAM
+        JointKind.BEAM -> Tok.BEAM
+        JointKind.ANCHOR -> Tok.INK
     }
 
     private var cullT = 0f
