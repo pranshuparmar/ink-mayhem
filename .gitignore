@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+local.properties
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Android
+*.apk
+*.aab
+captures/
+
+# Signing material must never be committed
+*.jks
+*.keystore
+*.p12
+keystore.properties
+
+# Reference harness
+reference/harness/node_modules/
+reference/harness/inkcore.js
+reference/harness/package-lock.json
