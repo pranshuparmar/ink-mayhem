@@ -31,6 +31,8 @@ class WorldRenderer(
     private val dropPoly = FloatArray(DROP_SHAPE.size)
     private val markerLabel = StringBuilder()
 
+    private var alpha = 1f
+
     /** Hover nib position in screen dp (set by the input router). */
     var hoverOn = false
     var hoverX = 0f
@@ -42,15 +44,20 @@ class WorldRenderer(
     var viewY = 0f
         private set
 
+    /**
+     * [alpha] (0..1) is how far the frame sits between the previous and the latest sim tick: moving
+     * bodies and the camera are interpolated so 120 Hz displays scroll smoothly over a 60 Hz sim.
+     */
     fun render(
         sim: GameSim, fx: Fx, pal: Palette, tint: Boolean, uiCam: OrthographicCamera,
-        wDp: Float, hDp: Float, scale: Float, density: Float,
+        wDp: Float, hDp: Float, scale: Float, density: Float, alpha: Float,
     ) {
+        this.alpha = alpha
         val px = 1f / scale // one dp in metres
         val vw = wDp / scale
         val vh = hDp / scale
-        viewX = sim.cam.x + fx.shakeOffset()
-        viewY = sim.cam.y + fx.shakeOffset()
+        viewX = sim.camPrev.x + (sim.cam.x - sim.camPrev.x) * alpha + fx.shakeOffset()
+        viewY = sim.camPrev.y + (sim.cam.y - sim.camPrev.y) * alpha + fx.shakeOffset()
         worldCam.setToOrtho(true, vw, vh)
         worldCam.position.set(viewX + vw / 2f, viewY + vh / 2f, 0f)
         worldCam.update()
@@ -227,10 +234,10 @@ class WorldRenderer(
                 val sg = s.segs[gi]
                 val g = sg.group
                 if (g.body == null) continue
-                val ax = g.worldX(sg.lax, sg.lay)
-                val ay = g.worldY(sg.lax, sg.lay)
-                val bx = g.worldX(sg.lbx, sg.lby)
-                val by = g.worldY(sg.lbx, sg.lby)
+                val ax = g.lerpX(sg.lax, sg.lay, alpha)
+                val ay = g.lerpY(sg.lax, sg.lay, alpha)
+                val bx = g.lerpX(sg.lbx, sg.lby, alpha)
+                val by = g.lerpY(sg.lbx, sg.lby, alpha)
                 if (max(ax, bx) < vx0 || min(ax, bx) > vx1) continue
                 shapes.color(inkColor(pal, sg.kind, tint)).capsule(ax, ay, bx, by, sg.t)
                 if (sg.kind == Ink.SPRING && !tint) {
@@ -265,10 +272,10 @@ class WorldRenderer(
     private fun drawBoulders(sim: GameSim, pal: Palette, px: Float) {
         val r = GameSim.BOULDER_R
         for (bi in sim.boulders.indices) {
-            val b = sim.boulders[bi].body
-            val cx = b.position.x
-            val cy = b.position.y
-            val a = b.angle
+            val pose = sim.boulders[bi].prev
+            val cx = pose.lerpX(alpha)
+            val cy = pose.lerpY(alpha)
+            val a = pose.lerpA(alpha)
             val ca = cos(a)
             val sa = sin(a)
             shapes.color(pal[Tok.ROCK]).circle(cx, cy, r)
@@ -312,15 +319,15 @@ class WorldRenderer(
     }
 
     private fun drawRunner(sim: GameSim, pal: Palette, px: Float) {
-        val b = sim.runner.body
-        val cx = b.position.x
-        val cy = b.position.y
+        val pose = sim.runner.prev
+        val cx = pose.lerpX(alpha)
+        val cy = pose.lerpY(alpha)
         val sq = sim.runner.squash
         val sx = 1f + sq * 0.2f
         val sy = 1f - sq * 0.2f
         val r = GameSim.RUNNER_R
         shapes.color(pal[Tok.INK]).ellipse(cx, cy, r * sx, r * sy)
-        shapes.color(pal[Tok.PAPER], 0.35f).arcScaled(cx, cy, r * 0.62f, 2f * px, 0.3f, 1.4f, b.angle, sx, sy)
+        shapes.color(pal[Tok.PAPER], 0.35f).arcScaled(cx, cy, r * 0.62f, 2f * px, 0.3f, 1.4f, pose.lerpA(alpha), sx, sy)
         val eye = if (sim.state == GameState.DEAD) 0.05f else r * 0.14f
         shapes.color(pal[Tok.PAPER])
         shapes.ellipse(cx + r * 0.2f * sx, cy - r * 0.25f * sy, eye * sx, eye * sy)

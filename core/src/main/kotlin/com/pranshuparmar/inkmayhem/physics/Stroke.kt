@@ -43,6 +43,33 @@ class InkGroup(val kind: Ink) {
     var body: Body? = null
     val segs = ArrayList<Segment>(4)
 
+    /** Transform before the latest tick, for render interpolation (NaN until the first snapshot). */
+    var prevX = Float.NaN
+    var prevY = 0f
+    var prevA = 0f
+
+    fun snapshot() {
+        val b = body ?: return
+        prevX = b.position.x
+        prevY = b.position.y
+        prevA = b.angle
+    }
+
+    /** Render-time position of a body-local point, [alpha] of the way from the previous tick. */
+    fun lerpX(lx: Float, ly: Float, alpha: Float): Float {
+        val b = body ?: return Float.NaN
+        if (prevX.isNaN()) return worldX(lx, ly)
+        val a = prevA + (b.angle - prevA) * alpha
+        return prevX + (b.position.x - prevX) * alpha + cos(a) * lx - sin(a) * ly
+    }
+
+    fun lerpY(lx: Float, ly: Float, alpha: Float): Float {
+        val b = body ?: return Float.NaN
+        if (prevX.isNaN()) return worldY(lx, ly)
+        val a = prevA + (b.angle - prevA) * alpha
+        return prevY + (b.position.y - prevY) * alpha + sin(a) * lx + cos(a) * ly
+    }
+
     /** World transform of a body-local point. */
     fun worldX(lx: Float, ly: Float): Float {
         val b = body ?: return Float.NaN

@@ -25,7 +25,7 @@ import com.pranshuparmar.inkmayhem.input.ToolType
  *
  * Options: --landscape, --size WxH (dp), --density D, --dark, --reduced-motion,
  *          --autoplay (the correct-ink bot plays), --wrong-ink TUNNEL=SPRING, --seed N, --settings,
- *          --calibration, --skip-calibration,
+ *          --calibration, --skip-calibration, --rotate-after seconds,
  *          --screenshot out.png --after seconds
  */
 fun main(args: Array<String>) {
@@ -72,6 +72,8 @@ private class Options(args: Array<String>) {
         val (h, i) = it.split('=')
         HazardType.valueOf(h) to Ink.valueOf(i)
     } ?: emptyMap()
+    /** Swaps width and height after this many seconds, like rotating the phone mid-run. */
+    val rotateAfter = value("--rotate-after")?.toFloat()
     val screenshot: String? = value("--screenshot")
     val after = value("--after")?.toFloat() ?: 2f
 }
@@ -139,10 +141,17 @@ private class DesktopHost(
         platform.penQueue.offer(x.toFloat(), y.toFloat(), p, 0f, 0f, buttons, phase, tool, 0, System.nanoTime())
     }
 
+    private var rotated = false
+
     override fun render() {
         game.render()
-        val shot = opts.screenshot ?: return
         elapsed += Gdx.graphics.deltaTime
+        val rotateAfter = opts.rotateAfter
+        if (rotateAfter != null && !rotated && elapsed >= rotateAfter) {
+            rotated = true
+            Gdx.graphics.setWindowedMode(Gdx.graphics.width.let { Gdx.graphics.height }, Gdx.graphics.width)
+        }
+        val shot = opts.screenshot ?: return
         if (elapsed >= opts.after) {
             val w = Gdx.graphics.backBufferWidth
             val h = Gdx.graphics.backBufferHeight

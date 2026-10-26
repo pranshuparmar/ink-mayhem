@@ -76,6 +76,8 @@ class GameSim(
 
     /** Camera top-left in metres. */
     val cam = Vector2()
+    /** Camera before the latest tick, for render interpolation. */
+    val camPrev = Vector2()
     /** Viewport size in metres (W / SCALE, H / SCALE). */
     var vw = vwMetres
         private set
@@ -167,6 +169,15 @@ class GameSim(
         runner = Runner(body)
         runner.bestX = x
         cam.set(x - vw * 0.28f, level - vh * 0.62f)
+        camPrev.set(cam)
+    }
+
+    /** Records every moving thing's transform before a tick so frames between ticks can interpolate. */
+    private fun snapshot() {
+        camPrev.set(cam)
+        runner.prev.snapshot()
+        boulders.fastEach { it.prev.snapshot() }
+        ink.strokes.fastEach { s -> s.groups.fastEach { it.snapshot() } }
     }
 
     /**
@@ -491,6 +502,7 @@ class GameSim(
 
     /** One fixed 1/60 s tick (POC tick(dt)). */
     fun tick(dt: Float) {
+        snapshot()
         val target = if (state == GameState.DEAD) 0.35f else 1f
         timeScale += (target - timeScale) * min(1f, dt * 10f)
         val sdt = if (state == GameState.TITLE) 0f else dt * timeScale

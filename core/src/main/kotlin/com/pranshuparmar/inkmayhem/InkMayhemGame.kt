@@ -299,7 +299,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         Gdx.gl.glEnable(GL20.GL_BLEND)
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA)
 
-        world.render(sim, fx, pal, settings.tint, uiCam, wDp, hDp, scale, density)
+        world.render(sim, fx, pal, settings.tint, uiCam, wDp, hDp, scale, density, (acc / STEP).coerceIn(0f, 1f))
 
         val safeL = Gdx.graphics.safeInsetLeft / density
         val safeT = Gdx.graphics.safeInsetTop / density

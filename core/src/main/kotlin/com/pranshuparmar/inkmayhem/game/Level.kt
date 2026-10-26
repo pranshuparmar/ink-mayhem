@@ -25,9 +25,28 @@ class Note(val x: Float, val y: Float, val text: String)
 class Boulder(val body: Body) {
     /** simT before which springs can't launch it again (NaN = never launched). */
     var bounceUntil = Float.NaN
+    val prev = Pose(body)
+}
+
+/** A body's transform before the latest tick, for render interpolation. */
+class Pose(private val body: Body) {
+    var x = body.position.x
+    var y = body.position.y
+    var a = body.angle
+
+    fun snapshot() {
+        x = body.position.x
+        y = body.position.y
+        a = body.angle
+    }
+
+    fun lerpX(alpha: Float) = x + (body.position.x - x) * alpha
+    fun lerpY(alpha: Float) = y + (body.position.y - y) * alpha
+    fun lerpA(alpha: Float) = a + (body.angle - a) * alpha
 }
 
 class Runner(val body: Body) {
+    val prev = Pose(body)
     var stuck = 0f
     var bounceCd = 0f
     var bestX = 0f
