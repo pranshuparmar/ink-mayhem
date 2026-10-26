@@ -136,6 +136,21 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         sim.setViewport(wDp / scale, hDp / scale)
         if (!sized && sim.state == GameState.TITLE) sim.newRun() // frame the start with the real viewport
         sized = true
+        warmFonts()
+    }
+
+    /** FreeType rasterizes on first use; do it up front so the first pop or death card doesn't hitch. */
+    private fun warmFonts() {
+        for (size in floatArrayOf(10f, 11f, 12f, 16f)) {
+            fonts.get(Face.MONO, size); fonts.get(Face.MONO_MEDIUM, size); fonts.get(Face.MONO_BOLD, size)
+        }
+        for (size in floatArrayOf(12.5f, 14f, 14.5f, 15f)) { fonts.get(Face.UI, size); fonts.get(Face.UI_BOLD, size) }
+        for (size in floatArrayOf(20f, 32f, 40f)) fonts.get(Face.HAND_BOLD, size)
+        fonts.get(Face.HAND, 20f)
+        for (size in floatArrayOf(30f, 40f, 64f)) fonts.get(Face.HAND_BOLD, size, Fonts.DIGITS)
+        fonts.get(Face.HAND, max(15f, scale * 0.6f))
+        fonts.get(Face.HAND_BOLD, max(18f, scale * 0.75f))
+        fonts.get(Face.MONO_BOLD, max(14f, scale * 0.5f))
     }
 
     override fun pause() {

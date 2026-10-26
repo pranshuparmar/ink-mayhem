@@ -21,19 +21,18 @@ import kotlin.math.tan
 class AndroidPenInput(private val queue: PenQueue, private val view: View) {
 
     init {
-        // Ask for every pointer sample as it arrives instead of once per vsync (API 30+). On older
-        // releases this is requested per gesture in onTouch.
+        // Ask for every pointer sample (touch and hover) as it arrives instead of once per vsync.
+        // The request travels up the view parents to the window, so wait until the view is attached.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            view.requestUnbufferedDispatch(InputDevice.SOURCE_CLASS_POINTER)
+            view.post { view.requestUnbufferedDispatch(InputDevice.SOURCE_CLASS_POINTER) }
         }
     }
 
     /** Touch stream: pen, eraser end and fingers. Always consumed so libGDX never sees raw touches. */
     fun onTouch(ev: MotionEvent) {
         val action = ev.actionMasked
-        if (action == MotionEvent.ACTION_DOWN && Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            view.requestUnbufferedDispatch(ev)
-        }
+        // Per-gesture request, valid during dispatch on every API level.
+        if (action == MotionEvent.ACTION_DOWN) view.requestUnbufferedDispatch(ev)
         when (action) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> emitPointer(ev, ev.actionIndex, PenPhase.DOWN)
             MotionEvent.ACTION_MOVE -> emitMoves(ev, PenPhase.MOVE)

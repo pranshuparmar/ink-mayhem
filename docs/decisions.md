@@ -70,3 +70,53 @@ callbacks.
 Tags `vMAJOR.MINOR.PATCH[-pre]` give `versionName = MAJOR.MINOR.PATCH[-pre]` and
 `versionCode = MAJOR × 1 000 000 + MINOR × 1 000 + PATCH`. Debug builds from CI use the CI run
 number.
+
+## 8. Test scenarios are validated on the POC's own engine first
+
+The brief lists behaviours, not setups, and the setup decides the outcome (a crate set down gently
+on a rope behaves very differently from one dropped onto it). `reference/harness` runs the POC's
+`InkCore`, extracted verbatim from the HTML, on planck.js 1.5.0 under Node, and each test scenario
+was chosen there first. The Kotlin tests then check the same scenarios on libGDX Box2D. The
+runner and boulder tests drive the real `GameSim.tick()` and pen-input path through a sandbox mode
+(hand-built terrain) rather than a copy of the logic.
+
+## 9. Sound effects are generated offline and committed
+
+`SfxSynth` re-creates the POC's WebAudio recipes (exponential frequency and gain ramps,
+oscillator shapes, biquad filters) as 16-bit WAVs; `./gradlew :core:generateSfx` writes them to
+the shared assets and `AssetsTest` fails if the committed files drift from the generator. The
+alternative, synthesizing at startup, would need a writable file per sound for `Sound` and adds
+startup work for no gain. The scratch is a one-second band-passed noise loop whose volume and
+pitch (0.6–1.47× of 3 kHz) glide like the POC's `setTargetAtTime`. Combo chimes are one file per
+level rather than pitch-shifted, so their length matches the POC.
+
+## 10. Render interpolation over the fixed 60 Hz step
+
+The simulation keeps the POC's fixed 1/60 s tick (max four per frame, dt clamped at 0.05 s), so
+gameplay is identical at any refresh rate. Each tick first snapshots the camera and every body;
+frames between ticks draw at `alpha = accumulator / step`. On a 120 Hz panel this turns
+"each tick shown twice, with occasional judder" into smooth motion. Pen samples map to the world
+through the same interpolated camera the player sees.
+
+## 11. One immediate-mode UI instead of scene2d
+
+The HUD, cards, settings sheet and calibration pad are drawn directly with ShapeRenderer and
+FreeType bitmap fonts, laid out from the POC's CSS numbers in dp. All input already arrives
+through the pen router, which hit-tests these few widgets itself (a tap activates when it starts
+and ends on the same widget, like a DOM click). Scene2d would need a skin and a second input path
+for no gain at this size.
+
+## 12. Small behaviour choices
+
+- **Settings persist.** The POC persisted only Sound; every setting is now in Preferences, as the
+  brief asks.
+- **Haptics toggle** added to the settings sheet (the brief asks for haptics "with a toggle").
+- **A second pointer can't hijack a stroke.** In the POC a second pointer-down mid-stroke
+  silently replaced the stroke. Now pen-downs from other pointers are ignored until the stroke
+  ends. This only matters with "Allow finger and mouse" on.
+- **The runner is never culled.** InkCore destroys any dynamic body below y = 400, which in the POC
+  could hit the runner after a long fall on the death screen. libGDX recycles destroyed bodies, so
+  only ink is culled that way.
+- **No allocation per frame.** Hot loops are index-based (`fastEach`), fonts are cached by a
+  primitive key, particles and pops are pooled and HUD strings are rebuilt only when their
+  values change, so drawing doesn't feed the garbage collector.

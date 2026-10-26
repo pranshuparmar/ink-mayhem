@@ -25,7 +25,7 @@ import com.pranshuparmar.inkmayhem.input.ToolType
  *
  * Options: --landscape, --size WxH (dp), --density D, --dark, --reduced-motion,
  *          --autoplay (the correct-ink bot plays), --wrong-ink TUNNEL=SPRING, --seed N, --settings,
- *          --calibration, --skip-calibration, --rotate-after seconds,
+ *          --calibration, --skip-calibration, --rotate-after seconds, --demo-draw,
  *          --screenshot out.png --after seconds
  */
 fun main(args: Array<String>) {
@@ -72,6 +72,8 @@ private class Options(args: Array<String>) {
         val (h, i) = it.split('=')
         HazardType.valueOf(h) to Ink.valueOf(i)
     } ?: emptyMap()
+    /** Starts a run, hovers, then slowly draws a stroke with rising pressure (to see the gauge). */
+    val demoDraw = "--demo-draw" in list
     /** Swaps width and height after this many seconds, like rotating the phone mid-run. */
     val rotateAfter = value("--rotate-after")?.toFloat()
     val screenshot: String? = value("--screenshot")
@@ -142,8 +144,41 @@ private class DesktopHost(
     }
 
     private var rotated = false
+    private var demoStep = 0
+
+    /** --demo-draw: pen down to start, hover from 1 s, then a 1.5 s stroke from light to hard. */
+    private fun demoDraw() {
+        val w = Gdx.graphics.width.toFloat()
+        val h = Gdx.graphics.height.toFloat()
+        val q = platform.penQueue
+        val now = System.nanoTime()
+        if (demoStep == 0) {
+            q.offer(w / 2, h / 2, 0.3f, 0f, 0f, 0, PenPhase.DOWN, ToolType.STYLUS, 3, now)
+            q.offer(w / 2, h / 2, 0.3f, 0f, 0f, 0, PenPhase.UP, ToolType.STYLUS, 3, now)
+            demoStep = 1
+        }
+        val t = elapsed
+        val x0 = w * 0.42f
+        val y0 = h * 0.5f
+        when {
+            t in 1f..1.6f -> q.offer(x0, y0, 0f, 0f, 0f, 0, PenPhase.HOVER, ToolType.STYLUS, 3, now)
+            t > 1.6f && demoStep == 1 -> {
+                q.offer(x0, y0, 0.1f, 0f, 0f, 0, PenPhase.DOWN, ToolType.STYLUS, 4, now)
+                demoStep = 2
+            }
+            demoStep == 2 && t < 3.1f -> {
+                val u = (t - 1.6f) / 1.5f
+                q.offer(x0 + u * w * 0.5f, y0 - u * h * 0.06f, 0.1f + 0.5f * u, 0f, 0f, 0, PenPhase.MOVE, ToolType.STYLUS, 4, now)
+            }
+            demoStep == 2 -> {
+                q.offer(x0 + w * 0.5f, y0 - h * 0.06f, 0.6f, 0f, 0f, 0, PenPhase.UP, ToolType.STYLUS, 4, now)
+                demoStep = 3
+            }
+        }
+    }
 
     override fun render() {
+        if (opts.demoDraw) demoDraw()
         game.render()
         elapsed += Gdx.graphics.deltaTime
         val rotateAfter = opts.rotateAfter
