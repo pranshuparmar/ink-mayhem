@@ -2,6 +2,8 @@ package com.pranshuparmar.inkmayhem
 
 import com.badlogic.gdx.ApplicationAdapter
 import com.badlogic.gdx.Gdx
+import com.badlogic.gdx.Input
+import com.badlogic.gdx.InputAdapter
 import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
@@ -116,6 +118,19 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         )
         if (dev.openCalibration || (settings.calibration == null && !dev.skipCalibration)) calibration.show()
         if (dev.openSettings) sheet.show()
+        // Android back closes an overlay first, then leaves the game as usual.
+        Gdx.input.setCatchKey(Input.Keys.BACK, true)
+        Gdx.input.inputProcessor = object : InputAdapter() {
+            override fun keyDown(keycode: Int): Boolean {
+                if (keycode != Input.Keys.BACK) return false
+                when {
+                    calibration.open -> calibration.skip()
+                    sheet.open -> sheet.hide()
+                    else -> Gdx.app.exit()
+                }
+                return true
+            }
+        }
         lastNanos = System.nanoTime()
     }
 

@@ -92,6 +92,12 @@ class CalibrationOverlay(
 
     private val canFinish: Boolean get() = sampleCount >= Pressure.CAL_MIN_SAMPLES
 
+    /** Same as the Skip button (Android back). */
+    fun skip() {
+        open = false
+        onSkip()
+    }
+
     /** Consumes every sample while open. [allowed] = pen, or finger with the debug setting. */
     fun onSample(s: PenSample, x: Float, y: Float, allowed: Boolean) {
         when (s.phase) {
@@ -131,10 +137,7 @@ class CalibrationOverlay(
                 }
                 when (press.up(s.pointerId, targetAt(x, y))) {
                     clear -> clearPad()
-                    skip -> {
-                        open = false
-                        onSkip()
-                    }
+                    skip -> skip()
                     done -> if (canFinish) {
                         open = false
                         onDone(Pressure.calibrate(samples, sampleCount))

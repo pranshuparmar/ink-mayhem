@@ -67,7 +67,7 @@ class AndroidPenInput(private val queue: PenQueue, private val view: View) {
                 tilt(ev.getHistoricalAxisValue(MotionEvent.AXIS_TILT, i, h), ev.getHistoricalAxisValue(MotionEvent.AXIS_ORIENTATION, i, h))
                 queue.offer(
                     ev.getHistoricalX(i, h), ev.getHistoricalY(i, h), ev.getHistoricalPressure(i, h), tiltX, tiltY,
-                    buttons, phase, tool, id, ev.getHistoricalEventTime(h) * 1_000_000L, isHistorical = true,
+                    buttons, phase, tool, id, ev.historicalTimeNanosCompat(h), isHistorical = true,
                 )
             }
             tilt(ev.getAxisValue(MotionEvent.AXIS_TILT, i), ev.getAxisValue(MotionEvent.AXIS_ORIENTATION, i))
@@ -96,8 +96,12 @@ class AndroidPenInput(private val queue: PenQueue, private val view: View) {
         tiltY = Math.toDegrees(atan(-t * cos(orientation.toDouble()))).toFloat()
     }
 
+    // Same precision for head and historical samples, so sample times never step backwards.
     private fun MotionEvent.eventTimeNanosCompat(): Long =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) eventTimeNanos else eventTime * 1_000_000L
+
+    private fun MotionEvent.historicalTimeNanosCompat(h: Int): Long =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) getHistoricalEventTimeNanos(h) else getHistoricalEventTime(h) * 1_000_000L
 
     private fun toolOf(type: Int): ToolType = when (type) {
         MotionEvent.TOOL_TYPE_STYLUS -> ToolType.STYLUS
