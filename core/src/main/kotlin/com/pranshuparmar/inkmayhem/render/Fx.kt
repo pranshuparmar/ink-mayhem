@@ -37,7 +37,8 @@ class Fx {
 
     fun burst(x: Float, y: Float, n: Int, spread: Float, color: Tok, up: Float = Float.NaN) {
         val count = if (reducedMotion) min(n, 4) else n
-        val kick = if (up.isNaN()) spread * 0.5f else up
+        // POC `up || spread * 0.5`: 0 is falsy in JS, so an explicit 0 still gets the default kick.
+        val kick = if (up.isNaN() || up == 0f) spread * 0.5f else up
         repeat(count) {
             val a = rnd.nextFloat() * 2f * PI.toFloat()
             val s = spread * (0.4f + rnd.nextFloat())

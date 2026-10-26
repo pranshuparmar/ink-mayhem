@@ -24,10 +24,11 @@ class PressureGauge {
 
     private fun bandTop(bottom: Float, from: Float, to: Float) = bottom - H * to to bottom - H * from
 
-    fun drawShapes(shapes: Shapes, pal: Palette, left: Float, top: Float, live: Float) {
+    /** [live] is the marker position; a band lights up only while [drawing]. */
+    fun drawShapes(shapes: Shapes, pal: Palette, left: Float, top: Float, live: Float, drawing: Boolean) {
         if (!visible) return
         val bottom = top + H
-        val k = if (live >= 0f) Ink.of(live) else null
+        val k = if (drawing) Ink.of(live) else null
         for (ink in Ink.entries) {
             val (from, to) = range(ink)
             val (y0, y1) = bandTop(bottom, from, to)
@@ -41,22 +42,21 @@ class PressureGauge {
                 Ink.BEAM -> { shapes.pie(left + W / 2, y0 + W / 2, W / 2, 180f, 180f); shapes.rect(left, y0 + W / 2, W, y1 - y0 - W / 2) }
             }
         }
-        if (live >= 0f) {
-            val y = bottom - H * live.coerceIn(0f, 1f)
-            shapes.color(pal[Tok.INK], opacity).roundRect(left - 4f, y - 1.5f, 20f, 3f, 1.5f)
-        }
+        val y = bottom - H * live.coerceIn(0f, 1f)
+        shapes.color(pal[Tok.INK], opacity).roundRect(left - 4f, y - 1.5f, 20f, 3f, 1.5f)
     }
 
-    fun drawText(text: Text, fonts: Fonts, pal: Palette, left: Float, top: Float, live: Float) {
+    fun drawText(text: Text, fonts: Fonts, pal: Palette, left: Float, top: Float, live: Float, drawing: Boolean) {
         if (!visible) return
         val font = fonts.get(Face.MONO_MEDIUM, 10f)
         val bottom = top + H
-        val k = if (live >= 0f) Ink.of(live) else null
+        val k = if (drawing) Ink.of(live) else null
         for (ink in Ink.entries) {
             val (from, to) = range(ink)
             val (y0, y1) = bandTop(bottom, from, to)
+            // the label is the band's ::after, so it shares the band's 0.5 opacity when inactive
             val c = if (ink == k) pal[Tok.UI_FG] else pal[Tok.MUTED]
-            text.line(font, LABELS[ink.ordinal], left + 18f, y0, y1 - y0, c, opacity)
+            text.line(font, LABELS[ink.ordinal], left + 18f, y0, y1 - y0, c, opacity * if (ink == k) 1f else 0.5f)
         }
     }
 

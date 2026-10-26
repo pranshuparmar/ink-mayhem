@@ -45,7 +45,7 @@ class Hud {
             lastScore = sc; lastDist = d; lastBest = shownBest
         }
         if (sim.combo != lastCombo) {
-            if (sim.combo > lastCombo && lastCombo != 0 && !reducedMotion) bump = BUMP_S
+            if (sim.combo > lastCombo && !reducedMotion) bump = BUMP_S
             comboText = "×${sim.combo}"
             lastCombo = sim.combo
         }

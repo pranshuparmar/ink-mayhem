@@ -207,7 +207,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         if (dev.autoplay) autoplay(now)
 
         readout.update(now)
-        toast.update(now)
+        toast.update(now, reduced)
         hud.update(dt, sim, settings.best, reduced)
         gauge.update(dt, sim.drawing != null, reduced)
         audio.update(dt)
@@ -234,8 +234,8 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
             sheet.onSample(s, x, y)
             return
         }
-        val wx = world.viewX + x / scale
-        val wy = world.viewY + y / scale
+        val wx = world.camX + x / scale
+        val wy = world.camY + y / scale
         val time = s.timeNanos / 1e9
         when (s.phase) {
             PenPhase.DOWN -> {
@@ -247,7 +247,8 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
                     toast.show(FINGER_TOAST, now)
                     return
                 }
-                world.hoverOn = false
+                // POC: the hover nib is only cleared by pen-downs during a run (not the start/restart tap)
+                if (sim.state == GameState.RUN) world.hoverOn = false
                 val erase = s.toolType == ToolType.ERASER || (s.buttons and (PenButtons.SIDE or PenButtons.SECONDARY)) != 0
                 sim.penDown(s.pointerId, wx, wy, n, erase, time)
             }
@@ -318,6 +319,8 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         override fun died(death: Death) {
             if (death.isBest) settings.best = death.best
         }
+
+        override fun runReset() = fx.clear()
     }
 
     // ------------------------------------------------------------------------------------ drawing
@@ -341,7 +344,8 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         hud.layout(text, fonts, wDp, safeL, safeT, safeR)
         val ink = max(0f, sim.inkLeft - (sim.drawing?.cost ?: 0f))
         val drawing = sim.drawing
-        val live = if (drawing == null || drawing.smoothed.isNaN()) -1f else drawing.smoothed
+        // POC: live = drawing ? (drawing.ps ?? 0) : 0, so the marker drops to the bottom as the gauge fades
+        val live = if (drawing == null || drawing.smoothed.isNaN()) 0f else drawing.smoothed
         val gaugeLeft = safeL + 10f
         val gaugeTop = hDp * 0.3f
         val showReadout = settings.penReadout
@@ -351,21 +355,21 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         val boxH = if (showReadout) overlay.layoutHeight(monoFont) else 0f
         val boxRight = wDp - max(12f, safeR)
         val boxTop = safeT + 64f
-        val tv = toast.visibility(now, reduced)
+        val tv = toast.visibility
         val toastFont = fonts.get(Face.UI_BOLD, 14f)
         val toastW = min(text.width(toastFont, toast.message) + 28f, wDp * 0.92f)
         val toastTop = safeT + 70f - (if (reduced) 0f else 8f * (1f - tv))
 
         shapes.begin(uiCam.combined, density)
         hud.drawShapes(shapes, pal, wDp, ink, sim.combo, hudPress.isPressed(hud.settingsButton))
-        gauge.drawShapes(shapes, pal, gaugeLeft, gaugeTop, live)
+        gauge.drawShapes(shapes, pal, gaugeLeft, gaugeTop, live, drawing != null)
         if (showReadout) overlay.drawBox(shapes, pal, boxRight, boxTop, boxW, boxH)
         if (tv > 0f) shapes.color(pal[Tok.INK], tv).roundRect(wDp / 2f - toastW / 2f, toastTop, toastW, 34f, 17f)
         shapes.end()
         batch.projectionMatrix = uiCam.combined
         batch.begin()
         hud.drawText(text, fonts, pal, wDp, sim.combo)
-        gauge.drawText(text, fonts, pal, gaugeLeft, gaugeTop, live)
+        gauge.drawText(text, fonts, pal, gaugeLeft, gaugeTop, live, drawing != null)
         if (showReadout) overlay.drawText(text, monoFont, pal, boxRight - boxW, boxTop)
         if (tv > 0f) text.line(toastFont, toast.message, wDp / 2f, toastTop, 34f, pal[Tok.PAPER], tv, Align.center)
         batch.end()

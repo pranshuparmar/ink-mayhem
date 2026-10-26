@@ -34,6 +34,9 @@ interface GameEvents {
 
     fun died(death: Death) {}
 
+    /** A new run is being built (POC newRun clears particles and pops). */
+    fun runReset() {}
+
     object None : GameEvents
 }
 

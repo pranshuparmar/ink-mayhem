@@ -53,7 +53,8 @@ class SettingsSheet(
         val rowH = 10f + 19f + 16f + 10f
         val n = options.size
         val h = 20f + n * rowH + (n - 1) * 4f + 4f + 10f + 42f + f.safeB + 18f
-        card.set((f.wDp - f.cardW) / 2f + (f.padL - f.padR) / 2f, f.hDp - h, f.cardW, h)
+        val w = minOf(f.wDp, 420f) // .sheet has no padding: edge to edge on phones
+        card.set((f.wDp - w) / 2f, f.hDp - h, w, h)
         var y = card.y + 20f
         for (o in options) {
             o.box.set(card.x + 20f, y, card.w - 40f, rowH)
@@ -99,7 +100,7 @@ class SettingsSheet(
     }
 
     fun drawShapes(shapes: Shapes, pal: Palette, f: Frame) {
-        shapes.color(pal[Tok.PAPER], 0.45f).rect(0f, 0f, f.wDp, f.hDp)
+        shapes.color(pal[Tok.PAPER], 0.55f).rect(0f, 0f, f.wDp, f.hDp)
         Widgets.card(shapes, pal, card, topOnly = true)
         for (o in options) {
             shapes.color(pal[Tok.LINE]).rect(o.box.x, o.box.bottom - 1f, o.box.w, 1f)

@@ -120,3 +120,21 @@ for no gain at this size.
 - **No allocation per frame.** Hot loops are index-based (`fastEach`), fonts are cached by a
   primitive key, particles and pops are pooled and HUD strings are rebuilt only when their
   values change, so drawing doesn't feed the garbage collector.
+- **"Allow finger and mouse" is debug-only.** The POC offered it in every build; the brief asks
+  for it in debug builds only, so release builds hide the row and ignore the stored setting.
+- **The scratch volume uses real sample times.** The POC timed the scratch with
+  `performance.now()` at handler time, so every coalesced pointer event after the first in a batch
+  (and the second point of every stroke) looked 1 ms apart and hit the volume cap. The port uses
+  each sample's own timestamp, so the scratch follows actual pen speed as the brief describes.
+
+## 13. Audit against the POC
+
+After the port was complete, an independent pass compared the POC and the Kotlin line by line.
+It found the gameplay logic faithful (constants, tick order, generation RNG order, scoring,
+judging, ink economy, deaths, contacts, joint breaking, culling) and a handful of presentation
+differences, all fixed to match the POC: pen input and the ruled lines use the unshaken camera;
+spring-bounce particles keep their upward puff (JS `0 || x`); particles and pops clear on a new
+run; a replacing toast doesn't blink; a one-point live stroke draws nothing; the settings sheet
+spans the width with a 55 % backdrop; gauge labels dim with their band and the marker drops as the
+gauge fades; pops draw under the boulder warning and the hover nib; and the vanishingly rare
+hazard-pool rounding case yields a plain flat, as in the POC.

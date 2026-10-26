@@ -51,7 +51,8 @@ class TitleCard(private val fonts: Fonts) {
             h += legendRowH[i] + if (i < 2) 8f else 0f
         }
         h += 12f + rules.layout(text, inner) + 12f + 28f
-        if (bestLine.isNotEmpty()) h += 12f + 16f
+        h += 12f // the POC's empty #title-best still takes its flex gap
+        if (bestLine.isNotEmpty()) h += 16f
         h += 20f
         box.set((f.wDp - f.cardW) / 2f + (f.padL - f.padR) / 2f, (f.hDp - h) / 2f, f.cardW, h)
     }

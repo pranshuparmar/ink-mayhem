@@ -154,6 +154,7 @@ class GameSim(
     }
 
     private fun resetWorld() {
+        events.runReset()
         if (::ink.isInitialized) ink.dispose()
         ink = InkPhysics()
         ink.world.setContactListener(contacts)
@@ -270,7 +271,7 @@ class GameSim(
         val x0 = genX
         addGround(flatLen)
         placeDrops(x0, flatLen)
-        var type: HazardType
+        var type: HazardType?
         var text: String? = null
         if (nSec < INTRO.size) {
             type = INTRO[nSec].first
@@ -286,7 +287,7 @@ class GameSim(
             var tot = 0f
             for (w in poolWeights) tot += w
             var r = gen.nextFloat() * tot
-            type = POOL[POOL.size - 1]
+            type = null // float rounding can leave r > 0: the POC's undefined type, a plain flat
             for (i in POOL.indices) {
                 r -= poolWeights[i]
                 if (r <= 0f) {
@@ -301,6 +302,7 @@ class GameSim(
         if (text != null) note(text, -flatLen + 0.6f, if (type == HazardType.TUNNEL) 4.6f else 3.4f)
         boulderCd--
         when (type) {
+            null -> Unit
             HazardType.GAP_S -> gap(type, rnd(2.2f, 3.2f))
             HazardType.GAP_M -> gap(type, rnd(4.2f, 5.8f))
             HazardType.GAP_L -> gap(type, rnd(7.6f, 9.2f))

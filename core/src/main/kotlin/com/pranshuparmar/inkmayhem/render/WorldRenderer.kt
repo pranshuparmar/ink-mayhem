@@ -38,11 +38,14 @@ class WorldRenderer(
     var hoverX = 0f
     var hoverY = 0f
 
-    /** Camera actually used for the last frame (with shake): input maps through this. */
-    var viewX = 0f
+    /** Interpolated camera of the last frame without shake: pen input maps through this (POC toWorld). */
+    var camX = 0f
         private set
-    var viewY = 0f
+    var camY = 0f
         private set
+    /** The same plus screen shake: what the world is drawn with. */
+    private var viewX = 0f
+    private var viewY = 0f
 
     /**
      * [alpha] (0..1) is how far the frame sits between the previous and the latest sim tick: moving
@@ -56,8 +59,10 @@ class WorldRenderer(
         val px = 1f / scale // one dp in metres
         val vw = wDp / scale
         val vh = hDp / scale
-        viewX = sim.camPrev.x + (sim.cam.x - sim.camPrev.x) * alpha + fx.shakeOffset()
-        viewY = sim.camPrev.y + (sim.cam.y - sim.camPrev.y) * alpha + fx.shakeOffset()
+        camX = sim.camPrev.x + (sim.cam.x - sim.camPrev.x) * alpha
+        camY = sim.camPrev.y + (sim.cam.y - sim.camPrev.y) * alpha
+        viewX = camX + fx.shakeOffset()
+        viewY = camY + fx.shakeOffset()
         worldCam.setToOrtho(true, vw, vh)
         worldCam.position.set(viewX + vw / 2f, viewY + vh / 2f, 0f)
         worldCam.update()
@@ -68,7 +73,7 @@ class WorldRenderer(
         shapes.begin(uiCam.combined, density)
         shapes.color(pal[Tok.RULE])
         val gap = 30f
-        val off = (((-sim.cam.y * scale) % gap) + gap) % gap
+        val off = (((-camY * scale) % gap) + gap) % gap
         var y = off
         while (y < hDp) {
             shapes.rect(0f, floor(y), wDp, 1f)
@@ -108,25 +113,9 @@ class WorldRenderer(
         fx.particles.fastEach { q ->
             shapes.color(pal[q.color], min(1f, q.life * 2f)).circle(q.x, q.y, q.r)
         }
-        // off-screen boulder warning on the left edge
-        val pulse = 0.6f + 0.4f * sin(sim.simT * 12f)
-        for (bi in sim.boulders.indices) {
-            val q = sim.boulders[bi].body.position
-            if (q.x + GameSim.BOULDER_R > sim.cam.x + 0.2f || q.y > sim.cam.y + vh) continue
-            val yy = q.y.coerceIn(sim.cam.y + 2f, sim.cam.y + vh - 2f)
-            val xx = sim.cam.x + 0.5f
-            shapes.color(pal[Tok.BEAM], pulse).triangle(xx - 0.25f, yy, xx + 0.35f, yy - 0.4f, xx + 0.35f, yy + 0.4f)
-        }
-        // hover nib shadow
-        if (hoverOn && sim.drawing == null && sim.erasingPointer < 0 && sim.state == GameState.RUN) {
-            val mx = hoverX / scale + viewX
-            val my = hoverY / scale + viewY
-            shapes.color(pal[Tok.INK]).ring(mx, my, Ink.thickness(0.45f) / 2f + 4f * px, 1.2f * px, 3f * px, 3f * px)
-            shapes.color(pal[Tok.INK]).circle(mx, my, 1.6f * px)
-        }
         shapes.end()
 
-        // score pops and the boulder distance label
+        // score pops
         text.batch.projectionMatrix = uiCam.combined
         text.batch.begin()
         val popFont = fonts.get(Face.HAND_BOLD, max(18f, scale * 0.75f))
@@ -135,6 +124,21 @@ class WorldRenderer(
             val sy = (q.y - viewY) * scale
             text.draw(popFont, q.text, sx, sy - popFont.capHeight, pal[q.color], min(1f, q.life * 1.5f), Align.center)
         }
+        text.batch.end()
+
+        // off-screen boulder warning on the left edge
+        shapes.begin(worldCam.combined, density * scale)
+        val pulse = 0.6f + 0.4f * sin(sim.simT * 12f)
+        for (bi in sim.boulders.indices) {
+            val q = sim.boulders[bi].body.position
+            if (q.x + GameSim.BOULDER_R > sim.cam.x + 0.2f || q.y > sim.cam.y + vh) continue
+            val yy = q.y.coerceIn(sim.cam.y + 2f, sim.cam.y + vh - 2f)
+            val xx = sim.cam.x + 0.5f
+            shapes.color(pal[Tok.BEAM], pulse).triangle(xx - 0.25f, yy, xx + 0.35f, yy - 0.4f, xx + 0.35f, yy + 0.4f)
+        }
+        shapes.end()
+        text.batch.projectionMatrix = uiCam.combined
+        text.batch.begin()
         val markerFont = fonts.get(Face.MONO_BOLD, max(14f, scale * 0.5f))
         for (bi in sim.boulders.indices) {
             val q = sim.boulders[bi].body.position
@@ -146,6 +150,16 @@ class WorldRenderer(
             text.draw(markerFont, markerLabel, (xx + 0.5f - viewX) * scale, (yy - viewY) * scale - markerFont.capHeight / 2f, pal[Tok.BEAM], pulse)
         }
         text.batch.end()
+
+        // hover nib shadow: placed with the unshaken camera, drawn in the shaking world (POC)
+        if (hoverOn && sim.drawing == null && sim.erasingPointer < 0 && sim.state == GameState.RUN) {
+            val mx = hoverX / scale + camX
+            val my = hoverY / scale + camY
+            shapes.begin(worldCam.combined, density * scale)
+            shapes.color(pal[Tok.INK]).ring(mx, my, Ink.thickness(0.45f) / 2f + 4f * px, 1.2f * px, 3f * px, 3f * px)
+            shapes.color(pal[Tok.INK]).circle(mx, my, 1.6f * px)
+            shapes.end()
+        }
     }
 
     private fun drawBlock(r: GroundRect, pal: Palette, vx0: Float, vx1: Float, screenBottom: Float, px: Float) {
@@ -257,13 +271,8 @@ class WorldRenderer(
     private fun drawLiveStroke(sim: GameSim, pal: Palette, tint: Boolean) {
         val d = sim.drawing ?: return
         val n = d.size
-        if (n == 0) return
         val alpha = if (d.dry) 0.5f else 1f
-        if (n == 1) {
-            shapes.color(inkColor(pal, Ink.of(d.ps[0]), tint), alpha).circle(d.xs[0], d.ys[0], Ink.thickness(d.ps[0]) / 2f)
-            return
-        }
-        for (i in 1 until n) {
+        for (i in 1 until n) { // segments only, like the POC: a single point draws nothing
             val p = (d.ps[i] + d.ps[i - 1]) / 2f
             shapes.color(inkColor(pal, Ink.of(p), tint), alpha).capsule(d.xs[i - 1], d.ys[i - 1], d.xs[i], d.ys[i], Ink.thickness(p))
         }
