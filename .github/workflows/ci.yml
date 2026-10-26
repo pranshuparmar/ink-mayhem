@@ -38,6 +38,17 @@ jobs:
       - name: Lint, test and build the debug APK
         run: ./gradlew lint test assembleDebug -PappVersionCode=${{ github.run_number }} --stacktrace
 
+      - name: Check that a release build signs (throwaway key)
+        run: |
+          ks="$RUNNER_TEMP/throwaway.jks"
+          keytool -genkeypair -keystore "$ks" -storetype PKCS12 -alias throwaway \
+            -storepass throwaway -keypass throwaway -keyalg RSA -keysize 2048 -validity 1 -dname "CN=CI" -noprompt
+          ANDROID_KEYSTORE_PATH="$ks" ANDROID_KEYSTORE_PASSWORD=throwaway ANDROID_KEY_ALIAS=throwaway \
+            ANDROID_KEY_PASSWORD=throwaway ./gradlew assembleRelease --stacktrace
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$apksigner" verify android/build/outputs/apk/release/android-release.apk
+          rm -f "$ks"
+
       - name: Name the APK
         id: apk
         run: |
