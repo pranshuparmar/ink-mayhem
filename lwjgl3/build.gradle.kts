@@ -33,7 +33,9 @@ application {
 }
 
 tasks.named<JavaExec>("run") {
-    workingDir = assetsDir
+    // Assets load from the classpath; keep the working directory out of the asset folder so
+    // LWJGL's native extraction (.lwjgl/) never lands in the APK sources.
+    workingDir = layout.buildDirectory.dir("run").get().asFile.also { it.mkdirs() }
     // Pass -Pargs="--portrait" etc. through to the launcher.
     providers.gradleProperty("args").orNull?.let { args(it.split(' ')) }
 }

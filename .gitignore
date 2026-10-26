@@ -25,3 +25,6 @@ keystore.properties
 reference/harness/node_modules/
 reference/harness/inkcore.js
 reference/harness/package-lock.json
+
+# Desktop runs: LWJGL native extraction
+.lwjgl/
