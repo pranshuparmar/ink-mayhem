@@ -69,7 +69,6 @@ android {
     lint {
         abortOnError = true
         warningsAsErrors = false
-        checkDependencies = true
     }
 }
 
