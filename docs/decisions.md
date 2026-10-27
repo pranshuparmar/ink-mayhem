@@ -59,11 +59,10 @@ never recreate the activity and a run survives them.
 
 ## 6. Debug and release builds install side by side
 
-Debug builds use `applicationIdSuffix = ".debug"` and the label "Ink Mayhem Debug". CI signs debug
-APKs with an optional fixed key (`ANDROID_DEBUG_KEYSTORE_BASE64`) so each `latest-debug` APK
-installs over the previous one; without it every CI run has a fresh throwaway key. Release builds
-are not minified: APK size doesn't matter here, and R8 would need keep rules for Box2D's JNI
-callbacks.
+Debug builds use `applicationIdSuffix = ".debug"` and the label "Ink Mayhem Debug". CI signs every
+debug APK with the same key so each `latest-debug` APK installs over the previous one (see ADR 17).
+Release builds are not minified: APK size doesn't matter here, and R8 would need keep rules for
+Box2D's JNI callbacks.
 
 ## 7. versionCode scheme
 
@@ -138,3 +137,52 @@ run; a replacing toast doesn't blink; a one-point live stroke draws nothing; the
 spans the width with a 55 % backdrop; gauge labels dim with their band and the marker drops as the
 gauge fades; pops draw under the boulder warning and the hover nib; and the vanishingly rare
 hazard-pool rounding case yields a plain flat, as in the POC.
+
+## 14. Wet ink: strokes are solid while they're drawn
+
+- **Context.** Playtesting on a phone: the runner often rolled straight through a bridge that was
+  still being drawn, because (as in the POC) a stroke only became physical on pen-up. It read as
+  the game reacting late.
+- **Options.** (a) Build the real stroke incrementally while drawing: its joints, anchors and
+  par judging all assume a finished stroke, and appending to a jointed chain mid-simulation
+  would change how strokes break. (b) Finish the stroke automatically when the runner reaches
+  it: a half-drawn bridge would then be anchored at one end only and fall. (c) Lay the stroke
+  so far as static "wet" pieces, solid for the runner alone, and swap in the real stroke on
+  pen-up.
+- **Decision.** (c). Static pieces can't sag or snap, so holding the pen down must never be
+  stronger than lifting it: wet rope stops being laid past the 6.8 m that a finished rope can
+  hold, and boulders (and everything but the runner) pass through wet ink, via a collision
+  category of its own. Judging counts the live stroke, so crossing a hazard before lifting the
+  pen still scores.
+- **Consequence.** A rule change from the POC, listed in `tuning.md`. Fast strokes that finish
+  before the runner arrives behave exactly as before.
+
+## 15. The tunnel rock
+
+- **Context.** In the POC any contact with the tunnel's ceiling slab was fatal, including landing
+  on top of it, which looked wrong; but a safe top makes the tunnel skippable with one spring.
+- **Decision.** The rock is one rect for drawing and anchoring with two fixtures: plain rock,
+  and a thin spiked layer along the underside (inset from the sides, matching where spikes are
+  drawn). The rock rises 40 m, beyond any view and any bounce, so the only way through is
+  underneath. The renderer already clips it to the screen.
+- **Consequence.** Generation draws exactly the same random numbers, so seeds still reproduce;
+  high drops that would land inside a rock are simply not placed.
+
+## 16. The tutorial runs on its own sim
+
+The tutorial builds its lessons with the sandbox mode the tests use (hand-built terrain, fixed
+speed) on a second `GameSim`, so the player's run, score and best are untouched and nothing in
+the game loop needs a "tutorial" branch beyond choosing which sim to tick, draw and feed input.
+The sim gained four small hooks for it: hold the runner, frame a point instead of the runner,
+place the runner lower in the view (the lesson card covers the top), and unlimited ink. Lesson
+logic lives in `game/Tutorial.kt` and is tested headlessly through the same pen path as play.
+
+## 17. A stable CI debug key without a secret
+
+Every new debug APK has to carry the same signing key or Android refuses to update the app, and
+uninstalling first wipes the calibration, tutorial progress and best score. That is what made
+the game "ask for calibration every time" on the phone. The `ANDROID_DEBUG_KEYSTORE_BASE64`
+secret still gives a permanent key; without it CI now generates one once and keeps it in the
+GitHub Actions cache (`actions/cache` restore and save), which holds it as long as there is a
+build at least every 7 days. Committing a debug keystore would be simpler but the brief rules out
+committing any keystore.

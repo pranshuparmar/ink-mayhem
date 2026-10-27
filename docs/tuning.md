@@ -2,12 +2,40 @@
 
 Every gameplay constant, where it lives, and any retune made while porting from the POC
 (Planck.js 1.5.0) to libGDX Box2D 2.3. The POC ([`reference/ink-mayhem-poc.html`](../reference/ink-mayhem-poc.html))
-is the source of truth.
+was the source of truth for the port; the rules changed since are listed under
+[Changes from the POC](#changes-from-the-poc).
 
 ## Retunes
 
-**None.** Every number below is the POC's. All verified behaviours pass on libGDX Box2D unchanged
-(see [Verified behaviours](#verified-behaviours)).
+**None.** Every number the POC has is unchanged. All verified behaviours pass on libGDX Box2D
+unchanged (see [Verified behaviours](#verified-behaviours)).
+
+## Changes from the POC
+
+Made after playtesting the port on a phone, at the owner's request.
+
+1. **Ink is solid while it's being drawn ("wet ink").** In the POC a stroke only became physical
+   on pen-up, so a runner reaching a bridge that was still being drawn fell straight through it.
+   Now the stroke so far is laid as static pieces (at least 0.15 m long, the stroke's own
+   thickness and friction) that only the runner collides with; pen-up replaces them with the
+   real stroke. Guards so holding the pen down is never stronger than lifting it:
+   - rope past 6.8 m in one stroke isn't laid (a finished rope that long gives way), and the
+     "Too long for rope" toast shows at once;
+   - boulders, crates and finished strokes pass through wet ink, so it never carries a boulder
+     a real rope would drop;
+   - a hazard crossed mid-stroke is judged on the live stroke (its footprint and heaviest ink).
+   Wet springs bounce the runner like finished ones.
+2. **The tunnel ceiling is a rock spiked only underneath.** The POC's ceiling was a 1.2 m slab
+   that killed on any contact, including landing on its top. Now the rock rises 40 m (out of
+   sight), only a 0.12 m layer along its underside is spiked (stopping 0.1 m short of each
+   side, where no spikes are drawn), and its top and sides are plain rock. Because it can't be
+   bounced over, the tunnel can't be skipped. Its gap, height and 3.5 m overhangs are unchanged.
+   High drops that would sit inside the rock are left out (the level's random draws are still
+   made, so the rest of a seeded level is unchanged), and the tunnel's intro note wraps to fit
+   in front of the rock.
+3. **Calibration asks for "Ink Mayhem"** instead of a signature, with the phrase as a faint
+   guide. The maths is the same.
+4. **A first-run tutorial** (new; see [Tutorial](#tutorial)).
 
 ## Physics (`core/.../physics/InkPhysics.kt`, `Ink.kt`)
 
@@ -32,6 +60,7 @@ is the source of truth.
 | Step | 1/60 s in 2 substeps, 10 velocity / 8 position iterations | `ink.step(sdt, 2)` |
 | Cull fallen ink | y > 400 | `CULL_Y` |
 | Ground / ceiling friction | 0.9 | `addRect` |
+| Wet ink (new) | static pieces ≥ 0.15 m (`WET_STEP`), box as a segment's, friction 0.8, restitution as the ink; collides with the runner only | — |
 
 ## Game (`core/.../game/GameSim.kt`)
 
@@ -69,7 +98,7 @@ is the source of truth.
 | Intro | gapS, gapM, wall, tunnel, gapL, boulder, each with its note |
 | Weights | gapS 1.6, gapM 2.6, gapL 2 + 1.5 d, wall 2.4, tunnel 1.8 + d, drop 1, boulder 1.6 + d (0 for 3 sections after a boulder); a repeat becomes gapM |
 | Level bounds | wall below 11 becomes a drop; drop above 27 becomes a wall |
-| Sizes | gapS 2.2–3.2, gapM 4.2–5.8, gapL 7.6–9.2, wall up 2.1–2.8, drop down 1.6–2.6, tunnel gap 3.8–5.2 under a ceiling 2.1 m up, 1.2 m thick, 3.5 m past each end; boulder runway 18 m then a 4.8–5.8 m gap |
+| Sizes | gapS 2.2–3.2, gapM 4.2–5.8, gapL 7.6–9.2, wall up 2.1–2.8, drop down 1.6–2.6, tunnel gap 3.8–5.2 under a rock whose underside is 2.1 m up, 3.5 m past each end (the POC's slab was 1.2 m thick; the rock now rises 40 m with a 0.12 m spiked layer underneath); boulder runway 18 m then a 4.8–5.8 m gap |
 | Generated ahead | until genX ≥ camera x + view width + 30 m |
 
 Generation draws from a seeded `kotlin.random.Random`; cosmetic randomness (tips, particle
@@ -81,7 +110,7 @@ reproduces exactly for the same viewport and the same play.
 
 | | |
 |---|---|
-| Calibration | median raw pressure of the signature (samples > 0.02, at least 30), clamped 0.08–0.9; 0.32 if skipped |
+| Calibration | median raw pressure of the player writing "Ink Mayhem" (samples > 0.02, at least 30), clamped 0.08–0.9; 0.32 if skipped. Asked once, stored; "Recalibrate" in settings |
 | Normalized pressure | p = clamp(0.45 × raw / cal) |
 | Fingers and mouse (debug) | fixed p = 0.45 |
 | Smoothing | p = 0.7 prev + 0.3 new |
@@ -115,6 +144,9 @@ Planck.js 1.5.0 (`reference/harness`), where it passes too:
 | Long rope snaps | 7.6 m rope snaps within ~0.65 s; 6 m rope doesn't | `RunnerBehaviourTest` |
 | Correct-ink bot | five seeds: six Clean intro judgements, ×8–9 combo past 120 m, no death to 170 m | `ScriptedRunTest` |
 | Wrong ink | spring in the tunnel dies "Spiked"; rope over the long gap dies "Fell in" | `ScriptedRunTest` |
+| Tunnel rock (new) | the roof and sides are safe, the underside spikes; springs 1–8 m before it at 3.4 and 6 m/s never get the runner above it; no drop inside a rock over 1.5 km of eight seeds | `TunnelTest` |
+| Wet ink (new) | the runner crosses a gap on a stroke still being drawn; pen-up builds the real stroke under it; a held rope past 6.8 m drops the runner; wet springs bounce; boulders fall through; mid-stroke crossings are judged | `WetInkTest` |
+| Tutorial (new) | each lesson passes with the right ink and fails, with its hint, with the wrong one; the runner waits for the pen; the whole tutorial can be played through | `TutorialTest` |
 
 Two notes on scenario design, both true of the POC as well:
 
@@ -125,6 +157,25 @@ Two notes on scenario design, both true of the POC as well:
   makes a step taller than the runner's radius. The stall hop fires, but the step's face cancels
   its forward impulse and the runner dies "Stuck" (the POC's tip: "Thick beams make walls").
   Bridges drawn edge to edge, as the crossing tests do, are crossed at every pressure.
+
+## Tutorial
+
+`core/.../game/Tutorial.kt`, on its own `GameSim` in sandbox mode (the player's run and best
+score are untouched). Ground level 20, run speed 3.4 m/s, unlimited ink, ink coloured by type.
+
+| Lesson | Scene | Passes when |
+|---|---|---|
+| 1 Feel the pressure | flat ground | rope, spring and beam have each been drawn |
+| 2 Light touch: rope | 3.2 m gap | the runner is 1.2 m past it; with heavier ink it asks for rope twice, then accepts |
+| 3 Write normally: spring | 2.4 m wall | the runner is on top; without a spring bounce it asks for one twice, then accepts |
+| 4 Press hard: beam | 7.6 m gap (too long for rope) | the runner is 1.2 m past it |
+| 5 Side button: erase | a 2.6 m beam post standing in the way | the post is erased and the runner is 1.5 m past it |
+
+In lessons 2–4 the runner waits until a stroke is finished and the pen lifted; in lesson 5 until
+the post is gone. A death, or 3 s without 0.3 m of progress, fails the lesson with a hint for
+what went wrong; the scene resets 2.2 s later. A pass moves on after 1.6 s. The tutorial runs
+once after calibration on first launch and again from "How to play"; Skip (or Android back)
+ends it.
 
 ## Where the brief and the POC differ
 

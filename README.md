@@ -9,13 +9,15 @@ and you draw the way ahead. How hard you press decides what the ink becomes:
 | Normal writing | **Spring** | Bounces you (and boulders) high. Fatal under spiked ceilings. |
 | Press hard | **Beam** | Spans anything, carries anything, costs far more ink. |
 
-Clear each hazard with the lightest ink that works to grow the combo. Hover to see where the nib
-will land; hold the side button while touching to erase. Fingers don't leave ink.
+Clear each hazard with the lightest ink that works to grow the combo. Ink is solid the moment
+it's drawn, so the runner can roll onto a stroke you're still finishing. Hover to see where the
+nib will land; hold the side button while touching to erase. Fingers don't leave ink.
 
-This is milestone 1: a native port of the playtested HTML proof of concept in
-[`reference/ink-mayhem-poc.html`](reference/ink-mayhem-poc.html). See
-[`docs/tuning.md`](docs/tuning.md) for every gameplay number and
-[`docs/decisions.md`](docs/decisions.md) for the design notes.
+It started as a native port of the playtested HTML proof of concept in
+[`reference/ink-mayhem-poc.html`](reference/ink-mayhem-poc.html); a few rules have since changed
+from it after playtesting on a phone. See [`docs/tuning.md`](docs/tuning.md) for every gameplay
+number and every change from the POC, and [`docs/decisions.md`](docs/decisions.md) for the
+design notes.
 
 ## Install a build
 
@@ -35,14 +37,15 @@ Or from a computer with USB debugging on: `adb install -r ink-mayhem-debug-<sha>
 
 The debug app is called **Ink Mayhem Debug** (`com.pranshuparmar.inkmayhem.debug`) and installs
 alongside the release app (`com.pranshuparmar.inkmayhem`). A new debug APK only installs over the
-previous one if both were signed with the same debug key; see
-[Debug signing](#optional-a-fixed-debug-key). Otherwise uninstall the old one first (this clears
-its best score and calibration).
+previous one if both were signed with the same debug key. CI keeps one (see
+[Debug signing](#debug-signing)); if Android still says the app conflicts, uninstall the old one
+first, which clears its best score, calibration and tutorial progress.
 
-On first launch the game asks you to **sign your name**: your everyday writing pressure becomes
-the middle of the spring band. Recalibrate any time from the ⋯ menu, which also has the
-**Pen readout** (tool type, raw and normalized pressure, buttons, tilt, hover and event rates)
-for checking the S Pen.
+On first launch the game asks you to **write “Ink Mayhem”** so it learns your everyday writing
+pressure (that becomes the middle of the spring band), then runs a short **tutorial**: five
+lessons on rope, spring, beam and erasing, on real terrain. Both happen once. The ⋯ menu has
+**How to play** (the tutorial again), **Recalibrate**, and the **Pen readout** (tool type, raw
+and normalized pressure, buttons, tilt, hover and event rates) for checking the S Pen.
 
 ## Build
 
@@ -63,7 +66,7 @@ still build. `-Pinkmayhem.android=false` skips it explicitly.
 For fast iteration with a mouse (`lwjgl3` module):
 
 ```sh
-./gradlew :lwjgl3:run -Pargs="--emulate-pen --skip-calibration"
+./gradlew :lwjgl3:run -Pargs="--emulate-pen --skip-calibration --skip-tutorial"
 ```
 
 | Option | |
@@ -75,6 +78,7 @@ For fast iteration with a mouse (`lwjgl3` module):
 | `--landscape`, `--size WxH`, `--density D` | Window size in dp and pixels per dp. |
 | `--dark`, `--reduced-motion` | Simulate the system settings. |
 | `--settings`, `--calibration`, `--skip-calibration` | Open or skip overlays at start. |
+| `--tutorial N`, `--skip-tutorial` | Open the tutorial at lesson N (1–5), or don't open it on first run. |
 | `--rotate-after S` | Swap width and height after S seconds, like rotating the phone mid-run. |
 | `--screenshot out.png --after S` | Save a screenshot after S seconds and quit. |
 
@@ -146,10 +150,12 @@ gh secret set ANDROID_KEY_PASSWORD
 
 Then delete the `.b64` file.
 
-### Optional: a fixed debug key
+### Debug signing
 
-Each CI runner makes a fresh debug key, so successive `latest-debug` APKs won't install over each
-other. To keep one debug key:
+Debug APKs from CI must all carry the same key, or Android won't install a new one over the last.
+Without any setup, CI makes a debug key once and keeps it in the GitHub Actions cache. The cache
+drops it after 7 days without a build, and the next APK then needs one uninstall. For a key that
+never changes, add it as a secret:
 
 ```sh
 keytool -genkeypair -v -keystore debug.keystore -storetype PKCS12 \
