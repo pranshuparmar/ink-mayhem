@@ -136,7 +136,7 @@ class Tutorial(val sim: GameSim) {
     /** Pen-down on the page during the tutorial. */
     fun penDown(pointer: Int, x: Float, y: Float, n: Float, erase: Boolean, t: Double) {
         if (phase != Phase.TRYING) return
-        if (lesson == Lesson.ERASE && !erase && post != null) hint("That drew ink. Hold the side button while you touch the post.")
+        if (lesson == Lesson.ERASE && !erase && post.let { it != null && it in sim.ink.strokes }) hint("That drew ink. Hold the side button while you touch the post.")
         sim.penDown(pointer, x, y, n, erase, t)
     }
 

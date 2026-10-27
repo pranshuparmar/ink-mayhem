@@ -153,9 +153,10 @@ Then delete the `.b64` file.
 ### Debug signing
 
 Debug APKs from CI must all carry the same key, or Android won't install a new one over the last.
-Without any setup, CI makes a debug key once and keeps it in the GitHub Actions cache. The cache
-drops it after 7 days without a build, and the next APK then needs one uninstall. For a key that
-never changes, add it as a secret:
+Without any setup, CI makes a debug key once on `main` and keeps it in the GitHub Actions cache;
+builds of other branches (including **Run workflow**) use the same key. The cache drops it after
+7 days without a build, and the next APK then needs one uninstall. For a key that never changes,
+add it as a secret:
 
 ```sh
 keytool -genkeypair -v -keystore debug.keystore -storetype PKCS12 \

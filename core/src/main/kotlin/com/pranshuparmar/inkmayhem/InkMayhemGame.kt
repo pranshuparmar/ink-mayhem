@@ -328,6 +328,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         ts.scale = scale
         ts.tint = true
         val t = Tutorial(ts)
+        framedLesson = -1
         updateFrame()
         frameTutorial(t)
         t.start(lesson)
@@ -343,7 +344,14 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         tutorialCard.layout(text, frame, t)
         val below = tutorialCard.box.bottom
         t.sim.camRunnerY = (below + (hDp - below) * 0.62f) / hDp
+        // a new lesson's card may be taller or shorter: frame its scene for this card at once
+        if (t.lessonIndex != framedLesson) {
+            framedLesson = t.lessonIndex
+            t.sim.snapCamera()
+        }
     }
+
+    private var framedLesson = -1
 
     /** Back to the title card; [finished] = played to the end rather than skipped. */
     private fun endTutorial(finished: Boolean) {
@@ -351,6 +359,14 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         tutorial = null
         t.sim.dispose()
         settings.tutorialDone = true
+        // "How to play" mid-run ends that run: keep its score if it was a best
+        if (sim.state == GameState.RUN) {
+            val sc = kotlin.math.floor(sim.score).toInt()
+            if (sc > settings.best) {
+                settings.best = sc
+                sim.best = sc
+            }
+        }
         world.hoverOn = false
         audio.scratch(0f, 0.5f)
         if (sim.state != GameState.TITLE) sim.toTitle() else fx.clear()
@@ -513,6 +529,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
     )
 
     override fun dispose() {
+        tutorial?.sim?.dispose()
         sim.dispose()
         audio.dispose()
         shapes.dispose()

@@ -16,8 +16,10 @@ class WetInkTest {
      */
     private class Held(
         val sb: Sandbox, val x0: Float, val x1: Float, val y: Float, val p: Float,
-        val startAt: Float, val liftAt: Float, val penSpeed: Float = 7f,
+        val startAt: Float, val liftAt: Float, val penSpeed: Float = 7f, val yEnd: Float = y,
     ) {
+        private fun yAt(x: Float) = y + (yEnd - y) * (x - x0) / (x1 - x0)
+
         var x = Float.NaN
         var lifted = false
 
@@ -26,7 +28,7 @@ class WetInkTest {
             if (x.isNaN()) {
                 if (sb.runnerX < startAt) return
                 x = x0
-                sb.penDown(x, y, p)
+                sb.penDown(x, yAt(x), p)
                 return
             }
             if (sb.runnerX >= liftAt || sb.sim.state != GameState.RUN) {
@@ -36,7 +38,7 @@ class WetInkTest {
             }
             if (x < x1) {
                 x = minOf(x1, x + penSpeed / 60f)
-                sb.penMove(x, y, p)
+                sb.penMove(x, yAt(x), p)
             }
         }
     }
@@ -141,6 +143,34 @@ class WetInkTest {
             sb.run(4f) { pen.tick() }
             assertTrue(sb.runnerX > 6f && !pen.lifted, "runner at ${sb.runnerX}, pen lifted: ${pen.lifted}")
             assertEquals(listOf("Clean ×2"), sb.events.pops)
+        } finally {
+            sb.dispose()
+        }
+    }
+
+    @Test
+    fun `ink begun in mid-air isn't solid while it's drawn`() {
+        val sb = Sandbox(gap = 4.5f, runnerX = -6f, speed = 4.7f)
+        try {
+            val p = InkBot.PRESSURE.getValue(Ink.BEAM)
+            val pen = Held(sb, 0.5f, 4f, Sandbox.LEVEL - 2f, p, startAt = -100f, liftAt = 100f, penSpeed = 30f)
+            repeat(30) { pen.tick() }
+            assertEquals(0, sb.sim.ink.wetPieces)
+        } finally {
+            sb.dispose()
+        }
+    }
+
+    /** A rope ramp pinned only at the near edge: held, it's a rigid launch ramp; it mustn't score. */
+    @Test
+    fun `crossing on half-drawn ink scores nothing`() {
+        val sb = Sandbox(gap = 8f, runnerX = -6f, speed = 5f)
+        try {
+            sb.sim.hazards += Hazard(HazardType.GAP_L, 0f, 8f)
+            val p = InkBot.PRESSURE.getValue(Ink.ROPE)
+            val pen = Held(sb, -0.4f, 5.6f, groundY(p), p, startAt = -2f, liftAt = 100f, penSpeed = 12f, yEnd = Sandbox.LEVEL - 2.4f)
+            sb.run(5f) { pen.tick() }
+            assertTrue(sb.events.pops.none { it.startsWith("Clean") || it.startsWith("Featherweight") }, "pops: ${sb.events.pops}")
         } finally {
             sb.dispose()
         }

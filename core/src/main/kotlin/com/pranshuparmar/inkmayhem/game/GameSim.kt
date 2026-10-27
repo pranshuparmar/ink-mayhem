@@ -143,6 +143,8 @@ class GameSim(
         var kinds = 0
         /** Wet ink is laid up to this point. */
         var wetFrom = 0
+        /** The stroke began where it will be pinned; a stroke begun in mid-air would just fall. */
+        var startAnchored = false
         var wetRope = 0f
         var tooLong = false
     }
@@ -500,6 +502,7 @@ class GameSim(
             events.scratch(min(0.09f, (len * scale / dt.toFloat()) * 0.00012f) * (0.5f + d.smoothed), d.smoothed)
         } else {
             d.lastT = t
+            d.startAnchored = ink.anchorable(x, y)
         }
         d.xs.add(x); d.ys.add(y); d.ps.add(d.smoothed)
         d.x0 = min(d.x0, x)
@@ -514,10 +517,12 @@ class GameSim(
 
     /**
      * Lays wet ink up to the newest point in pieces of at least [WET_STEP], so the runner can
-     * roll on a stroke while it is still being drawn (the POC built it only on pen-up). Rope past
-     * [ROPE_MAX_LEN] stays wet-but-weak: it isn't laid, as the finished rope would give way there.
+     * roll on a stroke while it is still being drawn (the POC built it only on pen-up). Only a
+     * stroke begun where it will be pinned is laid (one begun in mid-air falls when finished),
+     * and rope past [ROPE_MAX_LEN] isn't, as the finished rope would give way there.
      */
     private fun growWet(d: Drawing) {
+        if (!d.startAnchored) return
         val i = d.size - 1
         val j = d.wetFrom
         val len = hypot(d.xs[i] - d.xs[j], d.ys[i] - d.ys[j])
@@ -627,7 +632,7 @@ class GameSim(
             }
             if (sdt > 0f) ink.step(sdt, 2)
             runner.bounceCd -= sdt
-            if (pendingBounce && runner.bounceCd <= 0f && state == GameState.RUN) {
+            if (pendingBounce && runner.bounceCd <= 0f && state == GameState.RUN && !runnerHeld) {
                 val v = rb.linearVelocity
                 rb.setLinearVelocity(max(v.x, runSpeed * 0.95f), -9.6f)
                 runner.bounceCd = 0.3f
@@ -735,8 +740,10 @@ class GameSim(
             hz.done = true
             var heavy = -1
             ink.strokes.fastEach { s -> if (!s.x1.isNaN() && s.x1 >= hz.x0 - 3f && s.x0 <= hz.x1 + 1f) heavy = max(heavy, s.heaviest) }
+            // A stroke still being drawn counts once both its ends would be pinned (a finished
+            // bridge, or ink lying on the ground): crossing on half-drawn ink scores nothing.
             val d = drawing
-            if (d != null && d.x1 >= hz.x0 - 3f && d.x0 <= hz.x1 + 1f) heavy = max(heavy, d.heaviest)
+            if (d != null && d.x1 >= hz.x0 - 3f && d.x0 <= hz.x1 + 1f && liveStrokeComplete(d)) heavy = max(heavy, d.heaviest)
             val par = hz.par.weight
             val cx = (hz.x0 + hz.x1) / 2f
             val cy = py - 1.6f
@@ -758,6 +765,11 @@ class GameSim(
                 if (lost) events.sound(Sfx.COMBO_LOST)
             }
         }
+    }
+
+    private fun liveStrokeComplete(d: Drawing): Boolean {
+        val n = d.size
+        return n >= 2 && d.startAnchored && ink.anchorable(d.xs[n - 1], d.ys[n - 1])
     }
 
     /** POC tok[ev.kind] || tok.ink: anchors have no colour token of their own. */

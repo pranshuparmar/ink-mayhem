@@ -22,16 +22,15 @@ class PressureGauge {
 
     val visible: Boolean get() = opacity > 0.001f
 
-    private fun bandTop(bottom: Float, from: Float, to: Float) = bottom - H * to to bottom - H * from
-
     /** [live] is the marker position; a band lights up only while [drawing]. */
     fun drawShapes(shapes: Shapes, pal: Palette, left: Float, top: Float, live: Float, drawing: Boolean) {
         if (!visible) return
         val bottom = top + H
         val k = if (drawing) Ink.of(live) else null
-        for (ink in Ink.entries) {
-            val (from, to) = range(ink)
-            val (y0, y1) = bandTop(bottom, from, to)
+        for (wi in INKS.indices) { // index loop, no Pairs: this runs every frame while drawing
+            val ink = INKS[wi]
+            val y0 = bottom - H * BAND_TO[wi]
+            val y1 = bottom - H * BAND_FROM[wi]
             val a = opacity * if (ink == k) 1f else 0.5f
             val c = when (ink) { Ink.ROPE -> pal[Tok.ROPE]; Ink.SPRING -> pal[Tok.SPRING]; Ink.BEAM -> pal[Tok.BEAM] }
             shapes.color(c, a)
@@ -51,25 +50,24 @@ class PressureGauge {
         val font = fonts.get(Face.MONO_MEDIUM, 10f)
         val bottom = top + H
         val k = if (drawing) Ink.of(live) else null
-        for (ink in Ink.entries) {
-            val (from, to) = range(ink)
-            val (y0, y1) = bandTop(bottom, from, to)
+        for (wi in INKS.indices) {
+            val ink = INKS[wi]
+            val y0 = bottom - H * BAND_TO[wi]
+            val y1 = bottom - H * BAND_FROM[wi]
             // the label is the band's ::after, so it shares the band's 0.5 opacity when inactive
             val c = if (ink == k) pal[Tok.UI_FG] else pal[Tok.MUTED]
             text.line(font, LABELS[ink.ordinal], left + 18f, y0, y1 - y0, c, opacity * if (ink == k) 1f else 0.5f)
         }
     }
 
-    private fun range(ink: Ink) = when (ink) {
-        Ink.ROPE -> 0f to Ink.ROPE_MAX
-        Ink.SPRING -> Ink.ROPE_MAX to Ink.SPRING_MAX
-        Ink.BEAM -> Ink.SPRING_MAX to 1f
-    }
-
     companion object {
         const val W = 12f
         const val H = 150f
         private val LABELS = arrayOf("ROPE", "SPRING", "BEAM")
+        private val INKS = Ink.entries.toTypedArray()
+        /** Each band's pressure range, by ink weight. */
+        private val BAND_FROM = floatArrayOf(0f, Ink.ROPE_MAX, Ink.SPRING_MAX)
+        private val BAND_TO = floatArrayOf(Ink.ROPE_MAX, Ink.SPRING_MAX, 1f)
 
         fun approach(v: Float, target: Float, step: Float) =
             if (v < target) minOf(target, v + step) else maxOf(target, v - step)

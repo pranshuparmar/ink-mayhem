@@ -18,13 +18,19 @@ Made after playtesting the port on a phone, at the owner's request.
    on pen-up, so a runner reaching a bridge that was still being drawn fell straight through it.
    Now the stroke so far is laid as static pieces (at least 0.15 m long, the stroke's own
    thickness and friction) that only the runner collides with; pen-up replaces them with the
-   real stroke. Guards so holding the pen down is never stronger than lifting it:
+   real stroke. Guards so that holding the pen down doesn't beat lifting it:
+   - only a stroke begun within anchor reach (0.45 m) of the ground or a ceiling is laid; one
+     begun in mid-air would fall when finished;
    - rope past 6.8 m in one stroke isn't laid (a finished rope that long gives way), and the
      "Too long for rope" toast shows at once;
    - boulders, crates and finished strokes pass through wet ink, so it never carries a boulder
      a real rope would drop;
-   - a hazard crossed mid-stroke is judged on the live stroke (its footprint and heaviest ink).
-   Wet springs bounce the runner like finished ones.
+   - a hazard crossed mid-stroke is judged on the live stroke only once both its ends would be
+     pinned (a finished bridge, or ink lying on the ground); crossing on half-drawn ink scores
+     nothing.
+   Wet springs bounce the runner like finished ones. One gap remains by design: held ink is
+   rigid, so a skilled player can, say, hold a rope ramp pinned at one end and launch off it.
+   It can save the runner but never scores.
 2. **The tunnel ceiling is a rock spiked only underneath.** The POC's ceiling was a 1.2 m slab
    that killed on any contact, including landing on its top. Now the rock rises 40 m (out of
    sight), only a 0.12 m layer along its underside is spiked (stopping 0.1 m short of each
@@ -145,7 +151,7 @@ Planck.js 1.5.0 (`reference/harness`), where it passes too:
 | Correct-ink bot | five seeds: six Clean intro judgements, ×8–9 combo past 120 m, no death to 170 m | `ScriptedRunTest` |
 | Wrong ink | spring in the tunnel dies "Spiked"; rope over the long gap dies "Fell in" | `ScriptedRunTest` |
 | Tunnel rock (new) | the roof and sides are safe, the underside spikes; springs 1–8 m before it at 3.4 and 6 m/s never get the runner above it; no drop inside a rock over 1.5 km of eight seeds | `TunnelTest` |
-| Wet ink (new) | the runner crosses a gap on a stroke still being drawn; pen-up builds the real stroke under it; a held rope past 6.8 m drops the runner; wet springs bounce; boulders fall through; mid-stroke crossings are judged | `WetInkTest` |
+| Wet ink (new) | the runner crosses a gap on a stroke still being drawn; pen-up builds the real stroke under it; a held rope past 6.8 m drops the runner; wet springs bounce; boulders fall through; ink begun in mid-air isn't solid; finished-bridge crossings are judged, half-drawn ones score nothing | `WetInkTest` |
 | Tutorial (new) | each lesson passes with the right ink and fails, with its hint, with the wrong one; the runner waits for the pen; the whole tutorial can be played through | `TutorialTest` |
 
 Two notes on scenario design, both true of the POC as well:
@@ -172,7 +178,7 @@ score are untouched). Ground level 20, run speed 3.4 m/s, unlimited ink, ink col
 | 5 Side button: erase | a 2.6 m beam post standing in the way | the post is erased and the runner is 1.5 m past it |
 
 In lessons 2–4 the runner waits until a stroke is finished and the pen lifted; in lesson 5 until
-the post is gone. A death, or 3 s without 0.3 m of progress, fails the lesson with a hint for
+the post is gone. A waiting runner isn't launched by springs drawn under it. A death, or 3 s without 0.3 m of progress, fails the lesson with a hint for
 what went wrong; the scene resets 2.2 s later. A pass moves on after 1.6 s. The tutorial runs
 once after calibration on first launch and again from "How to play"; Skip (or Android back)
 ends it.

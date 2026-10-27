@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # only used on main, to update the latest-debug prerelease
+      actions: write # to drop a branch-scoped copy of the debug key (see below)
     steps:
       - uses: actions/checkout@v7
 
@@ -29,7 +30,16 @@ jobs:
       # Every debug APK must carry the same key, or Android refuses to install it over the last
       # one and the player has to uninstall, losing calibration, tutorial progress and best score.
       # A key from the ANDROID_DEBUG_KEYSTORE_BASE64 secret is permanent; without it CI makes one
-      # and keeps it in the Actions cache (evicted after 7 days without a build).
+      # on main and keeps it in the Actions cache (evicted after 7 days without a build). Other
+      # branches and PRs read main's key; a copy saved under a branch would shadow it, so drop it.
+      - name: Drop a branch-only debug key
+        if: github.ref != 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/caches?key=ink-mayhem-debug-keystore-v1&ref=$GITHUB_REF" \
+            >/dev/null 2>&1 || true
+
       - name: Restore the CI debug key
         uses: actions/cache/restore@v6
         with:
@@ -45,6 +55,10 @@ jobs:
           if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
             echo "$DEBUG_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/debug.keystore"
             echo "ANDROID_DEBUG_KEYSTORE_PATH=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if [ ! -f "$ks" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::notice title=Debug signing::No CI debug key from main yet, so this APK uses a throwaway key and won't install over latest-debug."
             exit 0
           fi
           if [ ! -f "$ks" ]; then

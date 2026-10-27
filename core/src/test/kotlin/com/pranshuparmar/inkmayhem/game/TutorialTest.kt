@@ -196,6 +196,25 @@ class TutorialTest {
     }
 
     @Test
+    fun `a spring under the waiting runner doesn't launch it`() {
+        tut.start()
+        val x = sim.runner.body.position.x
+        onGround(x - 0.7f, x + 0.7f, Ink.SPRING)
+        run(2f)
+        assertEquals(0, sim.bounces)
+        assertEquals(x, sim.runner.body.position.x, 0.3f)
+    }
+
+    @Test
+    fun `no erase hint once the post is gone`() {
+        tut.start(Lesson.ERASE.ordinal)
+        tut.penDown(6, Tutorial.POST_X, Tutorial.LEVEL - 1.2f, 0.5f, erase = true, t = 1.0)
+        tut.penUp(6)
+        onGround(-1f, -0.5f, Ink.ROPE)
+        assertEquals("", tut.feedback)
+    }
+
+    @Test
     fun `skip ends the tutorial`() {
         tut.start(Lesson.SPRING.ordinal)
         tut.skip()

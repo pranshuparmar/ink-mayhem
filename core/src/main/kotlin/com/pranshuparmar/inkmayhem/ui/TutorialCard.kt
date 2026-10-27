@@ -50,7 +50,8 @@ class TutorialCard(private val fonts: Fonts) {
         var x = box.x + 16f
         val cy = feedbackTop() + (FEEDBACK_H - 26f) / 2f
         val chipFont = fonts.get(Face.UI_BOLD, 13f)
-        for (ink in Ink.entries) {
+        for (wi in INKS.indices) { // index loops: these run every frame
+            val ink = INKS[wi]
             val w = text.width(chipFont, ink.label) + 26f
             chips[ink.weight].set(x, cy, w, 26f)
             x += w + 8f
@@ -65,7 +66,8 @@ class TutorialCard(private val fonts: Fonts) {
         Widgets.card(shapes, pal, box)
         Widgets.button(shapes, pal, skip, primary = false, enabled = true, pressed = press.isPressed(skip))
         if (!showChips(t)) return
-        for (ink in Ink.entries) {
+        for (wi in INKS.indices) {
+            val ink = INKS[wi]
             val b = chips[ink.weight]
             shapes.color(pal[tok(ink)])
             if (t.seen[ink.weight]) shapes.roundRect(b.x, b.y, b.w, b.h, b.h / 2f) else shapes.roundRectOutline(b.x, b.y, b.w, b.h, b.h / 2f, 1.5f)
@@ -83,7 +85,8 @@ class TutorialCard(private val fonts: Fonts) {
         Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 13f), pal, skip, SKIP, primary = false, enabled = true)
         if (showChips(t)) {
             val chipFont = fonts.get(Face.UI_BOLD, 13f)
-            for (ink in Ink.entries) {
+            for (wi in INKS.indices) {
+                val ink = INKS[wi]
                 val b = chips[ink.weight]
                 val c = if (t.seen[ink.weight]) pal[Tok.PAPER] else pal[tok(ink)]
                 text.line(chipFont, ink.label, b.x + b.w / 2f, b.y, b.h, c, 1f, Align.center)
@@ -106,6 +109,7 @@ class TutorialCard(private val fonts: Fonts) {
 
     companion object {
         const val SKIP = "Skip tutorial"
+        private val INKS = Ink.entries.toTypedArray()
         /** Room for two lines of feedback, so the card doesn't jump when a hint appears. */
         private const val FEEDBACK_H = 36f
     }

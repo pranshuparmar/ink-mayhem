@@ -84,6 +84,9 @@ class InkPhysics(
         r.spikes = null
     }
 
+    /** Would a stroke end at (px, py) be pinned to the ground or a ceiling? */
+    fun anchorable(px: Float, py: Float): Boolean = distToRects(px, py) <= anchorR
+
     fun distToRects(px: Float, py: Float): Float {
         var best = Float.POSITIVE_INFINITY
         rects.fastEach { r ->

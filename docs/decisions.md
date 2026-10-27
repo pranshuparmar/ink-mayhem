@@ -149,11 +149,13 @@ hazard-pool rounding case yields a plain flat, as in the POC.
   it: a half-drawn bridge would then be anchored at one end only and fall. (c) Lay the stroke
   so far as static "wet" pieces, solid for the runner alone, and swap in the real stroke on
   pen-up.
-- **Decision.** (c). Static pieces can't sag or snap, so holding the pen down must never be
-  stronger than lifting it: wet rope stops being laid past the 6.8 m that a finished rope can
-  hold, and boulders (and everything but the runner) pass through wet ink, via a collision
-  category of its own. Judging counts the live stroke, so crossing a hazard before lifting the
-  pen still scores.
+- **Decision.** (c). Static pieces can't sag or snap, so the guards keep holding the pen from
+  beating lifting it: only strokes begun where they'll be pinned are laid; wet rope stops past
+  the 6.8 m a finished rope can hold; boulders (and everything but the runner) pass through wet
+  ink, via a collision category of its own; and a crossing on a live stroke only scores once
+  both its ends would be pinned. What remains is that held ink is rigid, so an unfinished rope
+  ramp can carry the runner while held. That can save a run but never scores, and closing it
+  would also break the bridge-in-progress case the change exists for.
 - **Consequence.** A rule change from the POC, listed in `tuning.md`. Fast strokes that finish
   before the runner arrives behave exactly as before.
 
@@ -182,7 +184,10 @@ logic lives in `game/Tutorial.kt` and is tested headlessly through the same pen 
 Every new debug APK has to carry the same signing key or Android refuses to update the app, and
 uninstalling first wipes the calibration, tutorial progress and best score. That is what made
 the game "ask for calibration every time" on the phone. The `ANDROID_DEBUG_KEYSTORE_BASE64`
-secret still gives a permanent key; without it CI now generates one once and keeps it in the
+secret still gives a permanent key; without it CI now generates one on `main` and keeps it in the
 GitHub Actions cache (`actions/cache` restore and save), which holds it as long as there is a
-build at least every 7 days. Committing a debug keystore would be simpler but the brief rules out
-committing any keystore.
+build at least every 7 days. Caches are scoped per branch, but every branch and PR can read
+`main`'s, so only `main` saves the key; other runs first delete any copy saved under their own
+branch (which would shadow `main`'s), and before `main` has a key they fall back to a throwaway
+one. Committing a debug keystore would be simpler but the brief rules out committing any
+keystore.
