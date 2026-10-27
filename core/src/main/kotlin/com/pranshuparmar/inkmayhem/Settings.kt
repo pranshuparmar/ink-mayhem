@@ -25,7 +25,11 @@ class Settings(private val prefs: Preferences) {
     var haptics: Boolean = prefs.getBoolean("haptics", true)
         set(v) { field = v; put { putBoolean("haptics", v) } }
 
-    /** Median raw signature pressure, or null if the player never calibrated or skipped. */
+    /** The first-run tutorial was finished or skipped; it stays available from settings. */
+    var tutorialDone: Boolean = prefs.getBoolean("tutorialDone", false)
+        set(v) { field = v; put { putBoolean("tutorialDone", v) } }
+
+    /** Median raw calibration pressure, or null if the player never calibrated or skipped. */
     var calibration: Float? = if (prefs.contains("cal")) prefs.getFloat("cal") else null
         set(v) { field = v; put { if (v == null) remove("cal") else putFloat("cal", v) } }
 

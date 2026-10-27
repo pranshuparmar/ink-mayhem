@@ -25,7 +25,8 @@ import com.pranshuparmar.inkmayhem.input.ToolType
  *
  * Options: --landscape, --size WxH (dp), --density D, --dark, --reduced-motion,
  *          --autoplay (the correct-ink bot plays), --wrong-ink TUNNEL=SPRING, --seed N, --settings,
- *          --calibration, --skip-calibration, --rotate-after seconds, --demo-draw,
+ *          --calibration, --skip-calibration, --tutorial LESSON (1-based), --skip-tutorial,
+ *          --rotate-after seconds, --demo-draw,
  *          --screenshot out.png --after seconds
  */
 fun main(args: Array<String>) {
@@ -46,6 +47,8 @@ fun main(args: Array<String>) {
         openSettings = opts.openSettings,
         openCalibration = opts.openCalibration,
         skipCalibration = opts.skipCalibration || opts.autoplay,
+        tutorialLesson = opts.tutorialLesson?.minus(1),
+        skipTutorial = opts.skipTutorial,
         wrongInk = opts.wrongInk,
     )
     val game = InkMayhemGame(platform, dev)
@@ -67,6 +70,8 @@ private class Options(args: Array<String>) {
     val openSettings = "--settings" in list
     val openCalibration = "--calibration" in list
     val skipCalibration = "--skip-calibration" in list
+    val tutorialLesson = value("--tutorial")?.toInt()
+    val skipTutorial = "--skip-tutorial" in list
     /** e.g. --wrong-ink TUNNEL=SPRING */
     val wrongInk = value("--wrong-ink")?.split(',')?.associate {
         val (h, i) = it.split('=')

@@ -68,7 +68,7 @@ class Fonts(private var density: Float) : Disposable {
 
     companion object {
         /** Everything the game writes, including the POC's typographic extras. */
-        val TEXT = FreeTypeFontGenerator.DEFAULT_CHARS + "×·’…→—–°"
+        val TEXT = FreeTypeFontGenerator.DEFAULT_CHARS + "×·‘’“”…→—–°"
         const val DIGITS = "0123456789,.-+×mpts "
     }
 }

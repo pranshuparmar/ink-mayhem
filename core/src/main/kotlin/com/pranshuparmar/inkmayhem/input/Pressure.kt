@@ -22,7 +22,7 @@ object Pressure {
         return (TARGET * raw / c).coerceIn(0f, 1f)
     }
 
-    /** Median of a signature, clamped to the accepted calibration range. */
+    /** Median of the calibration writing, clamped to the accepted calibration range. */
     fun calibrate(samples: FloatArray, count: Int): Float {
         val sorted = samples.copyOf(count).also { it.sort() }
         return sorted[count / 2].coerceIn(CAL_MIN, CAL_MAX)

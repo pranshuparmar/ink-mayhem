@@ -105,6 +105,18 @@ class GameSim(
     private var nextSpeedNote = 100f
     var snaps = 0
         private set
+    /** Spring bounces of the runner this run. */
+    var bounces = 0
+        private set
+
+    /** Tutorial: the runner stands still (no drive, no stuck rules) until released. */
+    var runnerHeld = false
+    /** Tutorial: frame this x instead of following the runner (NaN = follow). */
+    var camFocusX = Float.NaN
+    /** Where the runner sits in the view, as a fraction of its height (the tutorial's card covers the top). */
+    var camRunnerY = 0.6f
+    /** Tutorial: strokes cost nothing. */
+    var unlimitedInk = false
 
     /** The stroke being drawn, or null. */
     var drawing: Drawing? = null
@@ -127,6 +139,8 @@ class GameSim(
         var x0 = Float.POSITIVE_INFINITY
         var x1 = Float.NEGATIVE_INFINITY
         var heaviest = -1
+        /** Bit per ink kind (1 shl weight) seen in this stroke so far. */
+        var kinds = 0
         /** Wet ink is laid up to this point. */
         var wetFrom = 0
         var wetRope = 0f
@@ -170,7 +184,7 @@ class GameSim(
         blocks.clear(); drops.clear(); notes.clear(); boulders.clear()
         ceilings.clear(); hazards.clear()
         combo = 1; score = 0.0; scoredDist = 0f; pendingDeath = null; boulderBounce.clear()
-        dist = 0f; inkLeft = INK_START; timeScale = 1f; simT = 0f; snaps = 0; nextSpeedNote = 100f
+        dist = 0f; inkLeft = INK_START; timeScale = 1f; simT = 0f; snaps = 0; bounces = 0; nextSpeedNote = 100f
         drawing = null; erasingPointer = -1; pendingBounce = false; death = null
     }
 
@@ -220,6 +234,21 @@ class GameSim(
         body.setLinearVelocity(vx, 0f)
         return Boulder(body).also { boulders += it }
     }
+
+    /** Abandons whatever is going on and shows a fresh level under the title card. */
+    fun toTitle() {
+        newRun()
+        state = GameState.TITLE
+    }
+
+    /** Jumps the camera to where it is heading (a new tutorial scene shouldn't pan in). */
+    fun snapCamera() {
+        val p = runner.body.position
+        cam.set(camTargetX(p.x), p.y - vh * camRunnerY)
+        camPrev.set(cam)
+    }
+
+    private fun camTargetX(runnerX: Float) = if (camFocusX.isNaN()) runnerX - vw * 0.28f else camFocusX - vw / 2f
 
     private fun startRun() {
         if (state == GameState.TITLE) {
@@ -458,7 +487,7 @@ class GameSim(
             }
             val th = Ink.thickness(d.smoothed)
             val c = len * th * th * InkPhysics.INK_K
-            if (inkLeft - d.cost - c <= 0f) {
+            if (!unlimitedInk && inkLeft - d.cost - c <= 0f) {
                 if (!d.dry) {
                     d.dry = true
                     events.toast(OUT_OF_INK)
@@ -475,7 +504,11 @@ class GameSim(
         d.xs.add(x); d.ys.add(y); d.ps.add(d.smoothed)
         d.x0 = min(d.x0, x)
         d.x1 = max(d.x1, x)
-        if (last >= 0) d.heaviest = max(d.heaviest, Ink.of((d.ps[last] + d.smoothed) / 2f).weight)
+        if (last >= 0) {
+            val w = Ink.of((d.ps[last] + d.smoothed) / 2f).weight
+            d.heaviest = max(d.heaviest, w)
+            d.kinds = d.kinds or (1 shl w)
+        }
         growWet(d)
     }
 
@@ -520,7 +553,7 @@ class GameSim(
             for (i in n - k until n) ps[i] = max(ps[i], pEnd)
         }
         val s = ink.buildStroke(d.xs.items, d.ys.items, ps.items, n) ?: return
-        inkLeft = max(0f, inkLeft - s.cost)
+        if (!unlimitedInk) inkLeft = max(0f, inkLeft - s.cost)
         // footprint + heaviest ink, for scoring against each hazard's par
         var x0 = Float.POSITIVE_INFINITY
         var x1 = Float.NEGATIVE_INFINITY
@@ -570,7 +603,7 @@ class GameSim(
         val rb = runner.body
 
         if (state == GameState.RUN || state == GameState.DEAD) {
-            if (state == GameState.RUN) {
+            if (state == GameState.RUN && !runnerHeld) {
                 val w = rb.angularVelocity
                 val wt = runSpeed / RUNNER_R
                 rb.applyTorque((3f * (wt - w)).coerceIn(-7f, 7f), true)
@@ -598,6 +631,7 @@ class GameSim(
                 val v = rb.linearVelocity
                 rb.setLinearVelocity(max(v.x, runSpeed * 0.95f), -9.6f)
                 runner.bounceCd = 0.3f
+                bounces++
                 runner.squash = 1f
                 val p = rb.position
                 events.burst(p.x, p.y + RUNNER_R, 8, 2f, Tok.SPRING, 0f)
@@ -674,7 +708,7 @@ class GameSim(
             }
             judgeHazards(px, py)
             if (py > levelNear(px) + 4f) die("Fell in", DeathKind.FELL)
-            if (px > runner.bestX + 0.5f) {
+            if (px > runner.bestX + 0.5f || runnerHeld) {
                 runner.bestX = px
                 runner.bestT = simT
             } else if (simT - runner.bestT > 5f) {
@@ -684,8 +718,8 @@ class GameSim(
 
         // camera
         val p = rb.position
-        val tx = p.x - vw * 0.28f
-        val ty = p.y - vh * 0.6f
+        val tx = camTargetX(p.x)
+        val ty = p.y - vh * camRunnerY
         cam.x += (tx - cam.x) * min(1f, dt * 4f)
         cam.y += (ty - cam.y) * min(1f, dt * 2.5f)
         if (state != GameState.TITLE) generate()

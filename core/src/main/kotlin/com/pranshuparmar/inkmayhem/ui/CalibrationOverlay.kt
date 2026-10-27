@@ -1,5 +1,6 @@
 package com.pranshuparmar.inkmayhem.ui
 
+import com.badlogic.gdx.utils.Align
 import com.pranshuparmar.inkmayhem.input.PenPhase
 import com.pranshuparmar.inkmayhem.input.PenSample
 import com.pranshuparmar.inkmayhem.input.Pressure
@@ -12,8 +13,9 @@ import com.pranshuparmar.inkmayhem.render.Tok
 import java.util.Locale
 
 /**
- * POC #cal: "Sign your name". The median raw pressure of the signature becomes the calibration,
- * so the player's everyday writing pressure lands mid-spring.
+ * Pressure calibration (POC #cal, which asked for a signature): the player writes "Ink Mayhem"
+ * over a faint guide, and the median raw pressure becomes the calibration, so their everyday
+ * writing pressure lands mid-spring. It runs on first launch and from "Recalibrate".
  */
 class CalibrationOverlay(
     private val fonts: Fonts,
@@ -31,12 +33,12 @@ class CalibrationOverlay(
     private val press = Press()
     private val intro = Flow(22.5f).setText(
         { fonts.get(Face.UI, 15f) }, Tok.MUTED,
-        "Write it the way you normally would. Your everyday pressure becomes a spring. Lighter makes rope, harder makes a beam.",
+        "Write it the way you normally write, so the game learns your pressure. Your everyday pressure makes a spring; lighter makes rope, harder makes a beam.",
     )
 
     private var samples = FloatArray(4096)
     private var sampleCount = 0
-    /** Signature ink as (x0, y0, x1, y1, width) in pad-relative dp. */
+    /** Written ink as (x0, y0, x1, y1, width) in pad-relative dp. */
     private var ink = FloatArray(4096 * 5)
     private var inkCount = 0
     private var capturePointer = -1
@@ -170,7 +172,7 @@ class CalibrationOverlay(
     fun drawShapes(shapes: Shapes, pal: Palette, f: Frame) {
         shapes.color(pal[Tok.PAPER], 0.7f).rect(0f, 0f, f.wDp, f.hDp)
         Widgets.card(shapes, pal, card)
-        // the signing pad: paper, dashed graphite border, a dashed baseline
+        // the writing pad: paper, dashed graphite border, a dashed baseline
         shapes.color(pal[Tok.PAPER]).roundRect(pad.x, pad.y, pad.w, pad.h, 10f)
         shapes.color(pal[Tok.GRAPHITE])
         dashedRect(shapes, pad, 4f, 4f)
@@ -217,10 +219,12 @@ class CalibrationOverlay(
     fun drawText(text: Text, pal: Palette) {
         val x = card.x + 20f
         var y = card.y + 20f
-        text.line(fonts.get(Face.HAND_BOLD, 32f), "Sign your name", x, y, 32f, pal[Tok.INK])
+        text.line(fonts.get(Face.HAND_BOLD, 32f), TITLE, x, y, 32f, pal[Tok.INK])
         y += 32f + 12f
         intro.draw(text, pal, x, y)
-        text.draw(fonts.get(Face.HAND, 20f), "×", pad.x + 12f, pad.bottom - 40f - fonts.get(Face.HAND, 20f).capHeight, pal[Tok.GRAPHITE])
+        // the phrase to copy, faint, sitting on the baseline
+        val guide = fonts.get(Face.HAND, GUIDE_SIZE)
+        text.draw(guide, PHRASE, pad.x + pad.w / 2f, pad.bottom - 34f - guide.capHeight - 2f, pal[Tok.GRAPHITE], GUIDE_ALPHA, Align.center)
         rebuildStatus()
         text.line(fonts.get(Face.MONO, 11f), statusOverride ?: status, x, pad.bottom + 12f, 16f, pal[Tok.MUTED])
         val font = fonts.get(Face.UI_BOLD, 14f)
@@ -233,5 +237,9 @@ class CalibrationOverlay(
 
     companion object {
         private const val WAITING = "Waiting for the S Pen…"
+        const val PHRASE = "Ink Mayhem"
+        const val TITLE = "Write “Ink Mayhem”"
+        private const val GUIDE_SIZE = 46f
+        private const val GUIDE_ALPHA = 0.22f
     }
 }

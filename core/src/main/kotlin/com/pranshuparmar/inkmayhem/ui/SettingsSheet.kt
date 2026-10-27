@@ -10,12 +10,13 @@ import com.pranshuparmar.inkmayhem.render.Shapes
 import com.pranshuparmar.inkmayhem.render.Text
 import com.pranshuparmar.inkmayhem.render.Tok
 
-/** POC #sheet: a bottom sheet of checkbox rows with "Recalibrate pressure" and "Done". */
+/** POC #sheet: a bottom sheet of checkbox rows with "How to play", "Recalibrate" and "Done". */
 class SettingsSheet(
     private val fonts: Fonts,
     private val settings: Settings,
     debugBuild: Boolean,
     private val onRecalibrate: () -> Unit,
+    private val onHowToPlay: () -> Unit,
     private val onChanged: () -> Unit,
 ) {
     private class Option(val title: String, val detail: String, val get: () -> Boolean, val set: (Boolean) -> Unit) {
@@ -35,6 +36,7 @@ class SettingsSheet(
         }
     }
     private val card = Box()
+    private val howTo = Box()
     private val recal = Box()
     private val done = Box()
     private val press = Press()
@@ -62,9 +64,11 @@ class SettingsSheet(
         }
         val font = fonts.get(Face.UI_BOLD, 14f)
         val doneW = text.width(font, "Done") + 32f
-        val recalW = text.width(font, "Recalibrate pressure") + 32f
+        val recalW = text.width(font, RECALIBRATE) + 32f
+        val howToW = text.width(font, HOW_TO_PLAY) + 32f
         done.set(card.right - 20f - doneW, y + 10f, doneW, 42f)
         recal.set(done.x - 8f - recalW, y + 10f, recalW, 42f)
+        howTo.set(recal.x - 8f - howToW, y + 10f, howToW, 42f)
     }
 
     /** Consumes every sample while open. */
@@ -83,6 +87,10 @@ class SettingsSheet(
                     hide()
                     onRecalibrate()
                 }
+                howTo -> {
+                    hide()
+                    onHowToPlay()
+                }
                 is Option -> {
                     t.set(!t.get())
                     onChanged()
@@ -96,6 +104,7 @@ class SettingsSheet(
     private fun targetAt(x: Float, y: Float): Any? {
         if (done.contains(x, y)) return done
         if (recal.contains(x, y)) return recal
+        if (howTo.contains(x, y)) return howTo
         return options.firstOrNull { it.box.contains(x, y) }
     }
 
@@ -106,6 +115,7 @@ class SettingsSheet(
             shapes.color(pal[Tok.LINE]).rect(o.box.x, o.box.bottom - 1f, o.box.w, 1f)
             Widgets.checkbox(shapes, pal, o.box.x + 2f, o.box.y + (o.box.h - 20f) / 2f, o.get())
         }
+        Widgets.button(shapes, pal, howTo, primary = false, enabled = true, pressed = press.isPressed(howTo))
         Widgets.button(shapes, pal, recal, primary = false, enabled = true, pressed = press.isPressed(recal))
         Widgets.button(shapes, pal, done, primary = true, enabled = true, pressed = press.isPressed(done))
     }
@@ -119,7 +129,13 @@ class SettingsSheet(
             text.line(detail, o.detail, x, o.box.y + 29f, 16f, pal[Tok.MUTED])
         }
         val font = fonts.get(Face.UI_BOLD, 14f)
-        Widgets.buttonLabel(text, font, pal, recal, "Recalibrate pressure", primary = false, enabled = true)
+        Widgets.buttonLabel(text, font, pal, howTo, HOW_TO_PLAY, primary = false, enabled = true)
+        Widgets.buttonLabel(text, font, pal, recal, RECALIBRATE, primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, done, "Done", primary = true, enabled = true)
+    }
+
+    companion object {
+        const val HOW_TO_PLAY = "How to play"
+        const val RECALIBRATE = "Recalibrate"
     }
 }

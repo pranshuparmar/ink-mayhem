@@ -16,6 +16,7 @@ import com.pranshuparmar.inkmayhem.game.GameState
 import com.pranshuparmar.inkmayhem.game.Haptic
 import com.pranshuparmar.inkmayhem.game.InkBot
 import com.pranshuparmar.inkmayhem.game.Sfx
+import com.pranshuparmar.inkmayhem.game.Tutorial
 import com.pranshuparmar.inkmayhem.input.PenButtons
 import com.pranshuparmar.inkmayhem.input.PenPhase
 import com.pranshuparmar.inkmayhem.input.PenReadout
@@ -40,6 +41,7 @@ import com.pranshuparmar.inkmayhem.ui.PressureGauge
 import com.pranshuparmar.inkmayhem.ui.SettingsSheet
 import com.pranshuparmar.inkmayhem.ui.TitleCard
 import com.pranshuparmar.inkmayhem.ui.Toast
+import com.pranshuparmar.inkmayhem.ui.TutorialCard
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
@@ -51,6 +53,10 @@ class DevOptions(
     val openSettings: Boolean = false,
     val openCalibration: Boolean = false,
     val skipCalibration: Boolean = false,
+    /** Open the tutorial at this lesson (0-based) on start. */
+    val tutorialLesson: Int? = null,
+    /** Don't open the first-run tutorial (autoplay never does). */
+    val skipTutorial: Boolean = false,
     /** Autoplay draws this ink for these hazards instead of par (to reach the death card). */
     val wrongInk: Map<com.pranshuparmar.inkmayhem.game.HazardType, com.pranshuparmar.inkmayhem.physics.Ink> = emptyMap(),
 )
@@ -68,6 +74,11 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
     private lateinit var deathCard: DeathCard
     private lateinit var sheet: SettingsSheet
     private lateinit var calibration: CalibrationOverlay
+    private lateinit var tutorialCard: TutorialCard
+    /** The tutorial runs on its own sim; the player's run waits (or is abandoned) meanwhile. */
+    private var tutorial: Tutorial? = null
+    private var tutorialPending = false
+    private val active: GameSim get() = tutorial?.sim ?: sim
     private val uiCam = OrthographicCamera()
     private var pal = Palette.LIGHT
     private val fx = Fx()
@@ -103,11 +114,17 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         density = platform.density
         fonts = Fonts(density)
         audio = Audio(settings)
-        sim = GameSim(seed = dev.seed ?: System.nanoTime(), events = Events(), best = settings.best)
+        sim = GameSim(seed = dev.seed ?: System.nanoTime(), events = Events(saveBest = true), best = settings.best)
         world = WorldRenderer(shapes, text, fonts)
         titleCard = TitleCard(fonts)
         deathCard = DeathCard(fonts)
-        sheet = SettingsSheet(fonts, settings, platform.isDebugBuild, onRecalibrate = { calibration.show() }, onChanged = ::onSettingsChanged)
+        tutorialCard = TutorialCard(fonts)
+        sheet = SettingsSheet(
+            fonts, settings, platform.isDebugBuild,
+            onRecalibrate = { calibration.show() },
+            onHowToPlay = { startTutorial(0) },
+            onChanged = ::onSettingsChanged,
+        )
         calibration = CalibrationOverlay(
             fonts,
             onDone = { cal ->
@@ -117,6 +134,8 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
             onSkip = { if (settings.calibration == null) settings.calibration = Pressure.DEFAULT_CAL },
         )
         if (dev.openCalibration || (settings.calibration == null && !dev.skipCalibration)) calibration.show()
+        // first run: calibrate, then the tutorial, then the title card
+        tutorialPending = dev.tutorialLesson != null || (!settings.tutorialDone && !dev.skipTutorial && !dev.autoplay)
         if (dev.openSettings) sheet.show()
         // Android back closes an overlay first, then leaves the game as usual.
         Gdx.input.setCatchKey(Input.Keys.BACK, true)
@@ -126,6 +145,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
                 when {
                     calibration.open -> calibration.skip()
                     sheet.open -> sheet.hide()
+                    tutorial != null -> endTutorial(finished = false)
                     else -> Gdx.app.exit()
                 }
                 return true
@@ -140,7 +160,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         if (d != density) {
             density = d
             fonts.setDensity(d)
-            titleCard.invalidate(); deathCard.invalidate(); calibration.invalidate()
+            titleCard.invalidate(); deathCard.invalidate(); calibration.invalidate(); tutorialCard.invalidate()
         }
         wDp = width / density
         hDp = height / density
@@ -149,6 +169,10 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         scale = (min(wDp, hDp) / 12f).coerceIn(22f, 64f)
         sim.scale = scale
         sim.setViewport(wDp / scale, hDp / scale)
+        tutorial?.sim?.let {
+            it.scale = scale
+            it.setViewport(wDp / scale, hDp / scale)
+        }
         if (!sized && sim.state == GameState.TITLE) sim.newRun() // frame the start with the real viewport
         sized = true
         warmFonts()
@@ -162,6 +186,8 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         for (size in floatArrayOf(12.5f, 14f, 14.5f, 15f)) { fonts.get(Face.UI, size); fonts.get(Face.UI_BOLD, size) }
         for (size in floatArrayOf(20f, 32f, 40f)) fonts.get(Face.HAND_BOLD, size)
         fonts.get(Face.HAND, 20f)
+        fonts.get(Face.HAND_BOLD, 28f)
+        fonts.get(Face.UI, 13.5f); fonts.get(Face.UI_BOLD, 13.5f); fonts.get(Face.UI_BOLD, 13f)
         for (size in floatArrayOf(30f, 40f, 64f)) fonts.get(Face.HAND_BOLD, size, Fonts.DIGITS)
         fonts.get(Face.HAND, max(15f, scale * 0.6f))
         fonts.get(Face.HAND_BOLD, max(18f, scale * 0.75f))
@@ -188,28 +214,39 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         fx.reducedMotion = reduced
         sim.realTime = now
         sim.tint = settings.tint
+        tutorial?.sim?.realTime = now
+        if (tutorialPending && sized && !calibration.open) {
+            tutorialPending = false
+            startTutorial(dev.tutorialLesson ?: 0)
+        }
 
         platform.penQueue.drain(sample) { onSample(it, now) }
 
         if (!paused) {
             acc += dt
             var n = 0
+            val tut = tutorial
             while (acc >= STEP && n < 4) {
-                bot?.update()
-                sim.tick(STEP)
+                if (tut != null) {
+                    tut.tick(STEP)
+                } else {
+                    bot?.update()
+                    sim.tick(STEP)
+                }
                 fx.update(STEP)
                 acc -= STEP
                 n++
             }
             if (n == 4) acc = 0f
-            sim.cull(dt)
+            active.cull(dt)
+            if (tut != null && tut.phase == Tutorial.Phase.FINISHED) endTutorial(finished = true)
         }
-        if (dev.autoplay) autoplay(now)
+        if (dev.autoplay && tutorial == null) autoplay(now)
 
         readout.update(now)
         toast.update(now, reduced)
-        hud.update(dt, sim, settings.best, reduced)
-        gauge.update(dt, sim.drawing != null, reduced)
+        if (tutorial == null) hud.update(dt, sim, settings.best, reduced)
+        gauge.update(dt, active.drawing != null, reduced)
         audio.update(dt)
 
         draw(now, reduced)
@@ -237,9 +274,15 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         val wx = world.camX + x / scale
         val wy = world.camY + y / scale
         val time = s.timeNanos / 1e9
+        val tut = tutorial
+        val card = tutorialCard
         when (s.phase) {
             PenPhase.DOWN -> {
-                if (hud.rightArea.contains(x, y)) {
+                if (tut != null && card.box.contains(x, y)) {
+                    card.press.down(s.pointerId, if (card.skip.contains(x, y)) card.skip else null)
+                    return
+                }
+                if (tut == null && hud.rightArea.contains(x, y)) {
                     hudPress.down(s.pointerId, if (hud.settingsButton.contains(x, y)) hud.settingsButton else null)
                     return
                 }
@@ -248,19 +291,25 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
                     return
                 }
                 // POC: the hover nib is only cleared by pen-downs during a run (not the start/restart tap)
-                if (sim.state == GameState.RUN) world.hoverOn = false
+                if (active.state == GameState.RUN) world.hoverOn = false
                 val erase = s.toolType == ToolType.ERASER || (s.buttons and (PenButtons.SIDE or PenButtons.SECONDARY)) != 0
-                sim.penDown(s.pointerId, wx, wy, n, erase, time)
+                if (tut != null) tut.penDown(s.pointerId, wx, wy, n, erase, time) else sim.penDown(s.pointerId, wx, wy, n, erase, time)
             }
-            PenPhase.MOVE -> sim.penMove(s.pointerId, wx, wy, n, time)
+            PenPhase.MOVE -> if (tut != null) tut.penMove(s.pointerId, wx, wy, n, time) else sim.penMove(s.pointerId, wx, wy, n, time)
             PenPhase.UP, PenPhase.CANCEL -> {
+                if (tut != null && s.pointerId == card.press.pointer) {
+                    if (card.press.up(s.pointerId, if (card.skip.contains(x, y)) card.skip else null) != null && s.phase == PenPhase.UP) {
+                        endTutorial(finished = false)
+                    }
+                    return
+                }
                 if (s.pointerId == hudPress.pointer) {
                     if (hudPress.up(s.pointerId, if (hud.settingsButton.contains(x, y)) hud.settingsButton else null) != null && s.phase == PenPhase.UP) {
                         sheet.show()
                     }
                     return
                 }
-                sim.penUp(s.pointerId)
+                if (tut != null) tut.penUp(s.pointerId) else sim.penUp(s.pointerId)
             }
             PenPhase.HOVER -> if (s.toolType.isPen || (s.toolType == ToolType.MOUSE && allowFinger)) {
                 world.hoverOn = true
@@ -269,6 +318,43 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
             }
             PenPhase.HOVER_EXIT -> world.hoverOn = false
         }
+    }
+
+    // ---------------------------------------------------------------------------------- tutorial
+
+    private fun startTutorial(lesson: Int) {
+        tutorial?.sim?.dispose()
+        val ts = GameSim(seed = 1, events = Events(saveBest = false), vwMetres = wDp / scale, vhMetres = hDp / scale)
+        ts.scale = scale
+        ts.tint = true
+        val t = Tutorial(ts)
+        updateFrame()
+        frameTutorial(t)
+        t.start(lesson)
+        tutorial = t
+        world.hoverOn = false
+        tutorialCard.press.cancel()
+        toast.clear()
+        audio.scratch(0f, 0.5f)
+    }
+
+    /** Lays out the lesson card and keeps the scene in the free space below it. */
+    private fun frameTutorial(t: Tutorial) {
+        tutorialCard.layout(text, frame, t)
+        val below = tutorialCard.box.bottom
+        t.sim.camRunnerY = (below + (hDp - below) * 0.62f) / hDp
+    }
+
+    /** Back to the title card; [finished] = played to the end rather than skipped. */
+    private fun endTutorial(finished: Boolean) {
+        val t = tutorial ?: return
+        tutorial = null
+        t.sim.dispose()
+        settings.tutorialDone = true
+        world.hoverOn = false
+        audio.scratch(0f, 0.5f)
+        if (sim.state != GameState.TITLE) sim.toTitle() else fx.clear()
+        if (finished) toast.show(READY_TOAST, clock, force = true)
     }
 
     private fun onSettingsChanged() {
@@ -294,7 +380,8 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
 
     // ------------------------------------------------------------------------------------ events
 
-    private inner class Events : GameEvents {
+    /** [saveBest] is off for the tutorial's sim, whose "runs" mustn't touch the best score. */
+    private inner class Events(private val saveBest: Boolean) : GameEvents {
         override fun sound(sfx: Sfx, variant: Int) = audio.play(sfx, variant)
         override fun scratch(volume: Float, pressure: Float) = audio.scratch(volume, pressure)
         override fun toast(message: String, force: Boolean, delaySec: Float) {
@@ -317,7 +404,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         }
 
         override fun died(death: Death) {
-            if (death.isBest) settings.best = death.best
+            if (saveBest && death.isBest) settings.best = death.best
         }
 
         override fun runReset() = fx.clear()
@@ -332,18 +419,20 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         Gdx.gl.glEnable(GL20.GL_BLEND)
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA)
 
-        world.render(sim, fx, pal, settings.tint, uiCam, wDp, hDp, scale, density, (acc / STEP).coerceIn(0f, 1f))
+        val tut = tutorial
+        // the tutorial always colours ink by type: that's what it teaches
+        world.render(active, fx, pal, settings.tint || tut != null, uiCam, wDp, hDp, scale, density, (acc / STEP).coerceIn(0f, 1f))
 
-        val safeL = Gdx.graphics.safeInsetLeft / density
-        val safeT = Gdx.graphics.safeInsetTop / density
-        val safeR = Gdx.graphics.safeInsetRight / density
-        val safeB = Gdx.graphics.safeInsetBottom / density
-        frame.wDp = wDp; frame.hDp = hDp; frame.safeL = safeL; frame.safeT = safeT; frame.safeR = safeR; frame.safeB = safeB
+        updateFrame()
+        val safeL = frame.safeL
+        val safeT = frame.safeT
+        val safeR = frame.safeR
 
         // HUD
         hud.layout(text, fonts, wDp, safeL, safeT, safeR)
+        if (tut != null) frameTutorial(tut)
         val ink = max(0f, sim.inkLeft - (sim.drawing?.cost ?: 0f))
-        val drawing = sim.drawing
+        val drawing = active.drawing
         // POC: live = drawing ? (drawing.ps ?? 0) : 0, so the marker drops to the bottom as the gauge fades
         val live = if (drawing == null || drawing.smoothed.isNaN()) 0f else drawing.smoothed
         val gaugeLeft = safeL + 10f
@@ -358,27 +447,28 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         val tv = toast.visibility
         val toastFont = fonts.get(Face.UI_BOLD, 14f)
         val toastW = min(text.width(toastFont, toast.message) + 28f, wDp * 0.92f)
-        val toastTop = safeT + 70f - (if (reduced) 0f else 8f * (1f - tv))
+        val toastTop = (if (tut != null) tutorialCard.box.bottom + 12f else safeT + 70f) - (if (reduced) 0f else 8f * (1f - tv))
 
         shapes.begin(uiCam.combined, density)
-        hud.drawShapes(shapes, pal, wDp, ink, sim.combo, hudPress.isPressed(hud.settingsButton))
+        if (tut != null) tutorialCard.drawShapes(shapes, pal, tut) else hud.drawShapes(shapes, pal, wDp, ink, sim.combo, hudPress.isPressed(hud.settingsButton))
         gauge.drawShapes(shapes, pal, gaugeLeft, gaugeTop, live, drawing != null)
         if (showReadout) overlay.drawBox(shapes, pal, boxRight, boxTop, boxW, boxH)
         if (tv > 0f) shapes.color(pal[Tok.INK], tv).roundRect(wDp / 2f - toastW / 2f, toastTop, toastW, 34f, 17f)
         shapes.end()
         batch.projectionMatrix = uiCam.combined
         batch.begin()
-        hud.drawText(text, fonts, pal, wDp, sim.combo)
+        if (tut != null) tutorialCard.drawText(text, pal, tut) else hud.drawText(text, fonts, pal, wDp, sim.combo)
         gauge.drawText(text, fonts, pal, gaugeLeft, gaugeTop, live, drawing != null)
         if (showReadout) overlay.drawText(text, monoFont, pal, boxRight - boxW, boxTop)
         if (tv > 0f) text.line(toastFont, toast.message, wDp / 2f, toastTop, 34f, pal[Tok.PAPER], tv, Align.center)
         batch.end()
 
-        // Cards: the title card until the first pen-down; the death card 0.6 s after dying.
-        if (sim.state == GameState.TITLE) {
+        // Cards: the title card until the first pen-down; the death card 0.6 s after dying. During
+        // the tutorial its own card is the only one.
+        if (tut == null && sim.state == GameState.TITLE) {
             titleCard.layout(text, frame, settings.best)
             pass({ titleCard.drawShapes(shapes, pal, 1f) }, { titleCard.drawText(text, pal, 1f) })
-        } else if (sim.state == GameState.DEAD && now - sim.deadAt >= 0.6) {
+        } else if (tut == null && sim.state == GameState.DEAD && now - sim.deadAt >= 0.6) {
             val d = sim.death
             if (d != null) {
                 deathCard.layout(text, frame, d)
@@ -393,6 +483,15 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
             calibration.layout(text, frame)
             pass({ calibration.drawShapes(shapes, pal, frame) }, { calibration.drawText(text, pal) })
         }
+    }
+
+    private fun updateFrame() {
+        frame.wDp = wDp
+        frame.hDp = hDp
+        frame.safeL = Gdx.graphics.safeInsetLeft / density
+        frame.safeT = Gdx.graphics.safeInsetTop / density
+        frame.safeR = Gdx.graphics.safeInsetRight / density
+        frame.safeB = Gdx.graphics.safeInsetBottom / density
     }
 
     private inline fun pass(shapesPass: () -> Unit, textPass: () -> Unit) {
@@ -424,6 +523,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
     companion object {
         const val STEP = 1f / 60f
         const val FINGER_TOAST = "Use the S Pen. Fingers don’t leave ink."
+        const val READY_TOAST = "You’re ready. The lightest ink that works grows your combo."
         const val SNAP_BUZZ_MS = 12
         const val DEATH_BUZZ_MS = 45
     }
