@@ -10,8 +10,8 @@ class Settings(private val prefs: Preferences) {
     var sound: Boolean = prefs.getBoolean("sound", true)
         set(v) { field = v; put { putBoolean("sound", v) } }
 
-    /** "Colour ink by type": rope green, spring amber, beam red. */
-    var tint: Boolean = prefs.getBoolean("tint", false)
+    /** "Colour ink by type": rope green, spring amber, beam red. On by default (the POC's was off). */
+    var tint: Boolean = prefs.getBoolean("tint", true)
         set(v) { field = v; put { putBoolean("tint", v) } }
 
     /** "Pen readout": the debug overlay. */

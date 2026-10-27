@@ -186,13 +186,13 @@ GitHub Release for the tag with `ink-mayhem-0.1.0.apk` and auto-generated notes.
 
 | Trigger | Workflow | Output |
 |---|---|---|
-| Every push and pull request | `ci.yml`: `./gradlew lint test assembleDebug` | The debug APK as a workflow artifact |
-| **Run workflow** on any branch | `ci.yml` (manual) | The same, on demand |
-| Push to `main`, or a manual run on `main` | `ci.yml` | Moves the `latest-debug` tag and replaces the prerelease's APK |
+| Push to any other branch, pull request | `ci.yml`: `./gradlew lint test` | Pass or fail; no APK |
+| Push to `main` | `ci.yml`: `./gradlew lint test assembleDebug` | The debug APK as a workflow artifact; moves the `latest-debug` tag and replaces the prerelease's APK |
+| **Run workflow** on any branch | `ci.yml` (manual), the same as `main` | The debug APK as a workflow artifact (and `latest-debug` when run on `main`) |
 | Tag `v*` | `release.yml` | Signed release APK on a GitHub Release |
 
-To build without pushing (from a phone too): on GitHub open **Actions → CI → Run workflow**, pick
-the branch and run it. The APK is under **Artifacts** on the finished run's page (a zip holding
+APKs are built automatically only for `main`. To get one for another branch (from a phone too):
+on GitHub open **Actions → CI → Run workflow**, pick the branch and run it. The APK is under **Artifacts** on the finished run's page (a zip holding
 the `.apk`); a run on `main` also refreshes `latest-debug`.
 
 ## Project layout

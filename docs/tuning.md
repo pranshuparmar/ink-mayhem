@@ -42,6 +42,8 @@ Made after playtesting the port on a phone, at the owner's request.
 3. **Calibration asks for "Ink Mayhem"** instead of a signature, with the phrase as a faint
    guide. The maths is the same.
 4. **A first-run tutorial** (new; see [Tutorial](#tutorial)).
+5. **"Colour ink by type" is on by default** (the POC's default was plain ink), so the ink
+   colours the tutorial teaches carry into the game. It can still be turned off in settings.
 
 ## Physics (`core/.../physics/InkPhysics.kt`, `Ink.kt`)
 

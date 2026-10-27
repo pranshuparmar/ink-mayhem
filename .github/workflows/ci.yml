@@ -17,6 +17,10 @@ jobs:
     permissions:
       contents: write # only used on main, to update the latest-debug prerelease
       actions: write # to drop a branch-scoped copy of the debug key (see below)
+    env:
+      # APKs are built for pushes to main and for "Run workflow"; other branches and pull
+      # requests get lint and tests only.
+      APK: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     steps:
       - uses: actions/checkout@v7
 
@@ -33,7 +37,7 @@ jobs:
       # on main and keeps it in the Actions cache (evicted after 7 days without a build). Other
       # branches and PRs read main's key; a copy saved under a branch would shadow it, so drop it.
       - name: Drop a branch-only debug key
-        if: github.ref != 'refs/heads/main'
+        if: env.APK == 'true' && github.ref != 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -41,12 +45,14 @@ jobs:
             >/dev/null 2>&1 || true
 
       - name: Restore the CI debug key
+        if: env.APK == 'true'
         uses: actions/cache/restore@v6
         with:
           path: ~/.ink-mayhem/debug.keystore
           key: ink-mayhem-debug-keystore-v1
 
       - name: Pick the debug key
+        if: env.APK == 'true'
         id: debugkey
         env:
           DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
@@ -78,10 +84,16 @@ jobs:
           path: ~/.ink-mayhem/debug.keystore
           key: ink-mayhem-debug-keystore-v1
 
+      - name: Lint and test
+        if: env.APK != 'true'
+        run: ./gradlew lint test --stacktrace
+
       - name: Lint, test and build the debug APK
+        if: env.APK == 'true'
         run: ./gradlew lint test assembleDebug -PappVersionCode=${{ github.run_number }} --stacktrace
 
       - name: Check that a release build signs (throwaway key)
+        if: env.APK == 'true'
         run: |
           ks="$RUNNER_TEMP/throwaway.jks"
           keytool -genkeypair -keystore "$ks" -storetype PKCS12 -alias throwaway \
@@ -93,6 +105,7 @@ jobs:
           rm -f "$ks"
 
       - name: Name the APK
+        if: env.APK == 'true'
         id: apk
         run: |
           short_sha="${GITHUB_SHA::7}"
@@ -101,6 +114,7 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
+        if: env.APK == 'true'
         with:
           name: ${{ steps.apk.outputs.name }}
           path: ${{ steps.apk.outputs.name }}
