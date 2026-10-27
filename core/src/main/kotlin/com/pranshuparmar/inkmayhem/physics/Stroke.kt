@@ -17,6 +17,13 @@ class FixtureTag(val kind: FixtureKind, val stroke: Stroke? = null) {
         val BOULDER = FixtureTag(FixtureKind.BOULDER)
         val CRATE = FixtureTag(FixtureKind.CRATE)
 
+        private val WET_ROPE = FixtureTag(FixtureKind.ROPE)
+        private val WET_SPRING = FixtureTag(FixtureKind.SPRING)
+        private val WET_BEAM = FixtureTag(FixtureKind.BEAM)
+
+        /** Wet ink (still being drawn) has no stroke yet, but its kind still counts: springs bounce. */
+        fun wet(ink: Ink) = when (ink) { Ink.ROPE -> WET_ROPE; Ink.SPRING -> WET_SPRING; Ink.BEAM -> WET_BEAM }
+
         fun of(ink: Ink, stroke: Stroke) = FixtureTag(
             when (ink) { Ink.ROPE -> FixtureKind.ROPE; Ink.SPRING -> FixtureKind.SPRING; Ink.BEAM -> FixtureKind.BEAM },
             stroke,
@@ -27,6 +34,8 @@ class FixtureTag(val kind: FixtureKind, val stroke: Stroke? = null) {
 /** A static rectangle on the ground body (InkCore addRect). Top-left origin, y down. */
 class GroundRect(val x: Float, val y: Float, val w: Float, val h: Float, val kind: FixtureKind) {
     internal var fixture: Fixture? = null
+    /** The spiked underside of a ceiling rock, if any. */
+    internal var spikes: Fixture? = null
 
     /** Game data: the ground level this block was generated at (its top). */
     var level = y

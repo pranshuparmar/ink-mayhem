@@ -29,6 +29,19 @@ class Sandbox(gap: Float, runnerX: Float, speed: Float, farLength: Float = 80f) 
         sim.penUp(pointer)
     }
 
+    /** Single pen samples, for strokes drawn over several ticks. */
+    fun penDown(x: Float, y: Float, p: Float, pointer: Int = 7) {
+        t += 1.0 / 240
+        sim.penDown(pointer, x, y, p, erase = false, t = t)
+    }
+
+    fun penMove(x: Float, y: Float, p: Float, pointer: Int = 7) {
+        t += 1.0 / 240
+        sim.penMove(pointer, x, y, p, t)
+    }
+
+    fun penUp(pointer: Int = 7) = sim.penUp(pointer)
+
     /** A stroke lying on the ground (harness default): 0.4 m past each edge, just above the surface. */
     fun groundLine(x0: Float, x1: Float, p: Float) = line(x0, x1, LEVEL - (Ink.thickness(p) / 2f + 0.04f), p)
 

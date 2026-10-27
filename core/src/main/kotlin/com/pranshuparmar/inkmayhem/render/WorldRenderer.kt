@@ -97,7 +97,7 @@ class WorldRenderer(
             text.batch.transformMatrix = noteMatrix
             // baseline at the note origin, wrapped like wrapText() with 1.15 line height
             noteFont.data.setLineHeight(noteSize * 1.15f * density)
-            text.draw(noteFont, n.text, 0f, -noteFont.capHeight, pal[Tok.GRAPHITE], wrapWidth = maxW)
+            text.draw(noteFont, n.text, 0f, -noteFont.capHeight, pal[Tok.GRAPHITE], wrapWidth = min(maxW, n.maxW * scale))
         }
         text.batch.transformMatrix = identity
         text.batch.end()

@@ -20,7 +20,10 @@ class Drop(val x: Float, val y: Float, val value: Float, val high: Boolean, var 
 }
 
 /** Handwritten onboarding note on the page. */
-class Note(val x: Float, val y: Float, val text: String)
+class Note(val x: Float, val y: Float, val text: String) {
+    /** Wrap width in metres (the renderer also caps it in dp). */
+    var maxW = Float.POSITIVE_INFINITY
+}
 
 class Boulder(val body: Body) {
     /** simT before which springs can't launch it again (NaN = never launched). */

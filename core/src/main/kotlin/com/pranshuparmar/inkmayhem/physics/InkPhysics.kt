@@ -57,10 +57,31 @@ class InkPhysics(
         return r
     }
 
+    /**
+     * A spiked ceiling: a solid rock with a thin spiked layer along its underside, so only
+     * touching the underside counts as being spiked. The layer stops [SPIKE_INSET] short of each
+     * side, where no spikes are drawn, so sliding down a side is safe. Rendering and anchoring
+     * treat it as one rect.
+     */
+    fun addSpikedRock(x: Float, y: Float, w: Float, h: Float, spikeDepth: Float): GroundRect {
+        val r = GroundRect(x, y, w, h, FixtureKind.CEILING)
+        box.setAsBox(w / 2f, h / 2f, v.set(x + w / 2f, y + h / 2f), 0f)
+        fd.reset()
+        fd.shape = box
+        fd.friction = 0.9f
+        r.fixture = ground.createFixture(fd).also { it.userData = FixtureTag.GROUND }
+        box.setAsBox(w / 2f - SPIKE_INSET, spikeDepth / 2f, v.set(x + w / 2f, y + h - spikeDepth / 2f), 0f)
+        r.spikes = ground.createFixture(fd).also { it.userData = FixtureTag.CEILING }
+        rects += r
+        return r
+    }
+
     fun removeRect(r: GroundRect) {
         if (!rects.remove(r)) return
         r.fixture?.let { ground.destroyFixture(it) }
+        r.spikes?.let { ground.destroyFixture(it) }
         r.fixture = null
+        r.spikes = null
     }
 
     fun distToRects(px: Float, py: Float): Float {
@@ -286,6 +307,43 @@ class InkPhysics(
         return null
     }
 
+    // ---- wet ink ----
+
+    /** The stroke being drawn: static pieces that only the runner collides with. */
+    private var wet: Body? = null
+    var wetPieces = 0
+        private set
+
+    /**
+     * Adds a piece of wet ink from (ax, ay) to (bx, by): solid at once, so the runner can roll on
+     * a stroke before the pen lifts. Boulders, crates and finished strokes pass through it.
+     */
+    fun addWet(ax: Float, ay: Float, bx: Float, by: Float, kind: Ink, t: Float) {
+        val body = wet ?: run {
+            bd.type = BodyDef.BodyType.StaticBody
+            bd.position.set(0f, 0f)
+            bd.angle = 0f
+            world.createBody(bd).also { wet = it }
+        }
+        val len = hypot(bx - ax, by - ay)
+        box.setAsBox(len / 2f + t * 0.15f, t / 2f, v.set((ax + bx) / 2f, (ay + by) / 2f), atan2(by - ay, bx - ax))
+        fd.reset()
+        fd.shape = box
+        fd.friction = 0.8f
+        fd.restitution = if (kind == Ink.SPRING) 0.25f else 0.05f
+        fd.filter.categoryBits = WET_BITS
+        fd.filter.maskBits = RUNNER_BITS
+        body.createFixture(fd).userData = FixtureTag.wet(kind)
+        wetPieces++
+    }
+
+    /** Removes the wet ink (the stroke was built, abandoned or the run ended). */
+    fun clearWet() {
+        wet?.let { world.destroyBody(it) }
+        wet = null
+        wetPieces = 0
+    }
+
     // ---- props (runner, boulders, test crates) ----
 
     fun addBall(x: Float, y: Float, r: Float, density: Float, friction: Float, restitution: Float, tag: FixtureTag, bullet: Boolean): Body {
@@ -302,6 +360,7 @@ class InkPhysics(
         fd.density = density
         fd.friction = friction
         fd.restitution = restitution
+        if (tag === FixtureTag.RUNNER) fd.filter.categoryBits = RUNNER_BITS
         b.createFixture(fd).userData = tag
         return b
     }
@@ -367,6 +426,11 @@ class InkPhysics(
         /** Stroke cost = INK_K × Σ L t². */
         const val INK_K = 30f
         const val CULL_Y = 400f
+        /** Collision categories: wet ink touches only the runner. Everything else is category 1. */
+        const val RUNNER_BITS: Short = 0x0002
+        const val WET_BITS: Short = 0x0004
+        /** The spiked layer of a ceiling rock stops this far short of each side. */
+        const val SPIKE_INSET = 0.1f
         const val VELOCITY_ITERATIONS = 10
         const val POSITION_ITERATIONS = 8
 

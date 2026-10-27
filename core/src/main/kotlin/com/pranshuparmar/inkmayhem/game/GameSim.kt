@@ -122,6 +122,15 @@ class GameSim(
         var dry = false
         var lastT = Double.NaN
         val size: Int get() = xs.size
+
+        /** Footprint and heaviest ink so far, so a hazard crossed mid-stroke is still judged. */
+        var x0 = Float.POSITIVE_INFINITY
+        var x1 = Float.NEGATIVE_INFINITY
+        var heaviest = -1
+        /** Wet ink is laid up to this point. */
+        var wetFrom = 0
+        var wetRope = 0f
+        var tooLong = false
     }
 
     val difficulty: Float get() = (dist / 600f).coerceIn(0f, 1f)
@@ -201,6 +210,10 @@ class GameSim(
         state = GameState.RUN
     }
 
+    /** A tunnel's spiked rock spanning [x0]..[x1] with its underside at [bottom] (also for sandboxes). */
+    fun addTunnelRock(x0: Float, x1: Float, bottom: Float): com.pranshuparmar.inkmayhem.physics.GroundRect =
+        ink.addSpikedRock(x0, bottom - ROCK_H, x1 - x0, ROCK_H, SPIKE_DEPTH).also { ceilings += it }
+
     /** Adds a rolling boulder (also used by the runway trigger). */
     fun spawnBoulder(x: Float, y: Float, vx: Float): Boulder {
         val body = ink.addBall(x, y, BOULDER_R, 2.5f, 1f, 0.02f, FixtureTag.BOULDER, bullet = false)
@@ -233,6 +246,7 @@ class GameSim(
         events.died(death!!)
         events.scratch(0f, 0.5f)
         drawing = null
+        ink.clearWet()
     }
 
     /** POC: a pen-down 0.7 s after dying restarts. */
@@ -255,7 +269,17 @@ class GameSim(
     private fun placeDrops(x0: Float, len: Float) {
         if (len < 4f) return
         if (gen.nextFloat() < 0.6f) drops += Drop(x0 + 1.5f + gen.nextFloat() * (len - 3f), level - 0.75f, DROP_INK, false, fx.nextFloat() * 6f)
-        if (gen.nextFloat() < 0.22f) drops += Drop(x0 + 2f + gen.nextFloat() * (len - 4f), level - 4.2f, HIGH_DROP_INK, true, fx.nextFloat() * 6f)
+        if (gen.nextFloat() < 0.22f) {
+            // the same draws either way, so a rock never changes the rest of the level
+            val d = Drop(x0 + 2f + gen.nextFloat() * (len - 4f), level - 4.2f, HIGH_DROP_INK, true, fx.nextFloat() * 6f)
+            if (!insideRock(d)) drops += d
+        }
+    }
+
+    /** A high drop over a tunnel would sit inside its rock, where nothing can reach it. */
+    private fun insideRock(d: Drop): Boolean {
+        ceilings.fastEach { c -> if (d.x > c.x - ROCK_CLEARANCE && d.x < c.right + ROCK_CLEARANCE && d.y < c.y + c.h + ROCK_CLEARANCE) return true }
+        return false
     }
 
     private fun rnd(a: Float, b: Float) = a + gen.nextFloat() * (b - a)
@@ -299,7 +323,11 @@ class GameSim(
         }
         if (type == HazardType.WALL && level < 11f) type = HazardType.DROP
         if (type == HazardType.DROP && level > 27f) type = HazardType.WALL
-        if (text != null) note(text, -flatLen + 0.6f, if (type == HazardType.TUNNEL) 4.6f else 3.4f)
+        if (text != null) {
+            note(text, -flatLen + 0.6f, if (type == HazardType.TUNNEL) 4.6f else 3.4f)
+            // the tunnel's rock covers the end of this flat: wrap the note in the room before it
+            if (type == HazardType.TUNNEL) notes[notes.size - 1].maxW = flatLen - TUNNEL_OVERHANG - 0.6f - 0.4f
+        }
         boulderCd--
         when (type) {
             null -> Unit
@@ -312,12 +340,13 @@ class GameSim(
             }
             HazardType.DROP -> level += rnd(1.6f, 2.6f)
             HazardType.TUNNEL -> {
-                // a spiked ceiling over a gap: springs launch you into it
+                // A spiked ceiling over a gap: springs launch you into it. Only the underside is
+                // spiked, and the rock rises out of sight so nothing can bounce over it.
                 val w = rnd(3.8f, 5.2f)
-                val cx0 = genX - 3.5f
-                val cx1 = genX + w + 3.5f
-                val bottom = level - 2.1f
-                ceilings += ink.addRect(cx0, bottom - 1.2f, cx1 - cx0, 1.2f, FixtureKind.CEILING)
+                val cx0 = genX - TUNNEL_OVERHANG
+                val cx1 = genX + w + TUNNEL_OVERHANG
+                addTunnelRock(cx0, cx1, level - 2.1f)
+                drops.removeAll { it.high && insideRock(it) }
                 gap(type, w)
             }
             HazardType.BOULDER -> {
@@ -444,11 +473,40 @@ class GameSim(
             d.lastT = t
         }
         d.xs.add(x); d.ys.add(y); d.ps.add(d.smoothed)
+        d.x0 = min(d.x0, x)
+        d.x1 = max(d.x1, x)
+        if (last >= 0) d.heaviest = max(d.heaviest, Ink.of((d.ps[last] + d.smoothed) / 2f).weight)
+        growWet(d)
+    }
+
+    /**
+     * Lays wet ink up to the newest point in pieces of at least [WET_STEP], so the runner can
+     * roll on a stroke while it is still being drawn (the POC built it only on pen-up). Rope past
+     * [ROPE_MAX_LEN] stays wet-but-weak: it isn't laid, as the finished rope would give way there.
+     */
+    private fun growWet(d: Drawing) {
+        val i = d.size - 1
+        val j = d.wetFrom
+        val len = hypot(d.xs[i] - d.xs[j], d.ys[i] - d.ys[j])
+        if (len < WET_STEP) return
+        d.wetFrom = i
+        val p = (d.ps[i] + d.ps[j]) / 2f
+        val kind = Ink.of(p)
+        if (kind == Ink.ROPE) {
+            d.wetRope += len
+            if (d.wetRope > ROPE_MAX_LEN) {
+                if (!d.tooLong) events.toast(TOO_LONG_FOR_ROPE)
+                d.tooLong = true
+                return
+            }
+        }
+        ink.addWet(d.xs[j], d.ys[j], d.xs[i], d.ys[i], kind, Ink.thickness(p))
     }
 
     private fun finishStroke() {
         val d = drawing
         drawing = null
+        ink.clearWet()
         events.scratch(0f, 0.5f)
         if (d == null || d.size < 2) return
         val n = d.size
@@ -643,6 +701,8 @@ class GameSim(
             hz.done = true
             var heavy = -1
             ink.strokes.fastEach { s -> if (!s.x1.isNaN() && s.x1 >= hz.x0 - 3f && s.x0 <= hz.x1 + 1f) heavy = max(heavy, s.heaviest) }
+            val d = drawing
+            if (d != null && d.x1 >= hz.x0 - 3f && d.x0 <= hz.x1 + 1f) heavy = max(heavy, d.heaviest)
             val par = hz.par.weight
             val cx = (hz.x0 + hz.x1) / 2f
             val cy = py - 1.6f
@@ -709,6 +769,13 @@ class GameSim(
         const val INK_MAX = 100f
         const val INK_START = 70f
         const val ROPE_MAX_LEN = 6.8f
+        /** Wet ink is laid in pieces at least this long (half a stroke segment). */
+        const val WET_STEP = InkPhysics.SEG / 2f
+        /** Tunnel rock: how far it overhangs each side of the gap, its height and its spiked layer. */
+        const val TUNNEL_OVERHANG = 3.5f
+        const val ROCK_H = 40f
+        const val SPIKE_DEPTH = 0.12f
+        private const val ROCK_CLEARANCE = 0.6f
         const val RUNNER_R = 0.4f
         const val BOULDER_R = 0.9f
         const val DROP_INK = 12f
