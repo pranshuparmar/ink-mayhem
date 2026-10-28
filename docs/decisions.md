@@ -280,3 +280,27 @@ Sharing copies it into Downloads through MediaStore and opens the share sheet, w
 new permission or dependency. Android 9, which has no MediaStore Downloads, saves to the app's
 own folder instead.
 
+## 24. One ink per stroke
+
+The POC inks each segment by its own pressure. Pen Lab (a browser page of S Pen tests: range,
+steadiness, speed, and game-style prompts with and without live colour) showed what that does
+to a real hand on a fast pen. The player's pressure took 110–150 ms to settle after
+touchdown (up to 200 ms) and 50–70 ms to fade at lift-off, a third of a 0.45 s rope stroke, and
+it rose 1.5–4× along slow lines. So per-segment ink gave almost every stroke light tips and a
+heavier tail: in the colour round, where the player aimed with live feedback and hit the
+asked band by stroke median 11 times in 12, only 4 of 12 strokes came out a single, right ink.
+Trimming the ramps or adding hysteresis barely helped; choosing one ink per stroke from its
+settled pressure gave 12 of 12 in both orientations. A stroke's ink is that median, and its
+thickness still follows the pen inside the band, so strokes keep their hand-drawn look and the
+ink economy (cost grows with thickness) is little changed. Wet ink is laid in the ink the
+stroke is heading for and laid again if that changes. Mixed strokes (a bridge with a spring in
+its middle) are no longer possible; no stage or tutorial step uses one.
+
+The same data says what this does not fix: which ink a stroke gets still depends on the
+tuning. In the player's first session their tuning put rope and spring 25 % apart, and their
+play pressure in beam; strokes that passed lessons by containing a little of the right ink
+now come out wholly the wrong one, so re-tuning matters more. Pen Lab also found that, without
+colour, the player's three inks overlap (14 or 16 of 18 separable at best), while with live
+colour they separate cleanly; tuning with colour practice, and separate portrait and landscape
+tunings (the player presses about 1.4× harder in portrait), are the next candidates.
+

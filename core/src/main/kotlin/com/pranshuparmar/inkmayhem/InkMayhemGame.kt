@@ -507,8 +507,9 @@ class InkMayhemGame(
                     }
                     return
                 }
-                if (recorder != null) logStroke(s.pointerId)
+                val note = if (recorder != null) strokeNote(s.pointerId) else null
                 if (tut != null) tut.penUp(s.pointerId) else active.penUp(s.pointerId)
+                if (note != null) log { "$note -> ${active.lastStrokeInk?.label ?: "nothing"}" }
             }
             PenPhase.HOVER -> if (s.toolType.isPen || (s.toolType == ToolType.MOUSE && allowFinger)) {
                 world.hoverOn = true
@@ -844,8 +845,9 @@ class InkMayhemGame(
         val hudSim = ses?.sim ?: sim
         val ink = max(0f, hudSim.inkLeft - (hudSim.drawing?.cost ?: 0f))
         val drawing = active.drawing
-        // POC: live = drawing ? (drawing.ps ?? 0) : 0, so the marker drops to the bottom as the gauge fades
-        val live = if (drawing == null || drawing.smoothed.isNaN()) 0f else drawing.smoothed
+        // POC: live = drawing ? (drawing.ps ?? 0) : 0, so the marker drops to the bottom as the gauge fades.
+        // The marker is the stroke's steady pressure, so the lit band is the ink the stroke will be.
+        val live = active.drawingPressure
         val gaugeLeft = safeL + 10f
         val gaugeTop = hDp * 0.3f
         val showReadout = settings.penReadout
@@ -924,10 +926,11 @@ class InkMayhemGame(
      */
     private fun inkTag(d: GameSim.Drawing?, show: Boolean): Ink? {
         if (!show || d == null || d.size == 0 || d.smoothed.isNaN()) return null
+        val kind = active.drawingInk ?: return null
         val i = d.size - 1
         tagX = ((d.xs[i] - world.camX) * scale + 16f).coerceIn(4f, wDp - TAG_W - 4f)
         tagY = ((d.ys[i] - world.camY) * scale - 44f).coerceIn(4f, hDp - 26f)
-        return Ink.of(d.smoothed)
+        return kind
     }
 
     private fun tagTok(k: Ink) = when (k) {
@@ -1042,10 +1045,13 @@ class InkMayhemGame(
         }
     }
 
-    /** Recordings: the stroke about to be finished, in world metres and normalized pressure. */
-    private fun logStroke(pointer: Int) {
-        val d = active.drawing ?: return
-        if (d.pointer != pointer || d.size == 0) return
+    /**
+     * Recordings: the stroke about to be finished, in world metres and normalized pressure, and the
+     * inks it showed while drawn; the ink it settles on is added once it is finished.
+     */
+    private fun strokeNote(pointer: Int): String? {
+        val d = active.drawing ?: return null
+        if (d.pointer != pointer || d.size == 0) return null
         var y0 = Float.POSITIVE_INFINITY
         var y1 = Float.NEGATIVE_INFINITY
         var p0 = Float.POSITIVE_INFINITY
@@ -1055,13 +1061,11 @@ class InkMayhemGame(
             p0 = min(p0, d.ps[i]); p1 = max(p1, d.ps[i])
         }
         val inks = Ink.entries.filter { d.kinds and (1 shl it.weight) != 0 }.joinToString("+") { it.label }
-        log {
-            String.format(
-                Locale.US, "stroke %d points x %.2f..%.2f y %.2f..%.2f p %.2f..%.2f ink %s%s",
-                d.size, d.xs[0], d.xs[d.size - 1], y0, y1, p0, p1, inks.ifEmpty { "none" },
-                if (d.startAnchored) " anchored" else "",
-            )
-        }
+        return String.format(
+            Locale.US, "stroke %d points x %.2f..%.2f y %.2f..%.2f p %.2f..%.2f showed %s%s",
+            d.size, d.xs[0], d.xs[d.size - 1], y0, y1, p0, p1, inks.ifEmpty { "none" },
+            if (d.startAnchored) " anchored" else "",
+        )
     }
 
     override fun dispose() {

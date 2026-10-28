@@ -9,6 +9,7 @@ import com.badlogic.gdx.physics.box2d.ContactListener
 import com.badlogic.gdx.physics.box2d.Manifold
 import com.pranshuparmar.inkmayhem.physics.FixtureKind
 import com.pranshuparmar.inkmayhem.physics.FixtureTag
+import com.pranshuparmar.inkmayhem.input.SteadyPressure
 import com.pranshuparmar.inkmayhem.physics.Ink
 import com.pranshuparmar.inkmayhem.physics.InkPhysics
 import com.pranshuparmar.inkmayhem.physics.JointKind
@@ -165,6 +166,23 @@ class GameSim(
     /** The stroke being drawn, or null. */
     var drawing: Drawing? = null
         private set
+
+    /** Each stroke is one ink, from the pressure it settles at (see [SteadyPressure]). */
+    private val steady = SteadyPressure()
+
+    /** The stroke being drawn: its steady pressure so far (the gauge's marker), 0 when not drawing. */
+    val drawingPressure: Float
+        get() {
+            val d = drawing ?: return 0f
+            return if (d.smoothed.isNaN()) 0f else steady.value(d.smoothed)
+        }
+
+    /** The ink the stroke being drawn will be, or null. */
+    val drawingInk: Ink? get() = if (drawing == null) null else Ink.of(drawingPressure)
+
+    /** The ink of the last finished stroke (recordings note it). */
+    var lastStrokeInk: Ink? = null
+        private set
     var erasingPointer = -1
         private set
 
@@ -185,8 +203,9 @@ class GameSim(
         var heaviest = -1
         /** Bit per ink kind (1 shl weight) seen in this stroke so far. */
         var kinds = 0
-        /** Wet ink is laid up to this point. */
+        /** Wet ink is laid up to this point, in this ink. */
         var wetFrom = 0
+        var wetInk: Ink? = null
         /** The stroke began where it will be pinned; a stroke begun in mid-air would just fall. */
         var startAnchored = false
         var wetRope = 0f
@@ -592,6 +611,7 @@ class GameSim(
             return
         }
         drawing = Drawing(pointer)
+        steady.reset()
         addPoint(x, y, n, t)
     }
 
@@ -613,6 +633,8 @@ class GameSim(
     private fun addPoint(x: Float, y: Float, n: Float, t: Double) {
         val d = drawing ?: return
         d.smoothed = if (d.smoothed.isNaN()) n else d.smoothed * 0.7f + n * 0.3f
+        steady.add(t, n)
+        val kind = Ink.of(steady.value(d.smoothed))
         val last = d.size - 1
         if (last >= 0) {
             val len = hypot(x - d.xs[last], y - d.ys[last])
@@ -620,7 +642,7 @@ class GameSim(
                 d.ps[last] = max(d.ps[last], d.smoothed)
                 return
             }
-            val th = Ink.thickness(d.smoothed)
+            val th = Ink.thickness(Ink.clampTo(d.smoothed, kind))
             val c = len * th * th * InkPhysics.INK_K
             if (!unlimitedInk && inkLeft - d.cost - c <= 0f) {
                 if (!d.dry) {
@@ -641,11 +663,11 @@ class GameSim(
         d.x0 = min(d.x0, x)
         d.x1 = max(d.x1, x)
         if (last >= 0) {
-            val w = Ink.of((d.ps[last] + d.smoothed) / 2f).weight
-            d.heaviest = max(d.heaviest, w)
-            d.kinds = d.kinds or (1 shl w)
+            // the whole stroke is one ink; while drawing, it is the one it is heading for
+            d.heaviest = kind.weight
+            d.kinds = d.kinds or (1 shl kind.weight)
         }
-        growWet(d)
+        growWet(d, kind)
     }
 
     /**
@@ -654,24 +676,32 @@ class GameSim(
      * stroke begun where it will be pinned is laid (one begun in mid-air falls when finished),
      * and rope past [ROPE_MAX_LEN] isn't, as the finished rope would give way there.
      */
-    private fun growWet(d: Drawing) {
+    private fun growWet(d: Drawing, kind: Ink) {
         if (!d.startAnchored) return
-        val i = d.size - 1
-        val j = d.wetFrom
-        val len = hypot(d.xs[i] - d.xs[j], d.ys[i] - d.ys[j])
-        if (len < WET_STEP) return
-        d.wetFrom = i
-        val p = (d.ps[i] + d.ps[j]) / 2f
-        val kind = Ink.of(p)
-        if (kind == Ink.ROPE) {
-            d.wetRope += len
-            if (d.wetRope > ROPE_MAX_LEN) {
-                if (!d.tooLong) events.toast(TOO_LONG_FOR_ROPE)
-                d.tooLong = true
-                return
-            }
+        if (kind != d.wetInk) {
+            // the stroke has settled on another ink: lay what is wet again in it
+            if (d.wetInk != null) ink.clearWet()
+            d.wetInk = kind
+            d.wetFrom = 0
+            d.wetRope = 0f
         }
-        ink.addWet(d.xs[j], d.ys[j], d.xs[i], d.ys[i], kind, Ink.thickness(p))
+        var j = d.wetFrom
+        for (i in j + 1 until d.size) {
+            val len = hypot(d.xs[i] - d.xs[j], d.ys[i] - d.ys[j])
+            if (len < WET_STEP) continue
+            if (kind == Ink.ROPE) {
+                d.wetRope += len
+                if (d.wetRope > ROPE_MAX_LEN) {
+                    if (!d.tooLong) events.toast(TOO_LONG_FOR_ROPE)
+                    d.tooLong = true
+                    break
+                }
+            }
+            val p = Ink.clampTo((d.ps[i] + d.ps[j]) / 2f, kind)
+            ink.addWet(d.xs[j], d.ys[j], d.xs[i], d.ys[i], kind, Ink.thickness(p))
+            j = i
+        }
+        d.wetFrom = j
     }
 
     private fun finishStroke() {
@@ -679,7 +709,10 @@ class GameSim(
         drawing = null
         ink.clearWet()
         events.scratch(0f, 0.5f)
+        lastStrokeInk = null
         if (d == null || d.size < 2) return
+        // one ink for the whole stroke, from the pressure it settled at
+        val kind = Ink.of(steady.finish(d.smoothed))
         val n = d.size
         val ps = d.ps
         // Flatten the pen-down and pen-up pressure ramps.
@@ -690,7 +723,9 @@ class GameSim(
             for (i in 0 until k) ps[i] = max(ps[i], pStart)
             for (i in n - k until n) ps[i] = max(ps[i], pEnd)
         }
+        for (i in 0 until n) ps[i] = Ink.clampTo(ps[i], kind)
         val s = ink.buildStroke(d.xs.items, d.ys.items, ps.items, n) ?: return
+        lastStrokeInk = kind
         if (!unlimitedInk) inkLeft = max(0f, inkLeft - s.cost)
         // footprint + heaviest ink, for scoring against each hazard's par
         var x0 = Float.POSITIVE_INFINITY

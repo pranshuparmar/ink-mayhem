@@ -544,9 +544,12 @@ class WorldRenderer(
         val d = sim.drawing ?: return
         val n = d.size
         val alpha = if (d.dry) 0.5f else 1f
+        // one ink for the whole stroke: the one it is heading for, thicker or thinner within it
+        val kind = sim.drawingInk ?: return
+        shapes.color(inkColor(pal, kind, tint), alpha)
         for (i in 1 until n) { // segments only, like the POC: a single point draws nothing
-            val p = (d.ps[i] + d.ps[i - 1]) / 2f
-            shapes.color(inkColor(pal, Ink.of(p), tint), alpha).capsule(d.xs[i - 1], d.ys[i - 1], d.xs[i], d.ys[i], Ink.thickness(p))
+            val p = Ink.clampTo((d.ps[i] + d.ps[i - 1]) / 2f, kind)
+            shapes.capsule(d.xs[i - 1], d.ys[i - 1], d.xs[i], d.ys[i], Ink.thickness(p))
         }
     }
 

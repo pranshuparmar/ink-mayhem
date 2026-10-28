@@ -46,8 +46,9 @@ previous one if both were signed with the same debug key. CI keeps one (see
 first, which clears its best score, calibration and tutorial progress.
 
 On first launch the game asks you to **tune your pen**: draw a rope (barely touching), a spring
-(the way you write) and a beam (pressing hard) along a dotted guide, then try a free stroke and
-watch the ink change. Your three pressures become the middle of the three ink bands. Then a
+(the way you write) and a beam (pressing hard) along a dotted guide, then try a few strokes of
+your own. Your three pressures become the middle of the three ink bands. Each stroke becomes
+one ink, from the pressure it settles at once the pen has landed. Then a
 short **tutorial**: four lessons on rope, spring, beam and erasing, on real terrain, each with a
 dotted guide showing where to draw. Both happen once; after that the
 game opens on the title card with **Stages** and **Endless**. The ⋯ menu has

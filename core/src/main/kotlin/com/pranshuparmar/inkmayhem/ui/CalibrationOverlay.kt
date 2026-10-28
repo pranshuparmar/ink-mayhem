@@ -5,6 +5,7 @@ import com.pranshuparmar.inkmayhem.input.PenCalibration
 import com.pranshuparmar.inkmayhem.input.PenPhase
 import com.pranshuparmar.inkmayhem.input.PenSample
 import com.pranshuparmar.inkmayhem.input.PenTuning
+import com.pranshuparmar.inkmayhem.input.SteadyPressure
 import com.pranshuparmar.inkmayhem.input.Pressure
 import com.pranshuparmar.inkmayhem.physics.Ink
 import com.pranshuparmar.inkmayhem.render.Face
@@ -51,10 +52,15 @@ class CalibrationOverlay(
     private var lastY = 0f
     private var smoothed = Float.NaN
     private var liveInk: Ink? = null
+    /** The check step: each stroke is one ink, from the pressure it settles at, as in the game. */
+    private val steady = SteadyPressure()
+    private var strokeFrom = 0
 
     /** Drawn ink as (x0, y0, x1, y1, width, ink weight) in pad-relative dp. */
     private var ink = FloatArray(2048 * 6)
     private var inkCount = 0
+    /** The check step: each segment's normalized pressure, so a recoloured stroke can rethicken. */
+    private var inkP = FloatArray(2048)
     private val seen = BooleanArray(3)
 
     private var hint = ""
@@ -102,7 +108,7 @@ class CalibrationOverlay(
                 PenTuning.Step.ROPE -> task.set(Flow.Run(bold, Tok.UI_FG, "Draw a rope."), Flow.Run(reg, Tok.MUTED, "Barely touch the glass, like a light sketch."))
                 PenTuning.Step.SPRING -> task.set(Flow.Run(bold, Tok.UI_FG, "Draw a spring."), Flow.Run(reg, Tok.MUTED, "Press the way you write."))
                 PenTuning.Step.BEAM -> task.set(Flow.Run(bold, Tok.UI_FG, "Draw a beam."), Flow.Run(reg, Tok.MUTED, "Press hard."))
-                PenTuning.Step.CHECK -> task.set(Flow.Run(bold, Tok.UI_FG, "Try it."), Flow.Run(reg, Tok.MUTED, "Draw anything, light to hard, and watch the ink change."))
+                PenTuning.Step.CHECK -> task.set(Flow.Run(bold, Tok.UI_FG, "Try it."), Flow.Run(reg, Tok.MUTED, "Draw a few lines: light, normal and hard. Each line becomes one ink."))
             }
         }
         val inner = f.cardW - 40f
@@ -145,6 +151,9 @@ class CalibrationOverlay(
                     rawCount = 0
                     length = 0f
                     smoothed = Float.NaN
+                    steady.reset()
+                    strokeFrom = inkCount
+                    sampleTime = s.timeNanos / 1e9
                     addRaw(pressureOf(s))
                     return
                 }
@@ -155,6 +164,7 @@ class CalibrationOverlay(
                 val px = (x - pad.x).coerceIn(0f, pad.w)
                 val py = (y - pad.y).coerceIn(0f, pad.h)
                 val p = pressureOf(s)
+                sampleTime = s.timeNanos / 1e9
                 addRaw(p)
                 val seg = hypot(px - lastX, py - lastY)
                 length += seg
@@ -166,7 +176,10 @@ class CalibrationOverlay(
                 if (s.pointerId == capturePointer) {
                     capturePointer = -1
                     liveInk = null
-                    if (s.phase == PenPhase.UP) finishLine()
+                    if (s.phase == PenPhase.UP) {
+                        finishCheckStroke()
+                        finishLine()
+                    }
                     return
                 }
                 if (s.phase == PenPhase.CANCEL) {
@@ -205,6 +218,7 @@ class CalibrationOverlay(
         val cal = tuning.calibration
         val weight: Int
         val width: Float
+        var pn = 0f
         if (cal == null) {
             val k = tuning.step.ink ?: Ink.SPRING
             weight = k.weight
@@ -212,21 +226,43 @@ class CalibrationOverlay(
         } else {
             val n = cal.normalize(p)
             smoothed = if (smoothed.isNaN()) n else smoothed * 0.7f + n * 0.3f
-            val k = Ink.of(smoothed)
+            pn = smoothed
+            steady.add(sampleTime, n)
+            val k = Ink.of(steady.value(smoothed))
+            if (k != liveInk) recolour(k)
             liveInk = k
             weight = k.weight
-            width = Ink.thickness(smoothed) * DP_PER_M
-            // a tap or a press in place doesn't count: the line has to go somewhere
-            if (length >= MIN_CHECK_LENGTH) seen[weight] = true
+            width = Ink.thickness(Ink.clampTo(smoothed, k)) * DP_PER_M
         }
         if (inkCount * 6 + 6 > ink.size) {
             if (ink.size >= MAX_INK * 6) return
             ink = ink.copyOf(ink.size * 2)
+            inkP = inkP.copyOf(inkP.size * 2)
         }
+        inkP[inkCount] = pn
         val i = inkCount * 6
         ink[i] = lastX; ink[i + 1] = lastY; ink[i + 2] = px; ink[i + 3] = py; ink[i + 4] = width; ink[i + 5] = weight.toFloat()
         inkCount++
     }
+
+    /** The check step's stroke so far takes [k]: one ink per stroke. */
+    private fun recolour(k: Ink) {
+        for (s in strokeFrom until inkCount) {
+            ink[s * 6 + 4] = Ink.thickness(Ink.clampTo(inkP[s], k)) * DP_PER_M
+            ink[s * 6 + 5] = k.weight.toFloat()
+        }
+    }
+
+    /** The check step: the finished stroke settles on its one ink, which then counts as found. */
+    private fun finishCheckStroke() {
+        if (tuning.calibration == null || inkCount == strokeFrom || smoothed.isNaN()) return
+        val k = Ink.of(steady.finish(smoothed))
+        recolour(k)
+        // a tap or a press in place doesn't count: the line has to go somewhere
+        if (length >= MIN_CHECK_LENGTH) seen[k.weight] = true
+    }
+
+    private var sampleTime = 0.0
 
     private fun finishLine() {
         val step = tuning.step

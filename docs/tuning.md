@@ -43,7 +43,7 @@ Made after playtesting the port on a phone, at the owner's request.
    line, then a free try. The POC's one number put the player's writing pressure at 0.45 on a
    straight line; now each of the player's three pressures lands in the middle of its own band
    (see Input below). The bands themselves (rope below
-   0.3, spring below 0.6) are unchanged. Asked by the player after a recording showed writing
+   0.33, spring below 0.62) are unchanged. Asked by the player after a recording showed writing
    pressure and drawing pressure differ, and a light pen (raw ~0.076 writing) reading as rope.
 4. **A first-run tutorial** (new; see [Tutorial](#tutorial)).
 5. **Stages** (new; see [Stages](#stages)): a second mode with hand-built levels. Endless keeps
@@ -53,6 +53,15 @@ Made after playtesting the port on a phone, at the owner's request.
 7. **No margin line.** The POC's notebook margin, a pinkish-red vertical line fixed on screen
    while the page scrolls, is gone in every orientation: in play it looked like a line
    following the runner. Visual only.
+8. **One ink per stroke.** The POC gives each segment the ink of its own pressure, so a stroke
+   can be rope at its tips and beam in the middle. Now a whole stroke takes the ink of the
+   pressure it settles at: the median of its samples after the first 150 ms (the pen landing)
+   and, once finished, before the last 70 ms (the pen lifting). Thickness still follows the
+   pen, kept inside that ink's band. While drawing, the stroke, its wet ink, the ink tag and the
+   gauge show the ink it is heading for (until the pen has landed, the pressure right now).
+   Asked for by the player after Pen Lab: their pressure took 110–150 ms to settle after
+   touchdown and rose along long strokes, so under per-segment ink only 4 of 12 aimed strokes
+   came out one, right ink; by settled pressure, 12 of 12. The band numbers are unchanged.
 
 ## Physics (`core/.../physics/InkPhysics.kt`, `Ink.kt`)
 
@@ -128,9 +137,10 @@ reproduces exactly for the same viewport and the same play.
 | | |
 |---|---|
 | Pen tuning | the player draws a rope, a spring and a beam line along a guide. Each line's pressure is the median of its middle 70 % (samples > 0.001, at least 8); it must run half the guide, and each must be at least 1.2× and 0.004 (spring) / 0.008 (beam) raw harder than the last (a beam at ≥ 0.98 only has to be harder). Then a free try, with live ink colour and a chip per ink seen in a stroke of 40 dp or more. Asked once, stored; "Recalibrate" in settings |
-| Normalized pressure | piecewise linear: 0 → 0, √(rope·spring) → 0.3, √(spring·beam) → 0.6, beam + (beam − √(spring·beam)) → 1, clamped. Skipped or never tuned: the POC's straight line p = 0.45 × raw / 0.32. An old one-number calibration carries over as that straight line (cal in place of 0.32), and the game asks for tuning once more |
+| Normalized pressure | piecewise linear: 0 → 0, √(rope·spring) → 0.33, √(spring·beam) → 0.62, beam + (beam − √(spring·beam)) → 1, clamped. Skipped or never tuned: the POC's straight line p = 0.45 × raw / 0.32. An old one-number calibration carries over as that straight line (cal in place of 0.32), and the game asks for tuning once more |
 | Fingers and mouse (debug) | fixed p = 0.45 |
-| Smoothing | p = 0.7 prev + 0.3 new |
+| Smoothing | p = 0.7 prev + 0.3 new (thickness and the pressure before the pen has landed) |
+| Stroke ink | one per stroke: the band of the median normalized pressure after the first 150 ms, without the last 70 ms once finished (a stroke too short for both: its middle 70 % of samples). Segments are built with their pressure clamped into that band | `SteadyPressure`, `GameSim.finishStroke` |
 | Point spacing | points closer than 0.02 m are dropped (raising the last point to the smoothed pressure) |
 | Ramps | the first and last min(3, n / 4) points are raised to their inner neighbour's pressure |
 
