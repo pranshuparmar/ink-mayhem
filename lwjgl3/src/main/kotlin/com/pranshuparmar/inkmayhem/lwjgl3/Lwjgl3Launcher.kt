@@ -116,6 +116,8 @@ private class Options(args: Array<String>) {
     val to = value("--to")?.toDouble() ?: Double.MAX_VALUE
     /** Replay window height in pixels (the game still sees the recorded screen size). */
     val replayHeight = value("--replay-height")?.toInt() ?: 900
+    /** Replay: don't put the runner back at each probe (to see raw drift). */
+    val noResync = "--no-resync" in list
     val args = list
 }
 
@@ -324,6 +326,9 @@ private class ReplayHost(
 ) : ApplicationListener {
     private var probes = 0
     private var mismatches = 0
+    private var maxDrift = 0.0
+    private var maxDriftAt = 0.0
+    private var resyncs = 0
     private var lastNow = 0.0
     private var saved = 0
     private var done = false
@@ -360,11 +365,22 @@ private class ReplayHost(
         for (e in f.events) println(String.format(java.util.Locale.US, "[%8.3f] %s", f.now, e))
         f.probe?.let { expected ->
             probes++
+            // the first six fields say where the game stands; position drift is measured in metres
+            val e = expected.split(' ')
             val got = game.probe()
-            if (got != expected) {
-                mismatches++
-                if (mismatches <= 5) println(String.format(java.util.Locale.US, "[%8.3f] DRIFT expected \"%s\" got \"%s\"", f.now, expected, got))
+            val g = got.split(' ')
+            val sameState = e[0] == g[0] && e[1] == g[1] && e.getOrNull(5) == g.getOrNull(5)
+            val d = Math.hypot(e[2].toDouble() - g[2].toDouble(), e[3].toDouble() - g[3].toDouble())
+            if (d > maxDrift) {
+                maxDrift = d
+                maxDriftAt = f.now
             }
+            if (!sameState) {
+                mismatches++
+                if (mismatches <= 5) println(String.format(java.util.Locale.US, "[%8.3f] DIFFERS expected \"%s\" got \"%s\"", f.now, e.take(6).joinToString(" "), g.take(6).joinToString(" ")))
+            }
+            // snap back only where it differs: a replay on the recording's own machine stays exact
+            if (!opts.noResync && got != expected && game.resync(expected)) resyncs++
         }
         val dir = opts.frames
         if (dir != null && f.now >= opts.from && f.now <= opts.to && replay.frameIndex % opts.every == 0) {
@@ -392,8 +408,10 @@ private class ReplayHost(
         if (done) return
         done = true
         println(String.format(
-            java.util.Locale.US, "replayed %d frames (%.1f s); probes %d, drifted %d%s",
-            replay.frameIndex + 1, lastNow, probes, mismatches, if (saved > 0) "; saved $saved frames" else "",
+            java.util.Locale.US, "replayed %d frames (%.1f s); probes %d: %d differed in state, runner drift up to %.4f m (at %.1f s), %s%s",
+            replay.frameIndex + 1, lastNow, probes, mismatches, maxDrift, maxDriftAt,
+            if (opts.noResync) "no resync" else "resynced $resyncs",
+            if (saved > 0) "; saved $saved frames" else "",
         ))
         Gdx.app.exit()
     }

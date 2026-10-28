@@ -257,11 +257,44 @@ class InkMayhemGame(
         recorder?.event(text)
     }
 
-    /** Where the game stands, written into recordings every second so a replay can check it. */
+    /**
+     * Where the game stands, written into recordings eight times a second so a replay can check it
+     * and put it back: screen, state, runner position, score, strokes, then the runner's velocity,
+     * angle and spin, and the camera (current, previous tick, and as last drawn).
+     */
     fun probe(): String {
         val a = active
-        val p = a.runner.body.position
-        return "${screen.name} ${a.state.name} ${p.x} ${p.y} ${kotlin.math.floor(a.score).toInt()} ${a.ink.strokes.size}"
+        val b = a.runner.body
+        val p = b.position
+        val v = b.linearVelocity
+        return "${screen.name} ${a.state.name} ${p.x} ${p.y} ${kotlin.math.floor(a.score).toInt()} ${a.ink.strokes.size} " +
+            "${v.x} ${v.y} ${b.angle} ${b.angularVelocity} ${a.cam.x} ${a.cam.y} ${a.camPrev.x} ${a.camPrev.y} ${world.camX} ${world.camY}"
+    }
+
+    /**
+     * Replays: puts the runner and camera back where a [probe] says they were. Physics rounds a
+     * little differently on a phone's chip than on a desktop, and a bounce can grow that into a
+     * different run; snapping back at each probe keeps a replay on the recorded path. Older
+     * probes carry only the position. Returns false when the screen or state already differ.
+     */
+    fun resync(probe: String): Boolean {
+        val f = probe.split(' ')
+        val a = active
+        if (f.size < 4 || f[0] != screen.name || f[1] != a.state.name) return false
+        val b = a.runner.body
+        if (f.size >= 16) {
+            b.setTransform(f[2].toFloat(), f[3].toFloat(), f[8].toFloat())
+            b.setLinearVelocity(f[6].toFloat(), f[7].toFloat())
+            b.angularVelocity = f[9].toFloat()
+            a.cam.set(f[10].toFloat(), f[11].toFloat())
+            a.camPrev.set(f[12].toFloat(), f[13].toFloat())
+            world.camX = f[14].toFloat()
+            world.camY = f[15].toFloat()
+        } else {
+            b.setTransform(f[2].toFloat(), f[3].toFloat(), b.angle)
+        }
+        b.isAwake = true
+        return true
     }
 
     override fun resize(width: Int, height: Int) {
@@ -404,7 +437,7 @@ class InkMayhemGame(
         draw(now, reduced)
         recorder?.let { r ->
             noteChanges()
-            if (++frameCount % 60 == 0L) r.probe(probe())
+            if (++frameCount % PROBE_EVERY == 0L) r.probe(probe())
         }
     }
 
@@ -1048,6 +1081,8 @@ class InkMayhemGame(
         const val READY_TOAST = "You’re ready. The lightest ink that works grows your combo."
         const val SNAP_BUZZ_MS = 12
         private const val TAG_W = 58f
+        /** Frames between recording probes (eight a second at 120 Hz). */
+        private const val PROBE_EVERY = 15L
         const val DEATH_BUZZ_MS = 45
     }
 }

@@ -268,8 +268,11 @@ shortest exact form, so they read back to the same bits.
 
 On one machine a replay is exact: re-recording a replay gives a byte-identical log (checked on
 an Endless autoplay, a stage run and a pen-tuning session). Between a phone's ARM chip and a
-desktop, Box2D's floating point may round differently and a long run can drift; the probes show
-where. Text widths come from the same fonts and FreeType on both, so card hit tests match.
+desktop, Box2D's floating point rounds differently. In the first phone recording the runner
+stayed within 0.1 mm for 90 s, then spring bounces grew that to over a metre and the replay
+died where the player hadn't. So the probe (eight a second) carries the runner's position,
+velocity, angle and spin and the camera, and a replay puts them back wherever a probe differs;
+with that, the same recording replays to the same clear, within 0.1 mm throughout. Text widths come from the same fonts and FreeType on both, so card hit tests match.
 Recording is debug-only and on by default, so there is nothing to remember to switch on before
 the interesting moment. A debug-only "Record input" switch stops it at once; switching it back
 on takes effect at the next launch, since a replay has to start from one. The file is plain text so it can be attached to a chat and read directly.

@@ -48,11 +48,12 @@ class WorldRenderer(
     var hoverX = 0f
     var hoverY = 0f
 
-    /** Interpolated camera of the last frame without shake: pen input maps through this (POC toWorld). */
+    /**
+     * Interpolated camera of the last frame without shake: pen input maps through this (POC toWorld).
+     * Set here each frame; a replay may put it back to a recorded value.
+     */
     var camX = 0f
-        private set
     var camY = 0f
-        private set
     /** The same plus screen shake: what the world is drawn with. */
     private var viewX = 0f
     private var viewY = 0f
