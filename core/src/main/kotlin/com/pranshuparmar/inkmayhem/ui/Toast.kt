@@ -20,8 +20,12 @@ class Toast {
     var visibility = 0f
         private set
 
+    /** Told about each toast that is shown (input recordings note them). */
+    var onShow: ((String) -> Unit)? = null
+
     fun show(msg: String, now: Double, force: Boolean = false) {
         if (!force && msg == message && now - lastAt < REPEAT_S) return
+        onShow?.invoke(msg)
         message = msg
         lastAt = now
         hideAt = now + SHOW_S

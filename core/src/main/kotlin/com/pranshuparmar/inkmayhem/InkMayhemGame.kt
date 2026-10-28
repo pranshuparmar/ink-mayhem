@@ -29,6 +29,9 @@ import com.pranshuparmar.inkmayhem.input.PenReadout
 import com.pranshuparmar.inkmayhem.input.PenSample
 import com.pranshuparmar.inkmayhem.input.Pressure
 import com.pranshuparmar.inkmayhem.input.ToolType
+import com.pranshuparmar.inkmayhem.record.FrameSource
+import com.pranshuparmar.inkmayhem.record.InputRecorder
+import com.pranshuparmar.inkmayhem.record.LiveFrames
 import com.pranshuparmar.inkmayhem.render.Face
 import com.pranshuparmar.inkmayhem.render.Fonts
 import com.pranshuparmar.inkmayhem.render.Fx
@@ -52,6 +55,7 @@ import com.pranshuparmar.inkmayhem.ui.SettingsSheet
 import com.pranshuparmar.inkmayhem.ui.TitleCard
 import com.pranshuparmar.inkmayhem.ui.Toast
 import com.pranshuparmar.inkmayhem.ui.TutorialCard
+import java.io.File
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
@@ -77,7 +81,15 @@ class DevOptions(
     val speed: Float = 1f,
 )
 
-class InkMayhemGame(private val platform: Platform, private val dev: DevOptions = DevOptions()) : ApplicationAdapter() {
+/**
+ * The game. Everything it reads from outside (clock, screen, system flags, pen samples) comes
+ * through [frames] and the platform's pen queue, so a recording can drive it exactly.
+ */
+class InkMayhemGame(
+    private val platform: Platform,
+    private val dev: DevOptions = DevOptions(),
+    private val frames: FrameSource = LiveFrames(platform),
+) : ApplicationAdapter() {
     private lateinit var settings: Settings
     private lateinit var shapes: Shapes
     private lateinit var batch: SpriteBatch
@@ -128,22 +140,31 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
     private var sized = false
 
     private val sample = PenSample()
-    private var lastNanos = 0L
-    private val startNanos = System.nanoTime()
-    private val clock: Double get() = (System.nanoTime() - startNanos) / 1e9
+    /** This frame's clock (seconds since launch). */
+    private var clock = 0.0
     private var acc = 0f
     private var paused = false
     private var lastSnapHaptic = -1.0
 
+    // debug builds record every launch's input (see record/InputLog.kt)
+    private var recorder: InputRecorder? = null
+    private var recordingFile: File? = null
+    private var recordInputWas = true
+    private var frameCount = 0L
+
     override fun create() {
-        settings = Settings(Gdx.app.getPreferences("ink-mayhem"))
+        val prefs = platform.preferences()
+        val worldSeed = dev.seed ?: System.nanoTime()
+        startRecording(prefs, worldSeed)
+        settings = Settings(prefs)
+        recordInputWas = settings.recordInput
         shapes = Shapes()
         batch = SpriteBatch()
         text = Text(batch)
         density = platform.density
         fonts = Fonts(density)
         audio = Audio(settings)
-        sim = GameSim(seed = dev.seed ?: System.nanoTime(), events = Events(saveBest = true), best = settings.best)
+        sim = GameSim(seed = worldSeed, events = Events(saveBest = true), best = settings.best)
         world = WorldRenderer(shapes, text, fonts)
         titleCard = TitleCard(fonts)
         deathCard = DeathCard(fonts)
@@ -158,6 +179,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
             onHowToPlay = { startTutorial(0) },
             onChanged = ::onSettingsChanged,
             onQuit = ::quitToMenu,
+            onShareRecording = if (recorder != null) ::shareRecording else null,
         )
         calibration = CalibrationOverlay(
             fonts,
@@ -167,6 +189,10 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
             },
             onSkip = { if (!settings.penTuned) settings.calibration = settings.calibration ?: PenCalibration.DEFAULT },
         )
+        if (recorder != null) {
+            calibration.log = { log(it) }
+            toast.onShow = { log("toast $it") }
+        }
         if (dev.openCalibration || (!settings.penTuned && !dev.skipCalibration)) calibration.show()
         // first run: calibrate, then the tutorial, then the title card
         tutorialPending = dev.tutorialLesson != null || (!settings.tutorialDone && !dev.skipTutorial && !dev.autoplay)
@@ -177,21 +203,70 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         Gdx.input.inputProcessor = object : InputAdapter() {
             override fun keyDown(keycode: Int): Boolean {
                 if (keycode != Input.Keys.BACK) return false
-                when {
-                    calibration.open -> calibration.skip()
-                    sheet.open -> sheet.hide()
-                    tutorial != null -> endTutorial(finished = false)
-                    screen == Screen.TITLE -> Gdx.app.exit()
-                    else -> quitToMenu()
-                }
+                back()
                 return true
             }
         }
-        lastNanos = System.nanoTime()
+        frames.reset()
+    }
+
+    /** The Android back key: closes an overlay first, then leaves the game as usual. */
+    fun back() {
+        recorder?.back()
+        when {
+            calibration.open -> calibration.skip()
+            sheet.open -> sheet.hide()
+            tutorial != null -> endTutorial(finished = false)
+            screen == Screen.TITLE -> Gdx.app.exit()
+            else -> quitToMenu()
+        }
+    }
+
+    private fun startRecording(prefs: com.badlogic.gdx.Preferences, worldSeed: Long) {
+        if (!platform.isDebugBuild || !prefs.getBoolean(Settings.RECORD_INPUT, true)) return
+        val file = platform.newRecording() ?: return
+        val r = try {
+            InputRecorder(file.bufferedWriter(bufferSize = 1 shl 16))
+        } catch (e: java.io.IOException) {
+            return
+        }
+        recorder = r
+        recordingFile = file
+        r.meta("app", platform.appVersion)
+        r.meta("device", platform.description)
+        r.meta("started", java.time.Instant.now().toString())
+        r.meta("seed", worldSeed.toString())
+        for ((k, v) in prefs.get()) r.pref(k, v)
+    }
+
+    private fun shareRecording() {
+        val file = recordingFile ?: return
+        recorder?.let {
+            it.event("shared")
+            it.flush()
+        }
+        platform.shareRecording(file)
+    }
+
+    /** Notes what happened in the recording, for whoever reads it. */
+    private inline fun log(text: () -> String) {
+        recorder?.event(text())
+    }
+
+    private fun log(text: String) {
+        recorder?.event(text)
+    }
+
+    /** Where the game stands, written into recordings every second so a replay can check it. */
+    fun probe(): String {
+        val a = active
+        val p = a.runner.body.position
+        return "${screen.name} ${a.state.name} ${p.x} ${p.y} ${kotlin.math.floor(a.score).toInt()} ${a.ink.strokes.size}"
     }
 
     override fun resize(width: Int, height: Int) {
         if (width <= 0 || height <= 0) return
+        recorder?.resize(width, height, platform.density)
         val d = platform.density
         if (d != density) {
             density = d
@@ -237,6 +312,10 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
     }
 
     override fun pause() {
+        recorder?.let {
+            it.pause()
+            it.flush()
+        }
         paused = true
         audio.scratch(0f, 0.5f)
         // coming back to a stage shouldn't throw the player straight back in: hold it on the sheet
@@ -247,17 +326,23 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
     }
 
     override fun resume() {
+        recorder?.resume()
         paused = false
-        lastNanos = System.nanoTime()
+        frames.reset()
     }
 
     override fun render() {
-        val t = System.nanoTime()
-        val dt = min(0.05f, (t - lastNanos) / 1e9f)
-        lastNanos = t
-        val now = clock
-        pal = if (platform.isDarkMode()) Palette.DARK else Palette.LIGHT
-        val reduced = platform.isReducedMotion()
+        frames.begin()
+        val dt = frames.dt
+        val now = frames.now
+        clock = now
+        recorder?.let {
+            it.flags(frames.dark, frames.reduced)
+            it.insets(frames.insetL, frames.insetT, frames.insetR, frames.insetB)
+            it.frame(dt, now)
+        }
+        pal = if (frames.dark) Palette.DARK else Palette.LIGHT
+        val reduced = frames.reduced
         fx.reducedMotion = reduced
         sim.realTime = now
         sim.tint = settings.tint
@@ -317,6 +402,10 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         audio.update(dt)
 
         draw(now, reduced)
+        recorder?.let { r ->
+            noteChanges()
+            if (++frameCount % 60 == 0L) r.probe(probe())
+        }
     }
 
     // ------------------------------------------------------------------------------------- input
@@ -324,6 +413,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
     private val allowFinger: Boolean get() = platform.isDebugBuild && settings.allowFinger
 
     private fun onSample(s: PenSample, now: Double) {
+        recorder?.sample(s)
         val n = if (s.toolType.isPen) (settings.calibration ?: PenCalibration.DEFAULT).normalize(s.pressure) else Pressure.FINGER
         readout.onSample(s)
         readout.normalized = n
@@ -384,6 +474,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
                     }
                     return
                 }
+                if (recorder != null) logStroke(s.pointerId)
                 if (tut != null) tut.penUp(s.pointerId) else active.penUp(s.pointerId)
             }
             PenPhase.HOVER -> if (s.toolType.isPen || (s.toolType == ToolType.MOUSE && allowFinger)) {
@@ -598,6 +689,20 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
 
     private fun onSettingsChanged() {
         if (!settings.sound) audio.scratch(0f, 0.5f)
+        // "Record input" off stops now (what's recorded so far can still be shared); on starts
+        // with the next launch, since a replay has to start from one
+        if (settings.recordInput == recordInputWas) return
+        recordInputWas = settings.recordInput
+        val r = recorder
+        if (!settings.recordInput && r != null) {
+            r.event("recording turned off")
+            r.close()
+            recorder = null
+            calibration.log = null
+            toast.onShow = null
+        } else if (settings.recordInput && r == null && platform.isDebugBuild) {
+            toast.show("Recording starts next launch.", clock, force = true)
+        }
     }
 
     private fun autoplay(now: Double) {
@@ -655,6 +760,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         }
 
         override fun died(death: Death) {
+            log { "died ${death.kind.name}: ${death.reason}" }
             if (saveBest && death.isBest) settings.best = death.best
         }
 
@@ -827,10 +933,10 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
     private fun updateFrame() {
         frame.wDp = wDp
         frame.hDp = hDp
-        frame.safeL = Gdx.graphics.safeInsetLeft / density
-        frame.safeT = Gdx.graphics.safeInsetTop / density
-        frame.safeR = Gdx.graphics.safeInsetRight / density
-        frame.safeB = Gdx.graphics.safeInsetBottom / density
+        frame.safeL = frames.insetL / density
+        frame.safeT = frames.insetT / density
+        frame.safeR = frames.insetR / density
+        frame.safeB = frames.insetB / density
     }
 
     private inline fun pass(shapesPass: () -> Unit, textPass: () -> Unit) {
@@ -851,7 +957,82 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         "device    ${platform.description}",
     )
 
+    // ------------------------------------------------------------------------------ recording
+
+    private var notedScreen: Screen? = null
+    private var notedTutorial: Tutorial? = null
+    private var notedLesson = -1
+    private var notedPhase: Tutorial.Phase? = null
+    private var notedFeedback = ""
+    private var notedSession: StageSession? = null
+    private var notedStagePhase: StageSession.Phase? = null
+    private var notedLives = -1
+    private var notedStage = ""
+
+    /** Recordings: notes screen, lesson and stage changes, and the tutorial's hints. */
+    private fun noteChanges() {
+        if (screen != notedScreen) {
+            notedScreen = screen
+            log { "screen ${screen.name}" }
+        }
+        val t = tutorial
+        if (t !== notedTutorial) {
+            notedTutorial = t
+            notedLesson = -1
+            notedPhase = null
+            notedFeedback = ""
+            if (t == null) log("tutorial closed")
+        }
+        if (t != null) {
+            if (t.lessonIndex != notedLesson || t.phase != notedPhase) {
+                notedLesson = t.lessonIndex
+                notedPhase = t.phase
+                log { "tutorial ${t.lesson.name} ${t.phase.name}" }
+            }
+            if (t.feedback != notedFeedback) {
+                notedFeedback = t.feedback
+                if (t.feedback.isNotEmpty()) log { "tutorial says: ${t.feedback}" }
+            }
+        }
+        val ses = session
+        if (ses !== notedSession) {
+            notedSession = ses
+            notedStagePhase = null
+            notedLives = -1
+            notedStage = ""
+        }
+        if (ses != null && (ses.phase != notedStagePhase || ses.lives != notedLives || ses.stage.id != notedStage)) {
+            notedStagePhase = ses.phase
+            notedLives = ses.lives
+            notedStage = ses.stage.id
+            log { "stage ${ses.stage.id} ${ses.phase.name} lives ${ses.lives}" }
+        }
+    }
+
+    /** Recordings: the stroke about to be finished, in world metres and normalized pressure. */
+    private fun logStroke(pointer: Int) {
+        val d = active.drawing ?: return
+        if (d.pointer != pointer || d.size == 0) return
+        var y0 = Float.POSITIVE_INFINITY
+        var y1 = Float.NEGATIVE_INFINITY
+        var p0 = Float.POSITIVE_INFINITY
+        var p1 = Float.NEGATIVE_INFINITY
+        for (i in 0 until d.size) {
+            y0 = min(y0, d.ys[i]); y1 = max(y1, d.ys[i])
+            p0 = min(p0, d.ps[i]); p1 = max(p1, d.ps[i])
+        }
+        val inks = Ink.entries.filter { d.kinds and (1 shl it.weight) != 0 }.joinToString("+") { it.label }
+        log {
+            String.format(
+                Locale.US, "stroke %d points x %.2f..%.2f y %.2f..%.2f p %.2f..%.2f ink %s%s",
+                d.size, d.xs[0], d.xs[d.size - 1], y0, y1, p0, p1, inks.ifEmpty { "none" },
+                if (d.startAnchored) " anchored" else "",
+            )
+        }
+    }
+
     override fun dispose() {
+        recorder?.close()
         tutorial?.sim?.dispose()
         session?.sim?.dispose()
         sim.dispose()

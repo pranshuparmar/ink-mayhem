@@ -254,3 +254,26 @@ can't do the lesson's job is wiped with a hint instead of releasing the runner, 
 label beside the pen names the ink being laid, since the gauge sits far from where the
 player looks.
 
+## 23. Input recordings that replay exactly
+
+Screen recordings show what happened but not why: not the pressure under the pen, which frame
+a sample landed in, or what the game decided about a stroke. Debug builds therefore log every
+launch's input to a text file: the frame clock and time step, every pen sample, resizes,
+insets, pauses, the back key, the world seed and the preferences at launch, plus human-readable
+notes and a probe of the runner's position every second. Everything the game reads from outside
+now comes through one seam (`FrameSource` for the clock, screen and system flags; the pen
+queue for samples; `Platform.preferences()` for settings), so the desktop launcher can feed a
+recording back and the game can't tell it from the original. Floats are written in their
+shortest exact form, so they read back to the same bits.
+
+On one machine a replay is exact: re-recording a replay gives a byte-identical log (checked on
+an Endless autoplay, a stage run and a pen-tuning session). Between a phone's ARM chip and a
+desktop, Box2D's floating point may round differently and a long run can drift; the probes show
+where. Text widths come from the same fonts and FreeType on both, so card hit tests match.
+Recording is debug-only and on by default, so there is nothing to remember to switch on before
+the interesting moment. A debug-only "Record input" switch stops it at once; switching it back
+on takes effect at the next launch, since a replay has to start from one. The file is plain text so it can be attached to a chat and read directly.
+Sharing copies it into Downloads through MediaStore and opens the share sheet, which needs no
+new permission or dependency. Android 9, which has no MediaStore Downloads, saves to the app's
+own folder instead.
+

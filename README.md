@@ -54,6 +54,20 @@ game opens on the title card with **Stages** and **Endless**. The ⋯ menu has
 **How to play** (the tutorial again), **Recalibrate**, and the **Pen readout** (tool type, raw
 and normalized pressure, buttons, tilt, hover and event rates) for checking the S Pen.
 
+### Sending a recording
+
+Debug builds record every session's input from launch (⋯ → **Record input**, on by default
+and shown only in debug builds; off stops recording at once, on starts at the next launch): each frame's clock and every pen sample
+(position, pressure, tilt, buttons), plus notes on what happened (strokes, the tutorial's hints,
+deaths, toasts, pen-tuning lines). When something goes wrong, open ⋯ → **Share input
+recording** (shown only while recording): it saves a copy to **Downloads** and opens the share
+sheet, so you can attach it in a chat or send it anywhere. The last five sessions are kept in the app's storage. A
+recording holds the device model, Android version, app version and settings at launch, and
+nothing else about you. Release builds don't record.
+
+A recording replays on the desktop exactly as it was played (see `--replay` below), so it can
+be stepped through, rendered to video, and turned into a test.
+
 ## Build
 
 Requirements: JDK 17 or newer, and the Android SDK with platform 37 for the APK (Android Studio
@@ -91,6 +105,8 @@ For fast iteration with a mouse (`lwjgl3` module):
 | `--speed N` | Run the game N times faster (to screenshot late moments). |
 | `--rotate-after S` | Swap width and height after S seconds, like rotating the phone mid-run. |
 | `--screenshot out.png --after S` | Save a screenshot after S seconds and quit. |
+| `--record out.txt` | Record this session's input, as debug builds do on the phone. |
+| `--replay rec.txt` | Play a recording back exactly, printing what happened and checking it doesn't drift. Add `--frames dir --every N --from S --to S` to save every Nth frame between two times as PNGs (`ffmpeg -framerate 30 -i dir/f%06d.png -pix_fmt yuv420p clip.mp4` makes a video), `--screenshot out.png --after S` for one frame, `--replay-height H` for the window size. |
 
 ### Sound effects
 

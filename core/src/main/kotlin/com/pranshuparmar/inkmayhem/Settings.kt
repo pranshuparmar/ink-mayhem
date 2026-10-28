@@ -27,6 +27,10 @@ class Settings(private val prefs: Preferences) : StageStore {
     var haptics: Boolean = prefs.getBoolean("haptics", true)
         set(v) { field = v; put { putBoolean("haptics", v) } }
 
+    /** Debug builds only: record each session's input for replays. On by default; read at launch. */
+    var recordInput: Boolean = prefs.getBoolean(RECORD_INPUT, true)
+        set(v) { field = v; put { putBoolean(RECORD_INPUT, v) } }
+
     /** The first-run tutorial was finished or skipped; it stays available from settings. */
     var tutorialDone: Boolean = prefs.getBoolean("tutorialDone", false)
         set(v) { field = v; put { putBoolean("tutorialDone", v) } }
@@ -77,5 +81,9 @@ class Settings(private val prefs: Preferences) : StageStore {
     private inline fun put(block: Preferences.() -> Unit) {
         prefs.block()
         prefs.flush()
+    }
+
+    companion object {
+        const val RECORD_INPUT = "recordInput"
     }
 }

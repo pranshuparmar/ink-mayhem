@@ -60,7 +60,11 @@ class CalibrationOverlay(
     private var hint = ""
     private var hintTone = Tok.MUTED
 
+    /** Told what the player drew and how it was judged (input recordings note it). */
+    var log: ((String) -> Unit)? = null
+
     fun show() {
+        log?.invoke("tuning opened")
         open = true
         tuning.restart()
         seen.fill(false)
@@ -70,6 +74,7 @@ class CalibrationOverlay(
 
     /** Same as the Skip button (Android back). */
     fun skip() {
+        log?.invoke("tuning skipped at ${tuning.step.name}")
         open = false
         onSkip()
     }
@@ -171,12 +176,14 @@ class CalibrationOverlay(
                 when (press.up(s.pointerId, targetAt(x, y))) {
                     skip -> skip()
                     again -> {
+                        log?.invoke("tuning started over")
                         tuning.restart()
                         seen.fill(false)
                         clearPad()
                         hint(GUIDE, Tok.MUTED)
                     }
                     done -> tuning.calibration?.let {
+                        log?.invoke("tuning done: rope < ${it.ropeEdge}, spring < ${it.springEdge}, top ${it.top}")
                         open = false
                         onDone(it)
                     }
@@ -224,7 +231,12 @@ class CalibrationOverlay(
     private fun finishLine() {
         val step = tuning.step
         if (step == PenTuning.Step.CHECK) return
-        val v = tuning.submit(raw, rawCount, length / max(1f, pad.w - 2f * GUIDE_INSET))
+        val fraction = length / max(1f, pad.w - 2f * GUIDE_INSET)
+        val v = tuning.submit(raw, rawCount, fraction)
+        log?.let {
+            it("tuning ${step.name} line: median ${PenTuning.lineMedian(raw, rawCount)} raw, $rawCount samples, " +
+                "${(fraction * 100).toInt()}% of the guide -> ${v.name}")
+        }
         when (v) {
             PenTuning.Verdict.ACCEPTED -> {
                 clearPad()

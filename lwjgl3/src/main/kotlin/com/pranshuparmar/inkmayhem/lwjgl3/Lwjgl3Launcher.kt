@@ -17,6 +17,13 @@ import com.pranshuparmar.inkmayhem.input.PenButtons
 import com.pranshuparmar.inkmayhem.input.PenPhase
 import com.pranshuparmar.inkmayhem.input.PenQueue
 import com.pranshuparmar.inkmayhem.input.ToolType
+import com.pranshuparmar.inkmayhem.record.InputLog
+import com.pranshuparmar.inkmayhem.record.MemoryPreferences
+import com.pranshuparmar.inkmayhem.record.Replay
+import com.pranshuparmar.inkmayhem.record.ReplayFrames
+import com.pranshuparmar.inkmayhem.record.ReplayTarget
+import java.io.File
+import java.util.zip.Deflater
 
 /**
  * Desktop launcher for fast iteration. The mouse arrives as a mouse (so it needs the debug
@@ -28,10 +35,14 @@ import com.pranshuparmar.inkmayhem.input.ToolType
  *          --calibration, --skip-calibration, --tutorial LESSON (1-based), --skip-tutorial,
  *          --stage 1-2 (with --autoplay its solution plays), --select, --speed N,
  *          --rotate-after seconds, --demo-draw, --demo-tune LINES (with --calibration),
- *          --screenshot out.png --after seconds
+ *          --screenshot out.png --after seconds,
+ *          --record out.txt (an input recording, as debug builds make on Android),
+ *          --replay rec.txt [--frames dir --every N --from S --to S] (plays a recording back exactly;
+ *            --after then counts the recording's clock)
  */
 fun main(args: Array<String>) {
     val opts = Options(args)
+    if (opts.replay != null) return replay(opts)
     val platform = DesktopPlatform(opts)
     val config = Lwjgl3ApplicationConfiguration().apply {
         setTitle("Ink Mayhem")
@@ -42,22 +53,23 @@ fun main(args: Array<String>) {
         setForegroundFPS(0)
         setResizable(true)
     }
-    val dev = DevOptions(
-        seed = opts.seed,
-        autoplay = opts.autoplay,
-        openSettings = opts.openSettings,
-        openCalibration = opts.openCalibration,
-        skipCalibration = opts.skipCalibration || opts.autoplay,
-        tutorialLesson = opts.tutorialLesson?.minus(1),
-        skipTutorial = opts.skipTutorial,
-        stage = opts.stage,
-        openSelect = opts.openSelect,
-        speed = opts.speed,
-        wrongInk = opts.wrongInk,
-    )
-    val game = InkMayhemGame(platform, dev)
+    val game = InkMayhemGame(platform, devOptions(opts, opts.seed))
     Lwjgl3Application(DesktopHost(game, platform, opts), config)
 }
+
+private fun devOptions(opts: Options, seed: Long?) = DevOptions(
+    seed = seed,
+    autoplay = opts.autoplay,
+    openSettings = opts.openSettings,
+    openCalibration = opts.openCalibration,
+    skipCalibration = opts.skipCalibration || opts.autoplay,
+    tutorialLesson = opts.tutorialLesson?.minus(1),
+    skipTutorial = opts.skipTutorial,
+    stage = opts.stage,
+    openSelect = opts.openSelect,
+    speed = opts.speed,
+    wrongInk = opts.wrongInk,
+)
 
 private class Options(args: Array<String>) {
     private val list = args.toList()
@@ -95,16 +107,33 @@ private class Options(args: Array<String>) {
     val rotateAfter = value("--rotate-after")?.toFloat()
     val screenshot: String? = value("--screenshot")
     val after = value("--after")?.toFloat() ?: 2f
+    val record: String? = value("--record")
+    val replay: String? = value("--replay")
+    /** Replay: save every Nth frame as a PNG into this directory, between --from and --to seconds. */
+    val frames: String? = value("--frames")
+    val every = value("--every")?.toInt() ?: 4
+    val from = value("--from")?.toDouble() ?: 0.0
+    val to = value("--to")?.toDouble() ?: Double.MAX_VALUE
+    /** Replay window height in pixels (the game still sees the recorded screen size). */
+    val replayHeight = value("--replay-height")?.toInt() ?: 900
+    val args = list
 }
 
 private class DesktopPlatform(private val opts: Options) : Platform {
     override val isDebugBuild = true
     override val penQueue = PenQueue()
-    override val density get() = opts.density
+    /** A replay sets the recorded density. */
+    var densityValue = opts.density
+    override val density get() = densityValue
     override val description = "Desktop ${System.getProperty("os.name")}"
     override fun isDarkMode() = opts.dark
     override fun isReducedMotion() = opts.reducedMotion
     override fun vibrate(millis: Int, amplitude: Int) = Unit
+    override val appVersion = DESKTOP + opts.args.joinToString(" ")
+    /** A replay starts from the recorded preferences instead of the desktop's own. */
+    var prefs: com.badlogic.gdx.Preferences? = null
+    override fun preferences() = prefs ?: super.preferences()
+    override fun newRecording(): File? = opts.record?.let(::File)
 }
 
 /** Feeds mouse input into the pen queue and handles --screenshot. */
@@ -249,3 +278,127 @@ private class DesktopHost(
 }
 
 private val TUNE_RAW = floatArrayOf(0.03f, 0.07f, 0.2f)
+
+/**
+ * --replay: plays a recording back through the real game. Each frame of this window runs one
+ * recorded frame (its clock, time step and pen samples), so the session unfolds exactly as it
+ * did, as fast as this machine renders. Prints what happened and checks the recorded probes.
+ */
+private fun replay(opts: Options) {
+    val path = opts.replay ?: return
+    val log = File(path).bufferedReader().use { InputLog.read(it) }
+    val first = log.steps.firstOrNull { it is InputLog.Step.Resize } as InputLog.Step.Resize?
+        ?: error("the recording never sized the screen")
+    val platform = DesktopPlatform(opts)
+    platform.densityValue = first.density
+    platform.prefs = MemoryPreferences.of(log.prefs)
+    val frames = ReplayFrames()
+    val seed = log.meta["seed"]?.toLongOrNull()
+    // a desktop recording replays with the options it was made with (an Android one has none)
+    val app = log.meta["app"].orEmpty()
+    val dev = if (app.startsWith(DESKTOP)) {
+        devOptions(Options(app.removePrefix(DESKTOP).split(' ').filter { it.isNotEmpty() }.toTypedArray()), seed)
+    } else {
+        DevOptions(seed = seed)
+    }
+    val game = InkMayhemGame(platform, dev, frames)
+    println("replaying ${log.frames} frames from ${log.meta["app"]} on ${log.meta["device"]}, started ${log.meta["started"]}")
+    val config = Lwjgl3ApplicationConfiguration().apply {
+        setTitle("Ink Mayhem replay")
+        // even sides, so the saved frames make a video without padding
+        val k = opts.replayHeight.toFloat() / first.h
+        setWindowedMode((first.w * k).toInt() / 2 * 2, opts.replayHeight / 2 * 2)
+        setBackBufferConfig(8, 8, 8, 8, 0, 0, 4)
+        useVsync(false)
+        setForegroundFPS(0)
+        setResizable(false)
+    }
+    Lwjgl3Application(ReplayHost(game, platform, Replay(log, frames, platform.penQueue), opts), config)
+}
+
+private class ReplayHost(
+    private val game: InkMayhemGame,
+    private val platform: DesktopPlatform,
+    private val replay: Replay,
+    private val opts: Options,
+) : ApplicationListener {
+    private var probes = 0
+    private var mismatches = 0
+    private var lastNow = 0.0
+    private var saved = 0
+    private var done = false
+
+    private val target = object : ReplayTarget {
+        override fun resize(w: Int, h: Int, density: Float) {
+            platform.densityValue = density
+            game.resize(w, h)
+        }
+        override fun pause() = game.pause()
+        override fun resume() = game.resume()
+        override fun back() = game.back()
+    }
+
+    override fun create() {
+        game.create()
+        opts.frames?.let { File(it).mkdirs() }
+    }
+
+    // the window's own size, pauses and so on don't reach the game: only the recording's do
+    override fun resize(width: Int, height: Int) = Unit
+    override fun pause() = Unit
+    override fun resume() = Unit
+
+    override fun render() {
+        if (done) return
+        val f = replay.next(target)
+        if (f == null) {
+            finish()
+            return
+        }
+        game.render()
+        lastNow = f.now
+        for (e in f.events) println(String.format(java.util.Locale.US, "[%8.3f] %s", f.now, e))
+        f.probe?.let { expected ->
+            probes++
+            val got = game.probe()
+            if (got != expected) {
+                mismatches++
+                if (mismatches <= 5) println(String.format(java.util.Locale.US, "[%8.3f] DRIFT expected \"%s\" got \"%s\"", f.now, expected, got))
+            }
+        }
+        val dir = opts.frames
+        if (dir != null && f.now >= opts.from && f.now <= opts.to && replay.frameIndex % opts.every == 0) {
+            savePng(File(dir, String.format(java.util.Locale.US, "f%06d.png", saved++)))
+        }
+        val shot = opts.screenshot
+        if (shot != null && f.now >= opts.after) {
+            savePng(File(shot))
+            finish()
+        }
+        if (f.now > opts.to) finish()
+    }
+
+    private fun savePng(file: File) {
+        val w = Gdx.graphics.backBufferWidth
+        val h = Gdx.graphics.backBufferHeight
+        val pixmap = Pixmap.createFromFrameBuffer(0, 0, w, h)
+        val px = pixmap.pixels
+        for (i in 3 until w * h * 4 step 4) px.put(i, 0xFF.toByte())
+        PixmapIO.writePNG(Gdx.files.absolute(file.absolutePath), pixmap, Deflater.BEST_SPEED, true)
+        pixmap.dispose()
+    }
+
+    private fun finish() {
+        if (done) return
+        done = true
+        println(String.format(
+            java.util.Locale.US, "replayed %d frames (%.1f s); probes %d, drifted %d%s",
+            replay.frameIndex + 1, lastNow, probes, mismatches, if (saved > 0) "; saved $saved frames" else "",
+        ))
+        Gdx.app.exit()
+    }
+
+    override fun dispose() = game.dispose()
+}
+
+private const val DESKTOP = "desktop "
