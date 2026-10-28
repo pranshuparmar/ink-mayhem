@@ -79,7 +79,7 @@ class WorldRenderer(
         val vx0 = sim.cam.x - 2f
         val vx1 = sim.cam.x + vw + 2f
 
-        // the paper scrolls with the page (ruled, graph or dot grid by theme); the margin stays put
+        // the paper scrolls with the page (ruled, graph or dot grid by theme)
         val theme = sim.stage?.theme ?: Theme.PAGE
         shapes.begin(uiCam.combined, density)
         shapes.color(pal[Tok.RULE])
@@ -118,7 +118,7 @@ class WorldRenderer(
                 }
             }
         }
-        shapes.color(pal[Tok.MARGIN]).rect(min(56f, wDp * 0.12f) - 0.75f, 0f, 1.5f, hDp)
+        // (the POC's fixed red margin line is left out: it read as a line chasing the runner)
         shapes.end()
 
         // notes in the margin hand

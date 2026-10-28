@@ -50,6 +50,9 @@ Made after playtesting the port on a phone, at the owner's request.
    every POC number.
 6. **"Colour ink by type" is on by default** (the POC's default was plain ink), so the ink
    colours the tutorial teaches carry into the game. It can still be turned off in settings.
+7. **No margin line.** The POC's notebook margin, a pinkish-red vertical line fixed on screen
+   while the page scrolls, is gone in every orientation: in play it looked like a line
+   following the runner. Visual only.
 
 ## Physics (`core/.../physics/InkPhysics.kt`, `Ink.kt`)
 
@@ -135,7 +138,7 @@ reproduces exactly for the same viewport and the same play.
 
 | | |
 |---|---|
-| Rules / margin | every 30 dp, scroll with the camera / margin at min(56, 12 % W) dp |
+| Rules | every 30 dp, scroll with the camera. The POC's fixed margin line at min(56, 12 % W) dp is left out |
 | Scratch | volume min(0.09, speed px/s × 0.00012) × (0.5 + p); pitch 1800 + (1 − p) 2600 Hz; smoothing 0.03 s / 0.05 s |
 | Shake | 0.35 on death, 0.15 boulder spawn, 0.12 snaps; off with reduced motion |
 | Particles | capped at 4 per burst with reduced motion |
