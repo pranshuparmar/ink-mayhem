@@ -42,7 +42,9 @@ Made after playtesting the port on a phone, at the owner's request.
 3. **Calibration asks for "Ink Mayhem"** instead of a signature, with the phrase as a faint
    guide. The maths is the same.
 4. **A first-run tutorial** (new; see [Tutorial](#tutorial)).
-5. **"Colour ink by type" is on by default** (the POC's default was plain ink), so the ink
+5. **Stages** (new; see [Stages](#stages)): a second mode with hand-built levels. Endless keeps
+   every POC number.
+6. **"Colour ink by type" is on by default** (the POC's default was plain ink), so the ink
    colours the tutorial teaches carry into the game. It can still be turned off in settings.
 
 ## Physics (`core/.../physics/InkPhysics.kt`, `Ink.kt`)
@@ -155,6 +157,8 @@ Planck.js 1.5.0 (`reference/harness`), where it passes too:
 | Tunnel rock (new) | the roof and sides are safe, the underside spikes; springs 1–8 m before it at 3.4 and 6 m/s never get the runner above it; no drop inside a rock over 1.5 km of eight seeds | `TunnelTest` |
 | Wet ink (new) | the runner crosses a gap on a stroke still being drawn; pen-up builds the real stroke under it; a held rope past 6.8 m drops the runner; wet springs bounce; boulders fall through; ink begun in mid-air isn't solid; finished-bridge crossings are judged, half-drawn ones score nothing | `WetInkTest` |
 | Tutorial (new) | each lesson passes with the right ink and fails, with its hint, with the wrong one; the runner waits for the pen; the whole tutorial can be played through | `TutorialTest` |
+| Stages (new) | every World 1 stage clears with its scripted solution, no deaths and only Clean judgements, passing its checkpoint and picking up its hearts; a spring in the Cellar is Spiked, rope over Up High's beam gap falls in, no ink dies everywhere | `StageTest` |
+| Stage session (new) | the intro holds the runner; a death costs a life and retries from the checkpoint with its score; game over after three; stars, best and unlocks are recorded; lives carry on and cap at 9 | `StageSessionTest` |
 
 Two notes on scenario design, both true of the POC as well:
 
@@ -165,6 +169,63 @@ Two notes on scenario design, both true of the POC as well:
   makes a step taller than the runner's radius. The stall hop fires, but the step's face cancels
   its forward impulse and the runner dies "Stuck" (the POC's tip: "Thick beams make walls").
   Bridges drawn edge to edge, as the crossing tests do, are crossed at every pressure.
+
+## Stages
+
+`core/.../game/Stage.kt` (layout and builder), `World1.kt` (the stages), `StageSession.kt` (lives,
+retries, stars). Each stage runs on its own `GameSim`; Endless is untouched.
+
+### World 1
+
+| Stage | Theme | Speed | Length | What's in it |
+|---|---|---|---|---|
+| 1-1 First Page | ruled paper | 3.4 m/s | 179 m | gaps (rope), hills, a wall (spring), a high road with a heart, a seesaw, a hill-top gap |
+| 1-2 Cellar | graph paper, cave roof 3.6 m up | 3.5 m/s | 126 m | tunnels, a rope slide down a shaft, spike pits, a lift up a 5 m wall |
+| 1-3 Up High | dot grid, islands 5 m deep | 3.6 m/s | 116 m | a three-spring climb, a 7.6 m beam gap, a seesaw, sloping bridges down, a cloud with a heart |
+| 1-4 Castle | brickwork | 3.8 m/s | 129 m | spike pits, a tunnel, a 6 m lift, a seesaw over spikes, a climb, a beam gap over spikes, a boulder runway |
+
+Ground starts at level 20; blocks are 40 m deep unless the theme says otherwise.
+
+### Pieces
+
+| Piece | Numbers |
+|---|---|
+| Slope | a quad from the current level up or down by `rise` over `len` |
+| Ledge | floating block, 0.6 m thick |
+| Spike strip | 0.3 m deep, fatal ("Spiked") anywhere |
+| Spike pit | the gap's floor 3 m down, solid, spiked |
+| Slide | a 5 m shaft to ground 4 m lower; spikes 10 m down. A rope edge to edge is 6.4 m (under rope's 6.8 m) |
+| Lift | 0.5 m thick kinematic platform in a 3 m slot; waits at the bottom until the runner lands on it, rises at 1.6 m/s to the top and stays. Riding it doesn't count as being stuck |
+| Seesaw | plank = gap + 0.6 m, 0.3 m thick, density 0.6, pinned 0.6 m above the ground at the gap's centre, resting on the near edge, angular damping 1.5 |
+| Checkpoint | a bookmark; a retry starts 1 m past it |
+| Finish | a flag; past it the runner brakes to a stop |
+| Heart | +1 life (max 9), pickup radius 0.85 m like drops |
+
+### Rules that differ from Endless
+
+| | Endless | Stages |
+|---|---|---|
+| Speed | 3.4 → 6 m/s with distance | fixed per stage |
+| Drive braking | torque clamp ±7 | −1.5 / +7, so downhill rolls build speed (1-1's hills reach 4.5 m/s, a 27° slope 5.6 m/s) |
+| Camera | lerp y 2.5/s | lerp y 4/s with a vertical look-ahead of 0.3 s of the runner's fall or rise (clamped −2…4 m) |
+| Speed toasts | every 100 m | none |
+| Settings sheet | doesn't pause (POC) | pauses |
+
+### Lives, retries and stars
+
+| | |
+|---|---|
+| Lives | 3 at the start of a stage from the list; carried into Next; +1 per heart, max 9 |
+| Intro | 2.2 s (stage name and lives) before the first try, 1.2 s before a retry; the runner waits |
+| Death | −1 life; after 1.6 s, retry from the checkpoint (or the start) with the score, combo, ink and hazard judgements the player had there |
+| Game over | no lives left: Try again restarts the stage with 3 lives |
+| Clear | 1 s after the flag: score + ink left × 10 = total |
+| Stars | 1 for clearing, 1 for no deaths in the stage, 1 for no hazard cleared with heavier ink than it needed |
+| Unlock | a stage opens once the one before has at least one star |
+
+Every stage has a scripted solution (rope, spring and beam at mid-band pressure, drawn 8 m
+ahead); `StageTest` plays each one through with no deaths and light ink, and checks that wrong
+ink or no ink fails.
 
 ## Tutorial
 

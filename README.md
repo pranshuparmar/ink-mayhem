@@ -9,6 +9,10 @@ and you draw the way ahead. How hard you press decides what the ink becomes:
 | Normal writing | **Spring** | Bounces you (and boulders) high. Fatal under spiked ceilings. |
 | Press hard | **Beam** | Spans anything, carries anything, costs far more ink. |
 
+Two ways to play: **Stages**, hand-built levels in numbered worlds with lives, a checkpoint, a
+finish flag and up to three stars each (World 1 has four: First Page, Cellar, Up High and
+Castle), and **Endless**, the original endless run for high scores.
+
 Clear each hazard with the lightest ink that works to grow the combo. Ink is solid the moment
 it's drawn, so the runner can roll onto a stroke you're still finishing. Hover to see where the
 nib will land; hold the side button while touching to erase. Fingers don't leave ink.
@@ -43,7 +47,8 @@ first, which clears its best score, calibration and tutorial progress.
 
 On first launch the game asks you to **write “Ink Mayhem”** so it learns your everyday writing
 pressure (that becomes the middle of the spring band), then runs a short **tutorial**: five
-lessons on rope, spring, beam and erasing, on real terrain. Both happen once. The ⋯ menu has
+lessons on rope, spring, beam and erasing, on real terrain. Both happen once; after that the
+game opens on the title card with **Stages** and **Endless**. The ⋯ menu has
 **How to play** (the tutorial again), **Recalibrate**, and the **Pen readout** (tool type, raw
 and normalized pressure, buttons, tilt, hover and event rates) for checking the S Pen.
 
@@ -79,6 +84,8 @@ For fast iteration with a mouse (`lwjgl3` module):
 | `--dark`, `--reduced-motion` | Simulate the system settings. |
 | `--settings`, `--calibration`, `--skip-calibration` | Open or skip overlays at start. |
 | `--tutorial N`, `--skip-tutorial` | Open the tutorial at lesson N (1–5), or don't open it on first run. |
+| `--stage 1-2`, `--select` | Start straight into a stage (with `--autoplay`, its scripted solution plays it), or open the stage list. |
+| `--speed N` | Run the game N times faster (to screenshot late moments). |
 | `--rotate-after S` | Swap width and height after S seconds, like rotating the phone mid-run. |
 | `--screenshot out.png --after S` | Save a screenshot after S seconds and quit. |
 

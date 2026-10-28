@@ -191,3 +191,43 @@ build at least every 7 days. Caches are scoped per branch, but every branch and 
 branch (which would shadow `main`'s), and before `main` has a key they fall back to a throwaway
 one. Committing a debug keystore would be simpler but the brief rules out committing any
 keystore.
+
+## 18. Stages: hand-built, fixed, on their own sim
+
+- **Context.** An endless flat line got repetitive; the owner asked for vertical play and
+  "stages like Mario", for the familiarity of numbered worlds, a finish flag and lives.
+- **Decision.** A Stages mode beside Endless. Stages are laid out by hand with a small builder
+  (`StageBuilder`: flat, slope, gap, wall, climb, slide, spike pit, lift, seesaw, checkpoint,
+  finish) into plain data (`StageLayout`), the same every time so they can be learned.
+  `GameSim.loadStage` turns the data into physics; a stage session gets its own `GameSim`, so
+  Endless (and its POC numbers and best score) is untouched.
+- **Familiar, not copied.** World–stage numbers, a dark "WORLD 1-1 × 3" card between lives, a
+  flag at the end with a little castle, hearts as extra lives, a checkpoint, a castle stage with
+  a boulder chase, chiptune jingles. All are genre conventions; the characters, pipes, blocks
+  and music of any existing game are not used, and the jingles are original.
+- **Proof.** Every stage carries a scripted solution. Tests play each stage with it (no deaths,
+  every hazard Clean), and with wrong or no ink (deaths), so a level can't silently become
+  impossible.
+
+## 19. Stage terrain in the physics
+
+Slopes are convex quads on the static ground body, so the existing anchoring (now a
+point-to-polygon distance), cull and render paths keep working. Lifts are kinematic bodies
+driven by velocity (never teleported, so the runner rides them); a waiting lift starts when the
+runner touches it and parks at the top. Seesaws are dynamic planks on a revolute joint with
+limits and damping. Spike strips reuse the ceiling's fatal tag. None of it changes how strokes
+are built or break.
+
+## 20. Lives with checkpoint retries
+
+The owner chose lives combined with checkpoint retries: a death costs a life and restarts from
+the midway bookmark, and running out is game over, which restarts the stage with three lives
+(not the world, which would be harsher than a phone game needs). Retrying rebuilds the stage
+from scratch and restores the score, combo, ink and hazard judgements saved at the checkpoint,
+so a retry can't farm points or stars.
+
+## 21. Stars reward the game's own skill
+
+Stars are clear, no deaths, and light ink (no hazard cleared with heavier ink than it needed),
+so the third star asks for exactly what Endless's combo rewards. A stage unlocks once the one
+before has a star.
