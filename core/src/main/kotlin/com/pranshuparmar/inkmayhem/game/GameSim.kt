@@ -20,7 +20,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
 
-enum class GameState { TITLE, RUN, DEAD }
+enum class GameState { TITLE, RUN, DEAD, CLEAR }
 
 /**
  * The POC's game logic (everything in its IIFE except DOM, canvas and WebAudio): run lifecycle,
@@ -57,6 +57,10 @@ class GameSim(
     val drops = ArrayList<Drop>()
     val notes = ArrayList<Note>()
     val boulders = ArrayList<Boulder>()
+    /** Stage pieces (empty in Endless): floor and ceiling spike strips, lifts and seesaws. */
+    val spikeStrips = ArrayList<com.pranshuparmar.inkmayhem.physics.GroundRect>()
+    val lifts = ArrayList<Lift>()
+    val seesaws = ArrayList<Seesaw>()
 
     var combo = 1
         private set
@@ -118,6 +122,46 @@ class GameSim(
     /** Tutorial: strokes cost nothing. */
     var unlimitedInk = false
 
+    // ---------------------------------------------------------------- stages
+
+    /** The stage being played, or null in Endless (and the tutorial). */
+    var stage: StageDef? = null
+        private set
+    /** Progress through the current stage attempt, kept across checkpoint retries. */
+    var stageRun: StageRun? = null
+        private set
+    /** When the runner crossed the finish line (state [GameState.CLEAR]). */
+    var clearedAt = 0.0
+        private set
+    private var runnerOnLift = 0
+
+    /** A stage attempt: its checkpoint and what the player had when they passed it. */
+    class StageRun(val def: StageDef, hazardCount: Int) {
+        var checkpoint = false
+        var cpScore = 0.0
+        var cpCombo = 1
+        var cpInk = INK_START
+        var cpDrops = 0
+        /** Per stage hazard: 0 not judged, 1 par or lighter, 2 heavier than par. */
+        val judged = IntArray(hazardCount)
+        private val cpJudged = IntArray(hazardCount)
+        var drops = 0
+
+        internal fun save(sim: GameSim) {
+            checkpoint = true
+            cpScore = sim.score; cpCombo = sim.combo; cpInk = sim.inkLeft; cpDrops = drops
+            judged.copyInto(cpJudged)
+        }
+
+        internal fun restore(sim: GameSim) {
+            sim.score = cpScore; sim.combo = cpCombo; sim.inkLeft = cpInk; drops = cpDrops
+            cpJudged.copyInto(judged)
+        }
+
+        /** No hazard was cleared with heavier ink than it needed. */
+        val allLight: Boolean get() = judged.none { it == 2 }
+    }
+
     /** The stroke being drawn, or null. */
     var drawing: Drawing? = null
         private set
@@ -171,6 +215,8 @@ class GameSim(
 
     fun newRun() {
         resetWorld()
+        stageRun = null
+        speedOverride = Float.NaN
         generating = true
         level = 20f; genX = -40f; nSec = 0; lastHazard = null; boulderCd = 0
         addGround(48f)
@@ -184,7 +230,8 @@ class GameSim(
         ink = InkPhysics()
         ink.world.setContactListener(contacts)
         blocks.clear(); drops.clear(); notes.clear(); boulders.clear()
-        ceilings.clear(); hazards.clear()
+        ceilings.clear(); hazards.clear(); spikeStrips.clear(); lifts.clear(); seesaws.clear()
+        stage = null; runnerOnLift = 0
         combo = 1; score = 0.0; scoredDist = 0f; pendingDeath = null; boulderBounce.clear()
         dist = 0f; inkLeft = INK_START; timeScale = 1f; simT = 0f; snaps = 0; bounces = 0; nextSpeedNote = 100f
         drawing = null; erasingPointer = -1; pendingBounce = false; death = null
@@ -203,7 +250,63 @@ class GameSim(
         camPrev.set(cam)
         runner.prev.snapshot()
         boulders.fastEach { it.prev.snapshot() }
+        lifts.fastEach { it.prev.snapshot() }
+        seesaws.fastEach { it.prev.snapshot() }
         ink.strokes.fastEach { s -> s.groups.fastEach { it.snapshot() } }
+    }
+
+    /**
+     * Builds [def] and puts the runner at its start, or at its checkpoint when [fromCheckpoint]
+     * and this attempt has passed it (score, combo, ink and judgements roll back to that moment).
+     * The runner is held until the caller sets [runnerHeld] to false.
+     */
+    fun loadStage(def: StageDef, fromCheckpoint: Boolean) {
+        val keep = stageRun?.takeIf { fromCheckpoint && it.def === def && it.checkpoint }
+        val l = def.layout
+        resetWorld()
+        generating = false
+        stage = def
+        for (b in l.blocks) {
+            val r = if (b.topR == b.top) ink.addRect(b.x, b.top, b.w, b.depth)
+            else ink.addSlope(b.x, b.top, b.w, b.topR, max(b.top, b.topR) + b.depth)
+            r.level = max(b.top, b.topR)
+            blocks += r
+        }
+        for (k in l.rocks) {
+            ceilings += if (k.spiked) ink.addSpikedRock(k.x, k.bottom - ROCK_H, k.w, ROCK_H, SPIKE_DEPTH)
+            else ink.addRect(k.x, k.bottom - ROCK_H, k.w, ROCK_H)
+        }
+        for (k in l.spikes) spikeStrips += ink.addSpikes(k.x, k.y, k.w, k.up)
+        for (k in l.lifts) lifts += Lift(ink.addLift(k.x, k.lowY, k.w, LIFT_H), k, LIFT_H)
+        for (k in l.seesaws) {
+            seesaws += Seesaw(ink.addSeesaw(k.cx, k.cy, k.len, SEESAW_THICK, k.angle, k.minAngle, k.maxAngle), k.len, k.cx, k.cy)
+        }
+        for (k in l.items) {
+            drops += when (k.kind) {
+                ItemKind.DROP -> Drop(k.x, k.y, DROP_INK, false, fx.nextFloat() * 6f)
+                ItemKind.HIGH_DROP -> Drop(k.x, k.y, HIGH_DROP_INK, true, fx.nextFloat() * 6f)
+                ItemKind.HEART -> Drop(k.x, k.y, 0f, true, fx.nextFloat() * 6f, heart = true)
+            }
+        }
+        for (k in l.notes) notes += Note(k.x, k.y, k.text).also { it.maxW = k.maxW }
+        for ((i, k) in l.hazards.withIndex()) hazards += Hazard(k.type, k.x0, k.x1, k.par).also { it.index = i }
+        for (k in l.runways) blocks.firstOrNull { it.x == k.x }?.boulderTrigger = k.triggerX
+        val sx = if (keep != null) l.checkpointX + 1f else l.startX
+        level = l.groundAt(sx)
+        spawnRunner(sx)
+        dist = sx
+        scoredDist = sx
+        nextSpeedNote = Float.POSITIVE_INFINITY
+        speedOverride = def.speed
+        hazards.fastEach { if (it.x1 < sx) it.done = true }
+        drops.fastEach { if (it.x < sx) it.taken = true }
+        val run = keep ?: StageRun(def, l.hazards.size)
+        if (keep != null) run.restore(this)
+        stageRun = run
+        runnerHeld = true
+        camFocusX = Float.NaN
+        state = GameState.RUN
+        snapCamera()
     }
 
     /**
@@ -421,12 +524,23 @@ class GameSim(
             val other = if (ua?.kind == FixtureKind.RUNNER) ub else if (ub?.kind == FixtureKind.RUNNER) ua else null
             if (other?.kind == FixtureKind.SPRING) pendingBounce = true
             if (other?.kind == FixtureKind.CEILING) pendingDeath = "Spiked"
+            if (other?.kind == FixtureKind.LIFT) {
+                runnerOnLift++
+                val body = if (ua?.kind == FixtureKind.LIFT) fa.body else fb.body
+                lifts.fastEach { if (it.body === body) it.loaded = true }
+            }
             // springs launch boulders too
             if (ua?.kind == FixtureKind.BOULDER && ub?.kind == FixtureKind.SPRING) addBoulderBounce(fa.body)
             if (ub?.kind == FixtureKind.BOULDER && ua?.kind == FixtureKind.SPRING) addBoulderBounce(fb.body)
         }
 
-        override fun endContact(c: Contact) = Unit
+        override fun endContact(c: Contact) {
+            val ua = c.fixtureA.userData as? FixtureTag
+            val ub = c.fixtureB.userData as? FixtureTag
+            if ((ua?.kind == FixtureKind.RUNNER && ub?.kind == FixtureKind.LIFT) || (ub?.kind == FixtureKind.RUNNER && ua?.kind == FixtureKind.LIFT)) {
+                runnerOnLift = max(0, runnerOnLift - 1)
+            }
+        }
         override fun preSolve(c: Contact, m: Manifold) = Unit
         override fun postSolve(c: Contact, i: ContactImpulse) = Unit
     }
@@ -607,11 +721,25 @@ class GameSim(
         simT += sdt
         val rb = runner.body
 
+        if (state == GameState.CLEAR) {
+            // past the flag the runner rolls to a stop
+            val w = rb.angularVelocity
+            rb.applyTorque((3f * (0f - w)).coerceIn(-7f, 7f), true)
+            if (sdt > 0f) {
+                updateLifts(sdt)
+                ink.step(sdt, 2)
+            }
+            pendingBounce = false
+            pendingDeath = null
+            ink.events.clear()
+        }
+
         if (state == GameState.RUN || state == GameState.DEAD) {
             if (state == GameState.RUN && !runnerHeld) {
                 val w = rb.angularVelocity
                 val wt = runSpeed / RUNNER_R
-                rb.applyTorque((3f * (wt - w)).coerceIn(-7f, 7f), true)
+                // stages let a downhill roll build speed: the drive barely brakes there
+                rb.applyTorque((3f * (wt - w)).coerceIn(if (stage != null) -STAGE_BRAKE else -7f, 7f), true)
                 val v = rb.linearVelocity
                 if (kotlin.math.abs(v.x) < 0.4f && kotlin.math.abs(v.y) < 0.6f) {
                     runner.stuck += sdt
@@ -630,7 +758,10 @@ class GameSim(
                 val bt = runSpeed * 1.4f / BOULDER_R
                 bo.body.applyTorque((25f * (bt - bw)).coerceIn(-90f, 90f), true)
             }
-            if (sdt > 0f) ink.step(sdt, 2)
+            if (sdt > 0f) {
+                updateLifts(sdt)
+                ink.step(sdt, 2)
+            }
             runner.bounceCd -= sdt
             if (pendingBounce && runner.bounceCd <= 0f && state == GameState.RUN && !runnerHeld) {
                 val v = rb.linearVelocity
@@ -701,7 +832,13 @@ class GameSim(
                 if (dr.taken) return@fastEach
                 if (hypot(dr.x - px, dr.y - py) < 0.85f) {
                     dr.taken = true
+                    if (dr.heart) {
+                        events.burst(dr.x, dr.y, 14, 2.5f, Tok.BEAM)
+                        events.extraLife()
+                        return@fastEach
+                    }
                     inkLeft = min(INK_MAX, inkLeft + dr.value)
+                    stageRun?.let { it.drops++ }
                     events.burst(dr.x, dr.y, 10, 2f, Tok.DROP)
                     events.sound(if (dr.high) Sfx.PICKUP_HIGH else Sfx.PICKUP)
                 }
@@ -712,8 +849,10 @@ class GameSim(
                 scoredDist = dist
             }
             judgeHazards(px, py)
+            stageProgress(px)
             if (py > levelNear(px) + 4f) die("Fell in", DeathKind.FELL)
-            if (px > runner.bestX + 0.5f || runnerHeld) {
+            // riding a lift isn't being stuck
+            if (px > runner.bestX + 0.5f || runnerHeld || runnerOnLift > 0) {
                 runner.bestX = px
                 runner.bestT = simT
             } else if (simT - runner.bestT > 5f) {
@@ -721,12 +860,13 @@ class GameSim(
             }
         }
 
-        // camera
+        // camera; stages climb and fall, so there it looks ahead vertically and follows faster
         val p = rb.position
         val tx = camTargetX(p.x)
-        val ty = p.y - vh * camRunnerY
+        val staged = stage != null
+        val ty = p.y - vh * camRunnerY + if (staged) (rb.linearVelocity.y * 0.3f).coerceIn(-2f, 4f) else 0f
         cam.x += (tx - cam.x) * min(1f, dt * 4f)
-        cam.y += (ty - cam.y) * min(1f, dt * 2.5f)
+        cam.y += (ty - cam.y) * min(1f, dt * if (staged) 4f else 2.5f)
         if (state != GameState.TITLE) generate()
 
         runner.squash = max(0f, runner.squash - dt * 4f)
@@ -748,6 +888,7 @@ class GameSim(
             val cx = (hz.x0 + hz.x1) / 2f
             val cy = py - 1.6f
             if (heavy < 0) continue
+            stageRun?.let { if (hz.index >= 0) it.judged[hz.index] = if (heavy <= par) 1 else 2 }
             if (heavy < par) {
                 combo = min(COMBO_MAX, combo + 1)
                 val bonus = 50 * combo
@@ -770,6 +911,63 @@ class GameSim(
     private fun liveStrokeComplete(d: Drawing): Boolean {
         val n = d.size
         return n >= 2 && d.startAnchored && ink.anchorable(d.xs[n - 1], d.ys[n - 1])
+    }
+
+    /** Checkpoint and finish line of a stage. */
+    private fun stageProgress(px: Float) {
+        val run = stageRun ?: return
+        val l = run.def.layout
+        if (!run.checkpoint && !l.checkpointX.isNaN() && px > l.checkpointX) {
+            run.save(this)
+            events.checkpoint()
+        }
+        if (state == GameState.RUN && px > l.finishX) {
+            state = GameState.CLEAR
+            clearedAt = realTime
+            drawing = null
+            ink.clearWet()
+            events.scratch(0f, 0.5f)
+            events.stageCleared()
+        }
+    }
+
+    /** Moves the lifts: a waiting lift rises once the runner is on it; the others travel up and down. */
+    private fun updateLifts(dt: Float) {
+        lifts.fastEach { lf ->
+            val d = lf.def
+            val top = lf.top
+            if (lf.pause > 0f) {
+                lf.pause -= dt
+                lf.body.setLinearVelocity(0f, 0f)
+                return@fastEach
+            }
+            if (lf.dir == 0) {
+                lf.dir = when {
+                    d.waitForRunner && lf.loaded && top > d.highY + 0.001f -> -1
+                    !d.waitForRunner -> -1
+                    else -> 0
+                }
+            }
+            if (lf.dir == 0) {
+                lf.body.setLinearVelocity(0f, 0f)
+                return@fastEach
+            }
+            val goal = if (lf.dir < 0) d.highY else d.lowY
+            val left = goal - top // negative when rising
+            val step = d.speed * dt
+            if (kotlin.math.abs(left) <= step) {
+                // arrive exactly this step, then park (waiting lift) or pause and turn round
+                lf.body.setLinearVelocity(0f, left / dt)
+                if (d.waitForRunner) {
+                    lf.dir = 0 // parked at the top for good
+                } else {
+                    lf.dir = -lf.dir
+                    lf.pause = LIFT_PAUSE
+                }
+            } else {
+                lf.body.setLinearVelocity(0f, if (left < 0f) -d.speed else d.speed)
+            }
+        }
     }
 
     /** POC tok[ev.kind] || tok.ink: anchors have no colour token of their own. */
@@ -815,6 +1013,12 @@ class GameSim(
         const val INK_MAX = 100f
         const val INK_START = 70f
         const val ROPE_MAX_LEN = 6.8f
+        /** Stage lifts and seesaws. */
+        const val LIFT_H = 0.5f
+        const val LIFT_PAUSE = 0.8f
+        /** Stages: the most the drive torque brakes an over-speeding runner (Endless: 7). */
+        const val STAGE_BRAKE = 1.5f
+        const val SEESAW_THICK = 0.3f
         /** Wet ink is laid in pieces at least this long (half a stroke segment). */
         const val WET_STEP = InkPhysics.SEG / 2f
         /** Tunnel rock: how far it overhangs each side of the gap, its height and its spiked layer. */

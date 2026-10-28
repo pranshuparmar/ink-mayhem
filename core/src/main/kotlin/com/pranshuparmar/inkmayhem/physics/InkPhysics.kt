@@ -76,6 +76,43 @@ class InkPhysics(
         return r
     }
 
+    /**
+     * A block whose top slopes from ([x], [yL]) to ([x] + [w], [yR]) with a level bottom at
+     * [bottom]: hills and ramps. One convex quad on the ground body.
+     */
+    fun addSlope(x: Float, yL: Float, w: Float, yR: Float, bottom: Float): GroundRect {
+        val r = GroundRect(x, yL, w, bottom - yL, FixtureKind.GROUND, yR)
+        quad[0] = x; quad[1] = yL
+        quad[2] = x + w; quad[3] = yR
+        quad[4] = x + w; quad[5] = bottom
+        quad[6] = x; quad[7] = bottom
+        box.set(quad)
+        fd.reset()
+        fd.shape = box
+        fd.friction = 0.9f
+        r.fixture = ground.createFixture(fd).also { it.userData = FixtureTag.GROUND }
+        rects += r
+        return r
+    }
+
+    private val quad = FloatArray(8)
+
+    /**
+     * A strip of spikes [SPIKE_H] deep: on a floor ([up], sitting on y) or hanging from a ceiling
+     * (hanging from y). Touching it is fatal, like a spiked ceiling's underside.
+     */
+    fun addSpikes(x: Float, y: Float, w: Float, up: Boolean): GroundRect {
+        val top = if (up) y - SPIKE_H else y
+        val r = GroundRect(x, top, w, SPIKE_H, FixtureKind.CEILING)
+        box.setAsBox(w / 2f, SPIKE_H / 2f, v.set(x + w / 2f, top + SPIKE_H / 2f), 0f)
+        fd.reset()
+        fd.shape = box
+        fd.friction = 0.9f
+        r.fixture = ground.createFixture(fd).also { it.userData = FixtureTag.CEILING }
+        rects += r
+        return r
+    }
+
     fun removeRect(r: GroundRect) {
         if (!rects.remove(r)) return
         r.fixture?.let { ground.destroyFixture(it) }
@@ -89,12 +126,65 @@ class InkPhysics(
 
     fun distToRects(px: Float, py: Float): Float {
         var best = Float.POSITIVE_INFINITY
-        rects.fastEach { r ->
+        rects.fastEach { r -> best = min(best, distTo(r, px, py)) }
+        return best
+    }
+
+    private fun distTo(r: GroundRect, px: Float, py: Float): Float {
+        if (!r.sloped) {
             val dx = max(max(r.x - px, 0f), px - (r.x + r.w))
             val dy = max(max(r.y - py, 0f), py - (r.y + r.h))
-            best = min(best, hypot(dx, dy))
+            return hypot(dx, dy)
         }
-        return best
+        val x1 = r.x + r.w
+        val b = r.bottom
+        if (px >= r.x && px <= x1 && py >= r.topAt(px) && py <= b) return 0f
+        return min(
+            min(distSeg(px, py, r.x, r.y, x1, r.yR), distSeg(px, py, x1, r.yR, x1, b)),
+            min(distSeg(px, py, x1, b, r.x, b), distSeg(px, py, r.x, b, r.x, r.y)),
+        )
+    }
+
+    // ---- moving platforms ----
+
+    /** A kinematic box (a lift) with its top-left at ([x], [y]); the caller moves it. */
+    fun addLift(x: Float, y: Float, w: Float, h: Float): Body {
+        bd.type = BodyDef.BodyType.KinematicBody
+        bd.position.set(x + w / 2f, y + h / 2f)
+        bd.angle = 0f
+        val b = world.createBody(bd)
+        box.setAsBox(w / 2f, h / 2f)
+        fd.reset()
+        fd.shape = box
+        fd.friction = 0.9f
+        b.createFixture(fd).userData = FixtureTag.LIFT
+        return b
+    }
+
+    /**
+     * A seesaw: a plank of [len] × [thick] centred on ([cx], [cy]), pinned there to the ground
+     * and free to tip between [minAngle] and [maxAngle] (radians, positive = clockwise on screen).
+     */
+    fun addSeesaw(cx: Float, cy: Float, len: Float, thick: Float, angle: Float, minAngle: Float, maxAngle: Float): Body {
+        bd.type = BodyDef.BodyType.DynamicBody
+        bd.position.set(cx, cy)
+        bd.angle = angle
+        bd.angularDamping = 1.5f
+        val b = world.createBody(bd)
+        bd.angularDamping = 0f
+        box.setAsBox(len / 2f, thick / 2f)
+        fd.reset()
+        fd.shape = box
+        fd.density = SEESAW_DENSITY
+        fd.friction = 0.9f
+        b.createFixture(fd).userData = FixtureTag.GROUND
+        world.createJoint(RevoluteJointDef().apply {
+            initialize(ground, b, v.set(cx, cy))
+            enableLimit = true
+            lowerAngle = minAngle - angle
+            upperAngle = maxAngle - angle
+        })
+        return b
     }
 
     // ---- strokes ----
@@ -432,6 +522,10 @@ class InkPhysics(
         /** Collision categories: wet ink touches only the runner. Everything else is category 1. */
         const val RUNNER_BITS: Short = 0x0002
         const val WET_BITS: Short = 0x0004
+        /** Depth of a spike strip on a floor or ceiling. */
+        const val SPIKE_H = 0.3f
+        /** Seesaw planks: light enough for the runner (about 1 kg) to tip. */
+        const val SEESAW_DENSITY = 0.6f
         /** The spiked layer of a ceiling rock stops this far short of each side. */
         const val SPIKE_INSET = 0.1f
         const val VELOCITY_ITERATIONS = 10

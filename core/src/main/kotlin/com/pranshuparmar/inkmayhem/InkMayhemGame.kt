@@ -389,6 +389,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
                 bot = newBot()
             }
             GameState.RUN -> if (bot == null) bot = newBot()
+            GameState.CLEAR -> Unit
         }
     }
 

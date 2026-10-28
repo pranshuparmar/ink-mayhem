@@ -1,0 +1,157 @@
+package com.pranshuparmar.inkmayhem.game
+
+import com.pranshuparmar.inkmayhem.physics.Ink
+
+/**
+ * World 1: four hand-built stages, each the same every time. 1-1 teaches on a gentle page,
+ * 1-2 goes underground (rope country), 1-3 climbs into the sky, and 1-4 is the castle, with a
+ * boulder chase to finish. Positions are in metres from the start; the ground starts at 20.
+ */
+object Stages {
+    val FIRST_PAGE = StageDef(1, 1, "First Page", Theme.PAGE, 3.4f) {
+        start(16f)
+        note("Light touch makes rope. Bridge the gaps.", dx = -12f)
+        gap(3f, HazardType.GAP_S)
+        flat(8f)
+        drops(x - 6f, 3)
+        slope(10f, 2f)
+        flat(4f)
+        drop(x - 2f)
+        note("Downhill, you speed up.", dx = -2f, up = 3.2f)
+        slope(10f, -2f)
+        flat(6f)
+        gap(4.5f)
+        flat(10f)
+        note("Write normally for a spring.", dx = -9f)
+        wall(2.4f)
+        // the high road: a second spring reaches a ledge with drops and a heart
+        val hx = x
+        flat(20f)
+        ledge(hx + 7f, level - 3.2f, 10f)
+        spring(hx + 4.4f, hx + 5.2f, level)
+        for (i in 0 until 3) dropAt(hx + 9f + i * 1.8f, level - 3.95f)
+        heart(hx + 15.6f, level - 4.1f)
+        note("Spring again for the high road.", dx = -18f, up = 2.2f)
+        checkpoint()
+        stepDown(2.4f)
+        flat(8f)
+        note("Seesaws tip as you cross.", dx = -6f)
+        seesawGap(6f)
+        flat(8f)
+        slope(12f, 3f)
+        flat(3f)
+        gap(4f)
+        flat(3f)
+        slope(12f, -3f)
+        flat(8f)
+        drops(x - 6f, 3)
+        gap(5f)
+        flat(8f)
+        wall(2.4f)
+        flat(10f)
+        finish()
+    }
+
+    val CELLAR = StageDef(1, 2, "Cellar", Theme.CELLAR, 3.5f) {
+        cave(40f, 3.6f)
+        start(16f)
+        note("Underground, springs hit the roof. Rope it.", dx = -12f, up = 2.6f)
+        gap(3f, HazardType.GAP_S)
+        flat(8f)
+        drops(x - 6f, 3)
+        tunnel(4.5f)
+        flat(8f)
+        cave(20f, 3.6f)
+        flat(4f)
+        note("A rope from edge to edge makes a slide.", dx = -3f, up = 2.6f)
+        slide(5f, 4f)
+        cave(30f, 3.6f)
+        flat(10f)
+        drops(x - 7f, 3)
+        spikePit(4f)
+        checkpoint()
+        flat(6f)
+        tunnel(5f)
+        flat(8f)
+        spikePit(4.5f)
+        flat(6f)
+        note("Lifts wait for you.", dx = -5f, up = 2.8f)
+        liftUp(3f, 5f)
+        flat(10f)
+        drops(x - 7f, 3)
+        cave(24f, 3.6f)
+        gap(4.5f)
+        flat(6f)
+        tunnel(4f)
+        flat(6f)
+        finish()
+    }
+
+    val UP_HIGH = StageDef(1, 3, "Up High", Theme.SKY, 3.6f) {
+        depth = 5f
+        start(16f)
+        note("The climb: a spring on every step.", dx = -12f)
+        climb(3, 2.4f, 7.5f)
+        flat(2f)
+        note("Too far for rope. Press hard for a beam.", dx = -8f, up = 3f)
+        gap(7.6f, HazardType.GAP_L)
+        flat(8f)
+        drops(x - 6f, 3)
+        seesawGap(6f)
+        checkpoint()
+        flat(6f)
+        note("Down the islands: bridges can slope.", dx = -4f)
+        gapDown(3.5f, 2f)
+        flat(6f)
+        gapDown(3.5f, 2f)
+        flat(16f)
+        // a cloud above with a heart, for whoever bounces up. Its spring sits clear of the last
+        // bridge's judging, and the runner drops back to the ground before the next gap.
+        spring(x - 14.8f, x - 14f, level)
+        ledge(x - 11.1f, level - 3.4f, 5f)
+        dropAt(x - 9.6f, level - 4.15f)
+        heart(x - 7.6f, level - 4.3f)
+        gap(5f)
+        flat(6f)
+        wall(2.4f)
+        flat(8f)
+        finish()
+    }
+
+    val CASTLE = StageDef(1, 4, "Castle", Theme.CASTLE, 3.8f) {
+        start(16f)
+        note("The castle. Spikes below, spikes above.", dx = -12f)
+        spikePit(3.5f)
+        flat(6f)
+        tunnel(4.5f)
+        flat(6f)
+        stepDown(2f)
+        flat(6f)
+        liftUp(3f, 6f)
+        flat(6f)
+        drops(x - 5f, 3)
+        spikePit(4.5f)
+        checkpoint()
+        flat(5f)
+        seesawGap(6f, spikesBelow = true)
+        flat(6f)
+        climb(2, 2.4f, 7.5f)
+        flat(1f)
+        spikePit(7.6f, type = HazardType.GAP_L)
+        flat(4f)
+        note("Boulder! Rope drops it, anything else carries it.", dx = -3f)
+        runway(18f)
+        gap(5f, HazardType.BOULDER)
+        flat(6f)
+        finish()
+    }
+
+    val WORLD_1 = listOf(FIRST_PAGE, CELLAR, UP_HIGH, CASTLE)
+
+    /** Every stage in play order. */
+    val ALL: List<StageDef> = WORLD_1
+
+    fun byId(id: String): StageDef? = ALL.firstOrNull { it.id == id }
+
+    fun next(def: StageDef): StageDef? = ALL.getOrNull(ALL.indexOf(def) + 1)
+}

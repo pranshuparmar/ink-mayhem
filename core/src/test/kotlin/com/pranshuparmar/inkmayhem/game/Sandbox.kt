@@ -71,11 +71,26 @@ class Sandbox(gap: Float, runnerX: Float, speed: Float, farLength: Float = 80f) 
 }
 
 /** Records what the sim announced, for assertions. */
-class RecordingEvents : GameEvents {
+open class RecordingEvents : GameEvents {
     val toasts = ArrayList<String>()
     val pops = ArrayList<String>()
     val sounds = ArrayList<Sfx>()
     var deaths = ArrayList<Death>()
+    var hearts = 0
+    var checkpoints = 0
+    var clears = 0
+
+    override fun extraLife() {
+        hearts++
+    }
+
+    override fun checkpoint() {
+        checkpoints++
+    }
+
+    override fun stageCleared() {
+        clears++
+    }
 
     override fun toast(message: String, force: Boolean, delaySec: Float) {
         toasts += message

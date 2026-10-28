@@ -7,7 +7,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** What a fixture is, for contact handling and rendering. Stored as Fixture user data. */
-enum class FixtureKind { GROUND, CEILING, ROPE, SPRING, BEAM, RUNNER, BOULDER, CRATE }
+enum class FixtureKind { GROUND, CEILING, ROPE, SPRING, BEAM, RUNNER, BOULDER, CRATE, LIFT }
 
 class FixtureTag(val kind: FixtureKind, val stroke: Stroke? = null) {
     companion object {
@@ -16,6 +16,7 @@ class FixtureTag(val kind: FixtureKind, val stroke: Stroke? = null) {
         val RUNNER = FixtureTag(FixtureKind.RUNNER)
         val BOULDER = FixtureTag(FixtureKind.BOULDER)
         val CRATE = FixtureTag(FixtureKind.CRATE)
+        val LIFT = FixtureTag(FixtureKind.LIFT)
 
         private val WET_ROPE = FixtureTag(FixtureKind.ROPE)
         private val WET_SPRING = FixtureTag(FixtureKind.SPRING)
@@ -31,11 +32,23 @@ class FixtureTag(val kind: FixtureKind, val stroke: Stroke? = null) {
     }
 }
 
-/** A static rectangle on the ground body (InkCore addRect). Top-left origin, y down. */
-class GroundRect(val x: Float, val y: Float, val w: Float, val h: Float, val kind: FixtureKind) {
+/**
+ * A static block on the ground body (InkCore addRect). Top-left origin, y down. A sloped block's
+ * top runs from [y] at the left to [yR] at the right; its bottom is level at y + [h].
+ */
+class GroundRect(
+    val x: Float, val y: Float, val w: Float, val h: Float, val kind: FixtureKind,
+    val yR: Float = y,
+) {
     internal var fixture: Fixture? = null
     /** The spiked underside of a ceiling rock, if any. */
     internal var spikes: Fixture? = null
+
+    val sloped: Boolean get() = yR != y
+    val bottom: Float get() = y + h
+
+    /** Height of the top edge at [px] (clamped to the block). */
+    fun topAt(px: Float): Float = if (yR == y) y else y + (yR - y) * ((px - x) / w).coerceIn(0f, 1f)
 
     /** Game data: the ground level this block was generated at (its top). */
     var level = y

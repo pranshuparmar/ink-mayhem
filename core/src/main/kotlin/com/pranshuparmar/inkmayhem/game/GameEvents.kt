@@ -6,6 +6,8 @@ import com.pranshuparmar.inkmayhem.render.Tok
 enum class Sfx {
     ANCHOR, HOP, BOING, BOULDER_BOING, SNAP, ERASE, SPEED_UP, RUMBLE,
     PICKUP, PICKUP_HIGH, FEATHERWEIGHT, CHIME, COMBO_LOST, DEATH,
+    // stages (new): short original jingles
+    STAGE_START, CHECKPOINT, CLEAR, ONE_UP, GAME_OVER, STAR,
 }
 
 /**
@@ -36,6 +38,15 @@ interface GameEvents {
 
     /** A new run is being built (POC newRun clears particles and pops). */
     fun runReset() {}
+
+    /** Stages: the runner passed the midway bookmark. */
+    fun checkpoint() {}
+
+    /** Stages: the runner crossed the finish line. */
+    fun stageCleared() {}
+
+    /** Stages: the runner picked up a heart. */
+    fun extraLife() {}
 
     object None : GameEvents
 }
