@@ -48,18 +48,11 @@ class TutorialTest {
     private fun waitForNext(lesson: Lesson) = run(Tutorial.PASS_PAUSE + 0.5f) { tut.lesson == lesson && tut.phase == Phase.TRYING }
 
     @Test
-    fun `the pressure lesson passes once rope, spring and beam have all been drawn`() {
+    fun `the tutorial starts with the rope lesson, its guide showing`() {
         tut.start()
-        line(-2f, 0f, 15f, 0.2f)
-        line(-2f, 0f, 14f, 0.47f)
-        run(0.5f)
-        assertEquals(Phase.TRYING, tut.phase)
-        assertTrue(tut.seen[Ink.ROPE.weight] && tut.seen[Ink.SPRING.weight] && !tut.seen[Ink.BEAM.weight])
-        line(-2f, 0f, 13f, 0.8f)
-        run(0.1f)
-        assertEquals(Phase.PASSED, tut.phase)
-        waitForNext(Lesson.ROPE)
         assertEquals(Lesson.ROPE, tut.lesson)
+        assertTrue(tut.showGuide)
+        assertEquals(Ink.ROPE, tut.guideInk)
     }
 
     @Test
@@ -101,7 +94,7 @@ class TutorialTest {
     @Test
     fun `falling in the rope lesson resets it with a hint`() {
         tut.start(Lesson.ROPE.ordinal)
-        bridge(0f, 1f, Ink.ROPE)
+        bridge(0f, Tutorial.ROPE_GAP - 0.7f, Ink.ROPE) // reaches the guide's end, not the far edge
         run(5f) { tut.phase != Phase.TRYING }
         assertEquals(Phase.FAILED, tut.phase)
         assertTrue(tut.feedback.startsWith("Fell in"), tut.feedback)
@@ -109,6 +102,40 @@ class TutorialTest {
         assertEquals(Lesson.ROPE, tut.lesson)
         assertEquals(GameState.RUN, sim.state)
         assertTrue(sim.runnerHeld)
+    }
+
+    @Test
+    fun `a stroke that can't do the lesson's job is wiped, and the runner keeps waiting`() {
+        tut.start(Lesson.ROPE.ordinal)
+        val x = sim.runner.body.position.x
+        line(-1f, -0.2f, 18f, 0.2f) // a dab in the air, like pressing in place
+        assertTrue(sim.ink.strokes.isEmpty())
+        assertTrue(tut.feedback.startsWith("That one missed"), tut.feedback)
+        run(3f)
+        assertTrue(sim.runnerHeld)
+        assertEquals(x, sim.runner.body.position.x, 0.01f)
+        bridge(0f, Tutorial.ROPE_GAP, Ink.ROPE)
+        assertEquals("", tut.feedback, "a good stroke clears the hint")
+        run(5f) { tut.phase != Phase.TRYING }
+        assertEquals(Phase.PASSED, tut.phase)
+    }
+
+    @Test
+    fun `a beam drawn above the gap is wiped instead of letting the runner fall`() {
+        tut.start(Lesson.BEAM.ordinal)
+        line(0f, Tutorial.BEAM_GAP, Tutorial.LEVEL - 3f, InkBot.PRESSURE.getValue(Ink.BEAM))
+        assertTrue(sim.ink.strokes.isEmpty())
+        run(3f)
+        assertTrue(sim.runnerHeld)
+        assertEquals(Phase.TRYING, tut.phase)
+    }
+
+    @Test
+    fun `a spring off the mark is wiped`() {
+        tut.start(Lesson.SPRING.ordinal)
+        onGround(1f, 2f, Ink.SPRING) // on top of the wall
+        assertTrue(sim.ink.strokes.isEmpty())
+        assertTrue("dotted mark" in tut.feedback, tut.feedback)
     }
 
     @Test
@@ -175,8 +202,6 @@ class TutorialTest {
     @Test
     fun `playing every lesson right finishes the tutorial`() {
         tut.start()
-        line(-2f, 0f, 15f, 0.2f); line(-2f, 0f, 14f, 0.47f); line(-2f, 0f, 13f, 0.8f)
-        waitForNext(Lesson.ROPE)
         bridge(0f, Tutorial.ROPE_GAP, Ink.ROPE)
         run(5f) { tut.phase != Phase.TRYING }
         waitForNext(Lesson.SPRING)
@@ -197,7 +222,7 @@ class TutorialTest {
 
     @Test
     fun `a spring under the waiting runner doesn't launch it`() {
-        tut.start()
+        tut.start(Lesson.ERASE.ordinal) // the runner waits for the post, whatever is drawn
         val x = sim.runner.body.position.x
         onGround(x - 0.7f, x + 0.7f, Ink.SPRING)
         run(2f)

@@ -34,6 +34,15 @@ class WorldRenderer(
 
     private var alpha = 1f
 
+    /**
+     * The tutorial's guide: a dotted line from (x0, y0) to (x1, y1) in metres to draw along, in
+     * [guideTok], or a dashed ring round (x0, y0) when [guideRing]. Off when [guideOn] is false.
+     */
+    var guideOn = false
+    var guideRing = false
+    val guide = FloatArray(4)
+    var guideTok = Tok.ROPE
+
     /** Hover nib position in screen dp (set by the input router). */
     var hoverOn = false
     var hoverX = 0f
@@ -138,6 +147,7 @@ class WorldRenderer(
         sim.blocks.fastEach { r -> drawBlock(r, pal, vx0, vx1, sim.cam.y + vh + 2f, px, brick) }
         sim.ceilings.fastEach { c -> drawCeiling(c, pal, vx0, vx1, sim.cam.y - 2f, px, brick) }
         sim.spikeStrips.fastEach { k -> drawSpikes(k, pal, vx0, vx1) }
+        if (guideOn) drawGuide(sim, pal, px)
         drawLifts(sim, pal, px)
         drawSeesaws(sim, pal, px)
         drawFlags(sim, pal, px, behind = false)
@@ -331,6 +341,29 @@ class WorldRenderer(
             shapes.triangle(x - 0.14f, by, x, by + 0.3f, x + 0.14f, by)
             x += 0.42f
         }
+    }
+
+    private fun drawGuide(sim: GameSim, pal: Palette, px: Float) {
+        val pulse = 0.55f + 0.35f * sin(sim.realTime.toFloat() * 4f)
+        val c = pal[guideTok]
+        if (guideRing) {
+            shapes.color(c, pulse).ring(guide[0], guide[1], 1.7f, 2.4f * px, 6f * px, 5f * px)
+            return
+        }
+        val x0 = guide[0]; val y0 = guide[1]; val x1 = guide[2]; val y1 = guide[3]
+        val len = kotlin.math.hypot(x1 - x0, y1 - y0)
+        val n = max(2, (len / 0.28f).toInt())
+        shapes.color(c, pulse)
+        for (i in 0..n) {
+            val u = i / n.toFloat()
+            shapes.circle(x0 + (x1 - x0) * u, y0 + (y1 - y0) * u, 0.07f)
+        }
+        // an arrow at the far end: draw this way
+        val ux = (x1 - x0) / len
+        val uy = (y1 - y0) / len
+        val ax = x1 + ux * 0.35f
+        val ay = y1 + uy * 0.35f
+        shapes.triangle(ax, ay, ax - ux * 0.35f - uy * 0.22f, ay - uy * 0.35f + ux * 0.22f, ax - ux * 0.35f + uy * 0.22f, ay - uy * 0.35f - ux * 0.22f)
     }
 
     /** A strip of spikes on a floor (pointing up) or under a ledge (pointing down). */

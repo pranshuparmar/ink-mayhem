@@ -22,6 +22,8 @@ import com.pranshuparmar.inkmayhem.game.StageSession
 import com.pranshuparmar.inkmayhem.game.Stages
 import com.pranshuparmar.inkmayhem.game.Tutorial
 import com.pranshuparmar.inkmayhem.input.PenButtons
+import com.pranshuparmar.inkmayhem.input.PenCalibration
+import com.pranshuparmar.inkmayhem.physics.Ink
 import com.pranshuparmar.inkmayhem.input.PenPhase
 import com.pranshuparmar.inkmayhem.input.PenReadout
 import com.pranshuparmar.inkmayhem.input.PenSample
@@ -161,11 +163,11 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
             fonts,
             onDone = { cal ->
                 settings.calibration = cal
-                toast.show("Calibrated. Your normal pressure makes a spring.", clock, force = true)
+                toast.show("Pen tuned: rope, spring and beam are yours.", clock, force = true)
             },
-            onSkip = { if (settings.calibration == null) settings.calibration = Pressure.DEFAULT_CAL },
+            onSkip = { if (!settings.penTuned) settings.calibration = settings.calibration ?: PenCalibration.DEFAULT },
         )
-        if (dev.openCalibration || (settings.calibration == null && !dev.skipCalibration)) calibration.show()
+        if (dev.openCalibration || (!settings.penTuned && !dev.skipCalibration)) calibration.show()
         // first run: calibrate, then the tutorial, then the title card
         tutorialPending = dev.tutorialLesson != null || (!settings.tutorialDone && !dev.skipTutorial && !dev.autoplay)
         if (dev.openSettings) sheet.show()
@@ -322,7 +324,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
     private val allowFinger: Boolean get() = platform.isDebugBuild && settings.allowFinger
 
     private fun onSample(s: PenSample, now: Double) {
-        val n = if (s.toolType.isPen) Pressure.normalize(s.pressure, settings.calibration) else Pressure.FINGER
+        val n = if (s.toolType.isPen) (settings.calibration ?: PenCalibration.DEFAULT).normalize(s.pressure) else Pressure.FINGER
         readout.onSample(s)
         readout.normalized = n
         val x = s.x / density
@@ -683,6 +685,12 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
 
         val tut = tutorial
         val ses = session
+        world.guideOn = tut != null && tut.showGuide && tut.phase == Tutorial.Phase.TRYING
+        if (tut != null && world.guideOn) {
+            tut.guide.copyInto(world.guide)
+            world.guideRing = tut.guideRing
+            world.guideTok = when (tut.guideInk) { Ink.ROPE -> Tok.ROPE; Ink.SPRING -> Tok.SPRING; Ink.BEAM -> Tok.BEAM }
+        }
         // the tutorial always colours ink by type: that's what it teaches
         world.render(active, fx, pal, settings.tint || tut != null, uiCam, wDp, hDp, scale, density, (acc / STEP).coerceIn(0f, 1f))
 
@@ -702,7 +710,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         val gaugeLeft = safeL + 10f
         val gaugeTop = hDp * 0.3f
         val showReadout = settings.penReadout
-        if (showReadout) overlay.update(now, readout, settings.calibration ?: Pressure.DEFAULT_CAL, readoutExtras)
+        if (showReadout) overlay.update(now, readout, settings.calibration ?: PenCalibration.DEFAULT, readoutExtras)
         val monoFont = overlay.font(fonts)
         val boxW = if (showReadout) overlay.width(text, monoFont) else 0f
         val boxH = if (showReadout) overlay.layoutHeight(monoFont) else 0f
@@ -724,6 +732,8 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
             }
         }
         gauge.drawShapes(shapes, pal, gaugeLeft, gaugeTop, live, drawing != null)
+        val tag = inkTag(drawing, tut != null || ses != null)
+        if (tag != null) shapes.color(pal[tagTok(tag)]).roundRect(tagX, tagY, TAG_W, 22f, 11f)
         if (showReadout) overlay.drawBox(shapes, pal, boxRight, boxTop, boxW, boxH)
         if (tv > 0f) shapes.color(pal[Tok.INK], tv).roundRect(wDp / 2f - toastW / 2f, toastTop, toastW, 34f, 17f)
         shapes.end()
@@ -731,6 +741,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         batch.begin()
         if (tut != null) tutorialCard.drawText(text, pal, tut) else hud.drawText(text, fonts, pal, wDp, hudSim.combo)
         gauge.drawText(text, fonts, pal, gaugeLeft, gaugeTop, live, drawing != null)
+        if (tag != null) text.line(fonts.get(Face.UI_BOLD, 12f), tag.label, tagX + TAG_W / 2f, tagY, 22f, pal[Tok.PAPER], 1f, Align.center)
         if (showReadout) overlay.drawText(text, monoFont, pal, boxRight - boxW, boxTop)
         if (tv > 0f) text.line(toastFont, toast.message, wDp / 2f, toastTop, 34f, pal[Tok.PAPER], tv, Align.center)
         batch.end()
@@ -764,6 +775,27 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
 
     /** Read from Preferences only when the menus open, not every frame. */
     private var starsTotal = -1
+
+    private var tagX = 0f
+    private var tagY = 0f
+
+    /**
+     * Tutorial and stages: the ink under the pen, named right next to it while drawing (the gauge
+     * on the edge is easy to miss). Places the tag at [tagX], [tagY].
+     */
+    private fun inkTag(d: GameSim.Drawing?, show: Boolean): Ink? {
+        if (!show || d == null || d.size == 0 || d.smoothed.isNaN()) return null
+        val i = d.size - 1
+        tagX = ((d.xs[i] - world.camX) * scale + 16f).coerceIn(4f, wDp - TAG_W - 4f)
+        tagY = ((d.ys[i] - world.camY) * scale - 44f).coerceIn(4f, hDp - 26f)
+        return Ink.of(d.smoothed)
+    }
+
+    private fun tagTok(k: Ink) = when (k) {
+        Ink.ROPE -> Tok.ROPE
+        Ink.SPRING -> Tok.SPRING
+        Ink.BEAM -> Tok.BEAM
+    }
 
     private fun totalStars(): Int {
         if (starsTotal < 0) {
@@ -834,6 +866,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         const val FINGER_TOAST = "Use the S Pen. Fingers don’t leave ink."
         const val READY_TOAST = "You’re ready. The lightest ink that works grows your combo."
         const val SNAP_BUZZ_MS = 12
+        private const val TAG_W = 58f
         const val DEATH_BUZZ_MS = 45
     }
 }

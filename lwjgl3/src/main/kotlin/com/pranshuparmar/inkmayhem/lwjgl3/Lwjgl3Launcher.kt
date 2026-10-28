@@ -27,7 +27,7 @@ import com.pranshuparmar.inkmayhem.input.ToolType
  *          --autoplay (the correct-ink bot plays), --wrong-ink TUNNEL=SPRING, --seed N, --settings,
  *          --calibration, --skip-calibration, --tutorial LESSON (1-based), --skip-tutorial,
  *          --stage 1-2 (with --autoplay its solution plays), --select, --speed N,
- *          --rotate-after seconds, --demo-draw,
+ *          --rotate-after seconds, --demo-draw, --demo-tune LINES (with --calibration),
  *          --screenshot out.png --after seconds
  */
 fun main(args: Array<String>) {
@@ -86,6 +86,11 @@ private class Options(args: Array<String>) {
     } ?: emptyMap()
     /** Starts a run, hovers, then slowly draws a stroke with rising pressure (to see the gauge). */
     val demoDraw = "--demo-draw" in list
+    /**
+     * Draws this many pen-tuning lines across the middle of the screen with a light pen's raw
+     * pressures (rope 0.03, spring 0.07, beam 0.2), then a free light-to-hard stroke if 4.
+     */
+    val demoTune = value("--demo-tune")?.toInt() ?: 0
     /** Swaps width and height after this many seconds, like rotating the phone mid-run. */
     val rotateAfter = value("--rotate-after")?.toFloat()
     val screenshot: String? = value("--screenshot")
@@ -189,8 +194,38 @@ private class DesktopHost(
         }
     }
 
+    private var tuneLine = 0
+    private var tuneT = 0f
+
+    /** --demo-tune: one 0.6 s line every 1.2 s, starting at 0.8 s. */
+    private fun demoTune() {
+        if (tuneLine >= opts.demoTune) return
+        val w = Gdx.graphics.width.toFloat()
+        val h = Gdx.graphics.height.toFloat()
+        val q = platform.penQueue
+        val now = System.nanoTime()
+        val u = (elapsed - 0.8f - tuneLine * 1.2f) / 0.6f
+        if (u < 0f) return
+        val free = tuneLine == 3
+        val p = if (free) 0.02f + 0.28f * u.coerceIn(0f, 1f) else TUNE_RAW[tuneLine]
+        val x = w * (0.18f + 0.64f * u.coerceIn(0f, 1f))
+        val y = h * 0.5f + if (free) h * 0.03f * kotlin.math.sin(u * 9f) else 0f
+        val phase = when {
+            tuneT == 0f -> PenPhase.DOWN
+            u >= 1f -> PenPhase.UP
+            else -> PenPhase.MOVE
+        }
+        q.offer(x, y, p, 0f, 0f, 0, phase, ToolType.STYLUS, 7, now)
+        tuneT += 1f
+        if (phase == PenPhase.UP) {
+            tuneLine++
+            tuneT = 0f
+        }
+    }
+
     override fun render() {
         if (opts.demoDraw) demoDraw()
+        demoTune()
         game.render()
         elapsed += Gdx.graphics.deltaTime
         val rotateAfter = opts.rotateAfter
@@ -212,3 +247,5 @@ private class DesktopHost(
         }
     }
 }
+
+private val TUNE_RAW = floatArrayOf(0.03f, 0.07f, 0.2f)

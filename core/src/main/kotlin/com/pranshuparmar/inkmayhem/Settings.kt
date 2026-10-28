@@ -2,6 +2,7 @@ package com.pranshuparmar.inkmayhem
 
 import com.badlogic.gdx.Preferences
 import com.pranshuparmar.inkmayhem.game.StageStore
+import com.pranshuparmar.inkmayhem.input.PenCalibration
 
 /**
  * Persisted settings, calibration and best score (libGDX Preferences "ink-mayhem"). Values are
@@ -30,9 +31,34 @@ class Settings(private val prefs: Preferences) : StageStore {
     var tutorialDone: Boolean = prefs.getBoolean("tutorialDone", false)
         set(v) { field = v; put { putBoolean("tutorialDone", v) } }
 
-    /** Median raw calibration pressure, or null if the player never calibrated or skipped. */
-    var calibration: Float? = if (prefs.contains("cal")) prefs.getFloat("cal") else null
-        set(v) { field = v; put { if (v == null) remove("cal") else putFloat("cal", v) } }
+    /**
+     * The player's pen tuning (from their rope, spring and beam lines), or null if they never
+     * tuned it. Older installs kept one number ("cal", the POC's signature median): that still
+     * works, as a straight-line mapping, until they tune again.
+     */
+    var calibration: PenCalibration? = when {
+        prefs.contains("cal.rope") -> runCatching {
+            PenCalibration(prefs.getFloat("cal.rope"), prefs.getFloat("cal.spring"), prefs.getFloat("cal.top"))
+        }.getOrNull()
+        prefs.contains("cal") -> runCatching { PenCalibration.linear(prefs.getFloat("cal")) }.getOrNull()
+        else -> null
+    }
+        set(v) {
+            field = v
+            penTuned = v != null
+            put {
+                remove("cal")
+                if (v == null) {
+                    remove("cal.rope"); remove("cal.spring"); remove("cal.top")
+                } else {
+                    putFloat("cal.rope", v.ropeEdge); putFloat("cal.spring", v.springEdge); putFloat("cal.top", v.top)
+                }
+            }
+        }
+
+    /** Whether pen tuning has been done or skipped (an old one-number calibration doesn't count). */
+    var penTuned: Boolean = calibration != null && prefs.contains("cal.rope")
+        private set
 
     var best: Int = prefs.getInteger("best", 0)
         set(v) { field = v; put { putInteger("best", v) } }

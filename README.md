@@ -45,9 +45,11 @@ previous one if both were signed with the same debug key. CI keeps one (see
 [Debug signing](#debug-signing)); if Android still says the app conflicts, uninstall the old one
 first, which clears its best score, calibration and tutorial progress.
 
-On first launch the game asks you to **write “Ink Mayhem”** so it learns your everyday writing
-pressure (that becomes the middle of the spring band), then runs a short **tutorial**: five
-lessons on rope, spring, beam and erasing, on real terrain. Both happen once; after that the
+On first launch the game asks you to **tune your pen**: draw a rope (barely touching), a spring
+(the way you write) and a beam (pressing hard) along a dotted guide, then try a free stroke and
+watch the ink change. Your three pressures become the middle of the three ink bands. Then a
+short **tutorial**: four lessons on rope, spring, beam and erasing, on real terrain, each with a
+dotted guide showing where to draw. Both happen once; after that the
 game opens on the title card with **Stages** and **Endless**. The ⋯ menu has
 **How to play** (the tutorial again), **Recalibrate**, and the **Pen readout** (tool type, raw
 and normalized pressure, buttons, tilt, hover and event rates) for checking the S Pen.
@@ -83,7 +85,8 @@ For fast iteration with a mouse (`lwjgl3` module):
 | `--landscape`, `--size WxH`, `--density D` | Window size in dp and pixels per dp. |
 | `--dark`, `--reduced-motion` | Simulate the system settings. |
 | `--settings`, `--calibration`, `--skip-calibration` | Open or skip overlays at start. |
-| `--tutorial N`, `--skip-tutorial` | Open the tutorial at lesson N (1–5), or don't open it on first run. |
+| `--demo-tune N` | With `--calibration`: draws N tuning lines with a light pen's pressures (4 adds a free stroke). |
+| `--tutorial N`, `--skip-tutorial` | Open the tutorial at lesson N (1–4), or don't open it on first run. |
 | `--stage 1-2`, `--select` | Start straight into a stage (with `--autoplay`, its scripted solution plays it), or open the stage list. |
 | `--speed N` | Run the game N times faster (to screenshot late moments). |
 | `--rotate-after S` | Swap width and height after S seconds, like rotating the phone mid-run. |

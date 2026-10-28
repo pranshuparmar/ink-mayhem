@@ -21,7 +21,7 @@ class DebugOverlay {
     private val lines = ArrayList<String>()
     private var lastBuild = -1.0
     /** [extraLines] is only invoked when the text is rebuilt (5 times a second). */
-    fun update(now: Double, r: PenReadout, cal: Float, extraLines: () -> List<String>) {
+    fun update(now: Double, r: PenReadout, cal: com.pranshuparmar.inkmayhem.input.PenCalibration, extraLines: () -> List<String>) {
         if (now - lastBuild < 0.2 && lines.isNotEmpty()) return
         lastBuild = now
         lines.clear()
@@ -39,7 +39,7 @@ class DebugOverlay {
         lines += "buttons   ${r.buttons}$side  tilt ${r.tiltX.roundToInt()}° ${r.tiltY.roundToInt()}°"
         lines += "hover     ${if (r.hovering) "yes" else "no "}  ${r.hoverEventsPerSec} ev/s  ${r.hoverSamplesPerSec} smp/s"
         lines += "moves     ${r.moveEventsPerSec} ev/s  ${r.moveSamplesPerSec} smp/s"
-        lines += "calib     median ${f3(cal)}"
+        lines += "calib     rope<${f3(cal.ropeEdge)} spring<${f3(cal.springEdge)} top ${f3(cal.top)}"
         lines += extraLines()
     }
 

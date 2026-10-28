@@ -39,8 +39,12 @@ Made after playtesting the port on a phone, at the owner's request.
    High drops that would sit inside the rock are left out (the level's random draws are still
    made, so the rest of a seeded level is unchanged), and the tunnel's intro note wraps to fit
    in front of the rock.
-3. **Calibration asks for "Ink Mayhem"** instead of a signature, with the phrase as a faint
-   guide. The maths is the same.
+3. **Calibration is three drawing tasks** instead of a signature: a rope, a spring and a beam
+   line, then a free try. The POC's one number put the player's writing pressure at 0.45 on a
+   straight line; now each of the player's three pressures lands in the middle of its own band
+   (see Input below). The bands themselves (rope below
+   0.3, spring below 0.6) are unchanged. Asked by the player after a recording showed writing
+   pressure and drawing pressure differ, and a light pen (raw ~0.076 writing) reading as rope.
 4. **A first-run tutorial** (new; see [Tutorial](#tutorial)).
 5. **Stages** (new; see [Stages](#stages)): a second mode with hand-built levels. Endless keeps
    every POC number.
@@ -116,12 +120,12 @@ spread, drop bob phase) uses a separate generator so it never changes the level.
 the difficulty term `d` uses the runner's distance when a section is generated, so a seed
 reproduces exactly for the same viewport and the same play.
 
-## Input (`core/.../input/Pressure.kt`, `GameSim.addPoint`)
+## Input (`core/.../input/PenCalibration.kt`, `Pressure.kt`, `GameSim.addPoint`)
 
 | | |
 |---|---|
-| Calibration | median raw pressure of the player writing "Ink Mayhem" (samples > 0.02, at least 30), clamped 0.08–0.9; 0.32 if skipped. Asked once, stored; "Recalibrate" in settings |
-| Normalized pressure | p = clamp(0.45 × raw / cal) |
+| Pen tuning | the player draws a rope, a spring and a beam line along a guide. Each line's pressure is the median of its middle 70 % (samples > 0.001, at least 8); it must run half the guide, and each must be at least 1.2× and 0.004 (spring) / 0.008 (beam) raw harder than the last (a beam at ≥ 0.98 only has to be harder). Then a free try, with live ink colour and a chip per ink seen in a stroke of 40 dp or more. Asked once, stored; "Recalibrate" in settings |
+| Normalized pressure | piecewise linear: 0 → 0, √(rope·spring) → 0.3, √(spring·beam) → 0.6, beam + (beam − √(spring·beam)) → 1, clamped. Skipped or never tuned: the POC's straight line p = 0.45 × raw / 0.32. An old one-number calibration carries over as that straight line (cal in place of 0.32), and the game asks for tuning once more |
 | Fingers and mouse (debug) | fixed p = 0.45 |
 | Smoothing | p = 0.7 prev + 0.3 new |
 | Point spacing | points closer than 0.02 m are dropped (raising the last point to the smoothed pressure) |
@@ -156,7 +160,8 @@ Planck.js 1.5.0 (`reference/harness`), where it passes too:
 | Wrong ink | spring in the tunnel dies "Spiked"; rope over the long gap dies "Fell in" | `ScriptedRunTest` |
 | Tunnel rock (new) | the roof and sides are safe, the underside spikes; springs 1–8 m before it at 3.4 and 6 m/s never get the runner above it; no drop inside a rock over 1.5 km of eight seeds | `TunnelTest` |
 | Wet ink (new) | the runner crosses a gap on a stroke still being drawn; pen-up builds the real stroke under it; a held rope past 6.8 m drops the runner; wet springs bounce; boulders fall through; ink begun in mid-air isn't solid; finished-bridge crossings are judged, half-drawn ones score nothing | `WetInkTest` |
-| Tutorial (new) | each lesson passes with the right ink and fails, with its hint, with the wrong one; the runner waits for the pen; the whole tutorial can be played through | `TutorialTest` |
+| Tutorial (new) | each lesson passes with the right ink and fails, with its hint, with the wrong one; the runner waits for the pen; strokes that can't do the lesson's job are wiped and the runner keeps waiting; the whole tutorial can be played through | `TutorialTest` |
+| Pen tuning (new) | an untuned pen maps as the POC did; a light pen's three lines land in their own bands, monotonically; each line must be long enough and harder than the last; a pen that tops out still gets a beam | `PenInputTest` |
 | Stages (new) | every World 1 stage clears with its scripted solution, no deaths and only Clean judgements, passing its checkpoint and picking up its hearts; a spring in the Cellar is Spiked, rope over Up High's beam gap falls in, no ink dies everywhere | `StageTest` |
 | Stage session (new) | the intro holds the runner; a death costs a life and retries from the checkpoint with its score; game over after three; stars, best and unlocks are recorded; lives carry on and cap at 9 | `StageSessionTest` |
 
@@ -232,16 +237,21 @@ ink or no ink fails.
 `core/.../game/Tutorial.kt`, on its own `GameSim` in sandbox mode (the player's run and best
 score are untouched). Ground level 20, run speed 3.4 m/s, unlimited ink, ink coloured by type.
 
-| Lesson | Scene | Passes when |
-|---|---|---|
-| 1 Feel the pressure | flat ground | rope, spring and beam have each been drawn |
-| 2 Light touch: rope | 3.2 m gap | the runner is 1.2 m past it; with heavier ink it asks for rope twice, then accepts |
-| 3 Write normally: spring | 2.4 m wall | the runner is on top; without a spring bounce it asks for one twice, then accepts |
-| 4 Press hard: beam | 7.6 m gap (too long for rope) | the runner is 1.2 m past it |
-| 5 Side button: erase | a 2.6 m beam post standing in the way | the post is erased and the runner is 1.5 m past it |
+| Lesson | Scene | Guide | Passes when |
+|---|---|---|---|
+| 1 Light touch: rope | 3.2 m gap | dots edge to edge | the runner is 1.2 m past it; with heavier ink it asks for rope twice, then accepts |
+| 2 Write normally: spring | 2.4 m wall | dots on the ground 2.4–3.2 m before it | the runner is on top; without a spring bounce it asks for one twice, then accepts |
+| 3 Press hard: beam | 7.6 m gap (too long for rope) | dots edge to edge | the runner is 1.2 m past it |
+| 4 Side button: erase | a 2.6 m beam post standing in the way | a dashed ring round the post | the post is erased and the runner is 1.5 m past it |
 
-In lessons 2–4 the runner waits until a stroke is finished and the pen lifted; in lesson 5 until
-the post is gone. A waiting runner isn't launched by springs drawn under it. A death, or 3 s without 0.3 m of progress, fails the lesson with a hint for
+(The old first lesson, "Feel the pressure", is gone: pen tuning's free try does its job.) The
+guide pulses in the lesson's ink colour until the runner goes. A finished stroke that can't do
+the lesson's job is wiped with a "That one missed" hint and the runner keeps waiting: a bridge
+has to come within 1.2 m of the ground and start and end within 0.8 m of the edges; a spring
+has to lie near the ground before the wall. In lessons 1–3 the runner waits until a fitting
+stroke is finished and the pen lifted; in lesson 4 until the post is gone. A waiting runner
+isn't launched by springs drawn under it. While drawing in the tutorial or a stage, a pill
+16 dp right of and 44 dp above the pen names the ink being laid. A death, or 3 s without 0.3 m of progress, fails the lesson with a hint for
 what went wrong; the scene resets 2.2 s later. A pass moves on after 1.6 s. The tutorial runs
 once after calibration on first launch and again from "How to play"; Skip (or Android back)
 ends it.
@@ -266,5 +276,5 @@ The POC won in each case; none of these changed behaviour.
 8. **Long-rope test** counts only the stroke's rope segments (× 0.3 m), and weakens the rope
    joint nearest the middle rope segment.
 9. **Rules the brief doesn't mention** but the POC has, all ported: pen-down needs > 0.5 ink; drop
-   pickup radius 0.85 m; calibration needs 30 samples above 0.02; the settings sheet doesn't pause
-   the run.
+   pickup radius 0.85 m; calibration needs 30 samples above 0.02 (since replaced by pen tuning);
+   the settings sheet doesn't pause the run.

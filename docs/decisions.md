@@ -231,3 +231,26 @@ so a retry can't farm points or stars.
 Stars are clear, no deaths, and light ink (no hazard cleared with heavier ink than it needed),
 so the third star asks for exactly what Endless's combo rewards. A stage unlocks once the one
 before has a star.
+
+## 22. Pen tuning by drawing, not writing
+
+The POC calibrates from a signature: the median pressure of writing becomes 0.45, and the
+rest is a straight line. A screen recording of a first run showed why that fails. Writing a
+phrase is not drawing a line: the player's pen read about 0.076 raw while writing (below the
+old 0.08 floor), so rope, spring and beam all came out of a narrow, guessed range, and the
+player had no way to learn what "hard" meant to the game. Tuning now asks for each ink in turn
+(a rope line, a spring line, a beam line, each along a guide in that ink's colour and width),
+checks each is a real line and heavier than the last, and maps the three medians to the
+middles of their bands with edges at the geometric means between them, since pressure steps
+feel like ratios. A free try follows, with live colour, so the player sees the three inks come
+out of their own hand before the tutorial starts. Old one-number calibrations still load, as
+the POC's straight line.
+
+The same recording showed the tutorial's first lessons passing or failing for the wrong
+reasons: a tap lit an ink chip, pressing in place passed the pressure lesson, and a stroke
+drawn in mid-air released the runner into the gap. So the pressure lesson went (tuning's free
+try replaces it), each lesson shows a dotted guide where its stroke belongs, a stroke that
+can't do the lesson's job is wiped with a hint instead of releasing the runner, and a small
+label beside the pen names the ink being laid, since the gauge sits far from where the
+player looks.
+
