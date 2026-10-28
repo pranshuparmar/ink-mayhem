@@ -49,9 +49,16 @@ class TitleCard(private val fonts: Fonts) {
     private var starsLine = ""
     private val legendRowH = FloatArray(3)
 
+    private var shownBest = -1
+    private var shownStars = -1
+
     fun layout(text: Text, f: Frame, best: Int, stars: Int, maxStars: Int) {
-        bestLine = if (best > 0) "ENDLESS BEST ${Format.thousands(best)}" else ""
-        starsLine = "$stars / $maxStars"
+        if (best != shownBest || stars != shownStars) {
+            shownBest = best
+            shownStars = stars
+            bestLine = if (best > 0) "ENDLESS BEST ${Format.thousands(best)}" else ""
+            starsLine = "$stars / $maxStars"
+        }
         starsW = text.width(fonts.get(Face.MONO_MEDIUM, 12f), starsLine)
         val inner = f.cardW - 40f
         var h = 20f + 40f + 12f + pitch.layout(text, inner) + 12f

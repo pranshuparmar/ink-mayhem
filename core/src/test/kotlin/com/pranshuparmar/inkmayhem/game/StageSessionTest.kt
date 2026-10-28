@@ -146,6 +146,38 @@ class StageSessionTest {
     }
 
     @Test
+    fun `the hazard right before the checkpoint keeps its judgement after a retry`() {
+        // a gap ending exactly at the checkpoint, then a gap with no solution
+        val def = StageDef(9, 3, "Edge", Theme.PAGE, 3.6f) {
+            start(14f)
+            gap(4f)
+            checkpoint()
+            flat(9f)
+            openGap(5f)
+            flat(8f)
+            finish()
+        }
+        session.start(def)
+        run(60f) { session.phase == Phase.DYING }
+        val run = sim.stageRun!!
+        assertEquals(1, run.judged[0], "the first gap was judged Clean before the checkpoint was saved")
+        assertEquals(2, run.cpCombo)
+        run(5f) { session.phase == Phase.INTRO }
+        assertEquals(1, sim.stageRun!!.judged[0])
+        assertEquals(2, sim.combo)
+    }
+
+    @Test
+    fun `a pen-down after a stage death never turns the stage into an Endless run`() {
+        session.start(mini(trap = true))
+        run(60f) { session.phase == Phase.DYING }
+        sim.realTime += 1.0 // past Endless's restart delay
+        sim.penDown(4, 0f, 0f, 0.4f, erase = false, t = 99.0)
+        assertEquals(GameState.DEAD, sim.state)
+        assertNotNull(sim.stage)
+    }
+
+    @Test
     fun `lives carry into the next stage and hearts stop at nine`() {
         session.start(Stages.FIRST_PAGE)
         repeat(10) { session.extraLife() }

@@ -18,7 +18,7 @@ class StageDef(
     val speed: Float,
     private val build: StageBuilder.() -> Unit,
 ) {
-    val id: String get() = "$world-$number"
+    val id: String = "$world-$number"
     val layout: StageLayout by lazy { StageLayout().also { StageBuilder(it).build() } }
 }
 

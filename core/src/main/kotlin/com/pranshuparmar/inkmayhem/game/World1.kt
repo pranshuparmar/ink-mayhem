@@ -70,7 +70,7 @@ object Stages {
         drops(x - 7f, 3)
         spikePit(4f)
         checkpoint()
-        flat(6f)
+        flat(11f)
         tunnel(5f)
         flat(8f)
         spikePit(4.5f)
@@ -99,14 +99,14 @@ object Stages {
         drops(x - 6f, 3)
         seesawGap(6f)
         checkpoint()
-        flat(6f)
+        flat(11f)
         note("Down the islands: bridges can slope.", dx = -4f)
         gapDown(3.5f, 2f)
         flat(6f)
         gapDown(3.5f, 2f)
-        flat(16f)
-        // a cloud above with a heart, for whoever bounces up. Its spring sits clear of the last
-        // bridge's judging, and the runner drops back to the ground before the next gap.
+        flat(18f)
+        // a cloud above with a heart, for whoever bounces up. Its spring sits 2 m clear of the
+        // last bridge's judging, and the runner drops back to the ground before the next gap.
         spring(x - 14.8f, x - 14f, level)
         ledge(x - 11.1f, level - 3.4f, 5f)
         dropAt(x - 9.6f, level - 4.15f)
@@ -132,7 +132,7 @@ object Stages {
         drops(x - 5f, 3)
         spikePit(4.5f)
         checkpoint()
-        flat(5f)
+        flat(10f)
         seesawGap(6f, spikesBelow = true)
         flat(6f)
         climb(2, 2.4f, 7.5f)

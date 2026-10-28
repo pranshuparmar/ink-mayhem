@@ -272,11 +272,17 @@ class GameSim(
             r.level = max(b.top, b.topR)
             blocks += r
         }
-        // touching blocks share an edge: draw only the part of it that shows (a step), not a seam
+        // touching blocks share an edge: hide the stretch the neighbour covers, not the rest
         blocks.fastEach { b ->
             blocks.fastEach { o ->
-                if (o !== b && kotlin.math.abs(o.right - b.x) < 0.01f) b.edgeLTo = o.topAt(o.right)
-                if (o !== b && kotlin.math.abs(o.x - b.right) < 0.01f) b.edgeRTo = o.topAt(o.x)
+                if (o !== b && kotlin.math.abs(o.right - b.x) < 0.01f) {
+                    b.edgeLTo = o.topAt(o.right)
+                    b.edgeLFrom = o.bottom
+                }
+                if (o !== b && kotlin.math.abs(o.x - b.right) < 0.01f) {
+                    b.edgeRTo = o.topAt(o.x)
+                    b.edgeRFrom = o.bottom
+                }
             }
         }
         for (k in l.rocks) {
@@ -569,7 +575,8 @@ class GameSim(
      * a stroke. [n] is normalized pressure, [t] the sample time in seconds.
      */
     fun penDown(pointer: Int, x: Float, y: Float, n: Float, erase: Boolean, t: Double) {
-        if (state == GameState.TITLE || canRestart) {
+        // (a stage restarts through its session, never into an Endless run)
+        if (stage == null && (state == GameState.TITLE || canRestart)) {
             startRun()
             return
         }
@@ -864,7 +871,7 @@ class GameSim(
             stageProgress(px)
             if (py > levelNear(px) + 4f) die("Fell in", DeathKind.FELL)
             // riding a lift isn't being stuck
-            if (px > runner.bestX + 0.5f || runnerHeld || runnerOnLift > 0) {
+            if (px > runner.bestX + 0.5f || runnerHeld || (runnerOnLift > 0 && liftMoving())) {
                 runner.bestX = px
                 runner.bestT = simT
             } else if (simT - runner.bestT > 5f) {
@@ -925,11 +932,18 @@ class GameSim(
         return n >= 2 && d.startAnchored && ink.anchorable(d.xs[n - 1], d.ys[n - 1])
     }
 
+    private fun liftMoving(): Boolean {
+        for (i in lifts.indices) if (lifts[i].dir != 0) return true
+        return false
+    }
+
     /** Checkpoint and finish line of a stage. */
     private fun stageProgress(px: Float) {
         val run = stageRun ?: return
         val l = run.def.layout
-        if (!run.checkpoint && !l.checkpointX.isNaN() && px > l.checkpointX) {
+        // saved once the hazard just before it has been judged (judging lags 0.6 m), still
+        // short of the respawn point 1 m past it
+        if (!run.checkpoint && !l.checkpointX.isNaN() && px > l.checkpointX + 0.6f) {
             run.save(this)
             events.checkpoint()
         }

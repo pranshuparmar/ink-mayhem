@@ -31,14 +31,32 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
     val box = Box()
     val back = Box()
     val press = Press()
-    private val rows = Stages.ALL.map { it to Box() }
+    private val defs = Stages.ALL
+    private val rows = Array(defs.size) { Box() }
+    // read from Preferences when the list opens (refresh), not on every frame or pen sample
+    private val open = BooleanArray(defs.size)
+    private val stars = IntArray(defs.size)
+    private val subs = Array(defs.size) { "" }
+
+    fun refresh() {
+        for (i in defs.indices) {
+            open[i] = StageSession.unlocked(defs[i], store)
+            stars[i] = store.stars(defs[i].id)
+            val best = store.best(defs[i].id)
+            subs[i] = if (!open[i]) "LOCKED" else if (best > 0) "BEST ${Format.thousands(best)}" else "NOT CLEARED YET"
+        }
+    }
+
+    init {
+        refresh()
+    }
 
     fun layout(text: Text, f: Frame) {
         val h = 20f + 36f + 12f + rows.size * (ROW_H + 8f) + 6f + 42f + 20f
         box.set((f.wDp - f.cardW) / 2f + (f.padL - f.padR) / 2f, (f.hDp - h) / 2f, f.cardW, h)
         var y = box.y + 20f + 36f + 12f
-        for ((_, b) in rows) {
-            b.set(box.x + 20f, y, box.w - 40f, ROW_H)
+        for (i in rows.indices) {
+            rows[i].set(box.x + 20f, y, box.w - 40f, ROW_H)
             y += ROW_H + 8f
         }
         val bw = text.width(fonts.get(Face.UI_BOLD, 14f), "Back") + 32f
@@ -48,17 +66,17 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
     /** The stage under (x, y) if it can be played, or [back]. */
     fun targetAt(x: Float, y: Float): Any? {
         if (back.contains(x, y)) return back
-        for ((def, b) in rows) if (b.contains(x, y) && StageSession.unlocked(def, store)) return def
+        for (i in rows.indices) if (rows[i].contains(x, y) && open[i]) return defs[i]
         return null
     }
 
     fun drawShapes(shapes: Shapes, pal: Palette, f: Frame) {
         shapes.color(pal[Tok.PAPER], 0.55f).rect(0f, 0f, f.wDp, f.hDp)
         Widgets.card(shapes, pal, box)
-        for ((def, b) in rows) {
-            val open = StageSession.unlocked(def, store)
-            Widgets.button(shapes, pal, b, primary = false, enabled = open, pressed = press.isPressed(def))
-            if (open) drawStars(shapes, pal, b.right - 46f, b.y + b.h / 2f, 9f, store.stars(def.id), 21f)
+        for (i in rows.indices) {
+            val b = rows[i]
+            Widgets.button(shapes, pal, b, primary = false, enabled = open[i], pressed = press.isPressed(defs[i]))
+            if (open[i]) drawStars(shapes, pal, b.right - 46f, b.y + b.h / 2f, 9f, stars[i], 21f)
         }
         Widgets.button(shapes, pal, back, primary = false, enabled = true, pressed = press.isPressed(back))
     }
@@ -68,14 +86,12 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
         val idFont = fonts.get(Face.MONO_BOLD, 15f)
         val nameFont = fonts.get(Face.UI_BOLD, 16f)
         val small = fonts.get(Face.MONO_MEDIUM, 10.5f)
-        for ((def, b) in rows) {
-            val open = StageSession.unlocked(def, store)
-            val fg = if (open) pal[Tok.UI_FG] else pal[Tok.MUTED]
-            text.line(idFont, def.id, b.x + 14f, b.y, b.h, fg)
-            text.line(nameFont, def.name, b.x + 58f, b.y + 9f, 20f, fg)
-            val best = store.best(def.id)
-            val sub = if (!open) "LOCKED" else if (best > 0) "BEST ${Format.thousands(best)}" else "NOT CLEARED YET"
-            text.line(small, sub, b.x + 58f, b.y + 30f, 14f, pal[Tok.MUTED])
+        for (i in rows.indices) {
+            val b = rows[i]
+            val fg = if (open[i]) pal[Tok.UI_FG] else pal[Tok.MUTED]
+            text.line(idFont, defs[i].id, b.x + 14f, b.y, b.h, fg)
+            text.line(nameFont, defs[i].name, b.x + 58f, b.y + 9f, 20f, fg)
+            text.line(small, subs[i], b.x + 58f, b.y + 30f, 14f, pal[Tok.MUTED])
         }
         Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 14f), pal, back, "Back", primary = false, enabled = true)
     }
@@ -87,29 +103,50 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
 
 /**
  * Before each try: the page goes dark with "WORLD 1-1", the stage's name and the lives left,
- * like an old console between lives. Retries show only the lives, briefly.
+ * like an old console between lives. Retries dim the page more lightly and show only the lives,
+ * briefly (ink can already go down then).
  */
 class StageIntro(private val fonts: Fonts) {
-    fun draw(shapes: Shapes, text: Text, pal: Palette, f: Frame, s: StageSession, uiPass: (shapesPass: () -> Unit, textPass: () -> Unit) -> Unit) {
+    private var worldText = ""
+    private var livesText = ""
+    private var forStage: StageDef? = null
+    private var forLives = -1
+
+    private fun fade(s: StageSession): Float {
         val total = if (s.firstIntro) StageSession.INTRO_S else StageSession.RETRY_INTRO_S
-        val fade = ((total - s.phaseT) / 0.3f).coerceIn(0f, 1f)
-        val a = if (s.firstIntro) fade else 0.85f * fade
-        if (a <= 0.01f) return
+        return ((total - s.phaseT) / 0.3f).coerceIn(0f, 1f)
+    }
+
+    fun visible(s: StageSession) = fade(s) > 0.01f
+
+    fun drawShapes(shapes: Shapes, pal: Palette, f: Frame, s: StageSession) {
+        val fade = fade(s)
         val cx = f.wDp / 2f
         val cy = f.hDp / 2f
-        uiPass({
-            shapes.color(pal[Tok.INK], a).rect(0f, 0f, f.wDp, f.hDp)
-            // the runner blot next to the lives
-            shapes.color(pal[Tok.PAPER], fade).circle(cx - 34f, cy + 52f, 14f)
-            shapes.color(pal[Tok.INK], fade).circle(cx - 34f + 3f, cy + 48f, 2.4f)
-            shapes.color(pal[Tok.INK], fade).circle(cx - 34f + 9f, cy + 48f, 2.4f)
-        }, {
-            if (s.firstIntro) {
-                text.line(fonts.get(Face.MONO_BOLD, 22f), "WORLD ${s.stage.id}", cx, cy - 92f, 28f, pal[Tok.PAPER], fade, Align.center)
-                text.line(fonts.get(Face.HAND_BOLD, 44f), s.stage.name, cx, cy - 56f, 52f, pal[Tok.PAPER], fade, Align.center)
-            }
-            text.line(fonts.get(Face.HAND_BOLD, 36f), "× ${s.lives}", cx - 12f, cy + 32f, 40f, pal[Tok.PAPER], fade)
-        })
+        shapes.color(pal[Tok.INK], if (s.firstIntro) fade else 0.55f * fade).rect(0f, 0f, f.wDp, f.hDp)
+        // the runner blot next to the lives
+        shapes.color(pal[Tok.PAPER], fade).circle(cx - 34f, cy + 52f, 14f)
+        shapes.color(pal[Tok.INK], fade).circle(cx - 34f + 3f, cy + 48f, 2.4f)
+        shapes.color(pal[Tok.INK], fade).circle(cx - 34f + 9f, cy + 48f, 2.4f)
+    }
+
+    fun drawText(text: Text, pal: Palette, f: Frame, s: StageSession) {
+        if (forStage !== s.stage) {
+            forStage = s.stage
+            worldText = "WORLD ${s.stage.id}"
+        }
+        if (forLives != s.lives) {
+            forLives = s.lives
+            livesText = "× ${s.lives}"
+        }
+        val fade = fade(s)
+        val cx = f.wDp / 2f
+        val cy = f.hDp / 2f
+        if (s.firstIntro) {
+            text.line(fonts.get(Face.MONO_BOLD, 22f), worldText, cx, cy - 92f, 28f, pal[Tok.PAPER], fade, Align.center)
+            text.line(fonts.get(Face.HAND_BOLD, 44f), s.stage.name, cx, cy - 56f, 52f, pal[Tok.PAPER], fade, Align.center)
+        }
+        text.line(fonts.get(Face.HAND_BOLD, 36f), livesText, cx - 12f, cy + 32f, 40f, pal[Tok.PAPER], fade)
     }
 }
 
@@ -140,10 +177,17 @@ class GameOverCard(private val fonts: Fonts) {
         Widgets.button(shapes, pal, stages, primary = false, enabled = true, pressed = press.isPressed(stages))
     }
 
+    private var subFor: StageDef? = null
+    private var sub = ""
+
     fun drawText(text: Text, pal: Palette, def: StageDef) {
         val x = box.x + 20f
+        if (subFor !== def) {
+            subFor = def
+            sub = "WORLD ${def.id} · ${def.name.uppercase()}"
+        }
         text.line(fonts.get(Face.HAND_BOLD, 40f), "Game over", x, box.y + 20f, 44f, pal[Tok.INK])
-        text.line(fonts.get(Face.MONO_MEDIUM, 12f), "WORLD ${def.id} · ${def.name.uppercase()}", x, box.y + 72f, 20f, pal[Tok.MUTED])
+        text.line(fonts.get(Face.MONO_MEDIUM, 12f), sub, x, box.y + 72f, 20f, pal[Tok.MUTED])
         val font = fonts.get(Face.UI_BOLD, 14f)
         Widgets.buttonLabel(text, font, pal, again, "Try again", primary = true, enabled = true)
         Widgets.buttonLabel(text, font, pal, stages, "Stages", primary = false, enabled = true)
@@ -224,9 +268,17 @@ class ClearCard(private val fonts: Fonts) {
         Widgets.button(shapes, pal, stages, primary = false, enabled = true, pressed = press.isPressed(stages))
     }
 
+    private var titleFor: StageSession.Result? = null
+    private var title = ""
+    private var bonusLabel = "INK LEFT × ${StageSession.INK_BONUS}"
+
     fun drawText(text: Text, pal: Palette, r: StageSession.Result) {
         val x = box.x + 20f
-        text.line(fonts.get(Face.HAND_BOLD, 34f), "${r.stage.id} cleared!", x, box.y + 20f, 36f, pal[Tok.INK])
+        if (titleFor !== r) {
+            titleFor = r
+            title = "${r.stage.id} cleared!"
+        }
+        text.line(fonts.get(Face.HAND_BOLD, 34f), title, x, box.y + 20f, 36f, pal[Tok.INK])
         var y = box.y + 20f + 36f + 14f + 50f + 8f
         val tiny = fonts.get(Face.MONO_MEDIUM, 9.5f)
         val cx = box.x + box.w / 2f
@@ -242,10 +294,10 @@ class ClearCard(private val fonts: Fonts) {
         text.line(mono, "SCORE", x, y, 22f, pal[Tok.MUTED])
         text.line(big, scoreText, right, y, 22f, pal[Tok.UI_FG], 1f, Align.right)
         y += 22f
-        text.line(mono, "INK LEFT × ${StageSession.INK_BONUS}", x, y, 22f, pal[Tok.MUTED])
+        text.line(mono, bonusLabel, x, y, 22f, pal[Tok.MUTED])
         text.line(big, bonusText, right, y, 22f, pal[Tok.DROP], 1f, Align.right)
         y += 22f
-        text.line(mono, if (r.newBest && totalText.isNotEmpty()) "TOTAL · NEW BEST" else "TOTAL", x, y, 22f, if (r.newBest) pal[Tok.BEAM] else pal[Tok.MUTED])
+        text.line(mono, if (r.newBest && totalText.isNotEmpty()) TOTAL_BEST else TOTAL, x, y, 22f, if (r.newBest) pal[Tok.BEAM] else pal[Tok.MUTED])
         text.line(big, totalText, right, y, 22f, pal[Tok.INK], 1f, Align.right)
         val font = fonts.get(Face.UI_BOLD, 14f)
         Widgets.buttonLabel(text, font, pal, next, if (hasNext) "Next" else "Stages", primary = true, enabled = true)
@@ -260,5 +312,7 @@ class ClearCard(private val fonts: Fonts) {
         const val COUNT_S = 0.9f
         private val LABELS = arrayOf("CLEARED", "NO DEATHS", "LIGHT INK")
         private const val STAR_GAP = 96f
+        private const val TOTAL = "TOTAL"
+        private const val TOTAL_BEST = "TOTAL · NEW BEST"
     }
 }

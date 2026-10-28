@@ -180,9 +180,9 @@ retries, stars). Each stage runs on its own `GameSim`; Endless is untouched.
 | Stage | Theme | Speed | Length | What's in it |
 |---|---|---|---|---|
 | 1-1 First Page | ruled paper | 3.4 m/s | 179 m | gaps (rope), hills, a wall (spring), a high road with a heart, a seesaw, a hill-top gap |
-| 1-2 Cellar | graph paper, cave roof 3.6 m up | 3.5 m/s | 126 m | tunnels, a rope slide down a shaft, spike pits, a lift up a 5 m wall |
-| 1-3 Up High | dot grid, islands 5 m deep | 3.6 m/s | 116 m | a three-spring climb, a 7.6 m beam gap, a seesaw, sloping bridges down, a cloud with a heart |
-| 1-4 Castle | brickwork | 3.8 m/s | 129 m | spike pits, a tunnel, a 6 m lift, a seesaw over spikes, a climb, a beam gap over spikes, a boulder runway |
+| 1-2 Cellar | graph paper, cave roof 3.6 m up | 3.5 m/s | 131 m | tunnels, a rope slide down a shaft, spike pits, a lift up a 5 m wall |
+| 1-3 Up High | dot grid, islands 5 m deep | 3.6 m/s | 123 m | a three-spring climb, a 7.6 m beam gap, a seesaw, sloping bridges down, a cloud with a heart |
+| 1-4 Castle | brickwork | 3.8 m/s | 134 m | spike pits, a tunnel, a 6 m lift, a seesaw over spikes, a climb, a beam gap over spikes, a boulder runway |
 
 Ground starts at level 20; blocks are 40 m deep unless the theme says otherwise.
 
@@ -197,7 +197,7 @@ Ground starts at level 20; blocks are 40 m deep unless the theme says otherwise.
 | Slide | a 5 m shaft to ground 4 m lower; spikes 10 m down. A rope edge to edge is 6.4 m (under rope's 6.8 m) |
 | Lift | 0.5 m thick kinematic platform in a 3 m slot; waits at the bottom until the runner lands on it, rises at 1.6 m/s to the top and stays. Riding it doesn't count as being stuck |
 | Seesaw | plank = gap + 0.6 m, 0.3 m thick, density 0.6, pinned 0.6 m above the ground at the gap's centre, resting on the near edge, angular damping 1.5 |
-| Checkpoint | a bookmark; a retry starts 1 m past it |
+| Checkpoint | a bookmark; the snapshot is taken 0.6 m past it (once the hazard just before is judged) and a retry starts 1 m past it, with at least 8 m of flat before the next hazard |
 | Finish | a flag; past it the runner brakes to a stop |
 | Heart | +1 life (max 9), pickup radius 0.85 m like drops |
 
@@ -209,14 +209,14 @@ Ground starts at level 20; blocks are 40 m deep unless the theme says otherwise.
 | Drive braking | torque clamp ±7 | −1.5 / +7, so downhill rolls build speed (1-1's hills reach 4.5 m/s, a 27° slope 5.6 m/s) |
 | Camera | lerp y 2.5/s | lerp y 4/s with a vertical look-ahead of 0.3 s of the runner's fall or rise (clamped −2…4 m) |
 | Speed toasts | every 100 m | none |
-| Settings sheet | doesn't pause (POC) | pauses |
+| Settings sheet | doesn't pause (POC) | pauses, as does recalibrating; leaving the app mid-stage opens the sheet, so coming back is paused |
 
 ### Lives, retries and stars
 
 | | |
 |---|---|
 | Lives | 3 at the start of a stage from the list; carried into Next; +1 per heart, max 9 |
-| Intro | 2.2 s (stage name and lives) before the first try, 1.2 s before a retry; the runner waits |
+| Intro | 2.2 s (stage name and lives) before the first try, 1.2 s before a retry; the runner waits, and during a retry's intro ink can already go down |
 | Death | −1 life; after 1.6 s, retry from the checkpoint (or the start) with the score, combo, ink and hazard judgements the player had there |
 | Game over | no lives left: Try again restarts the stage with 3 lives |
 | Clear | 1 s after the flag: score + ink left × 10 = total |

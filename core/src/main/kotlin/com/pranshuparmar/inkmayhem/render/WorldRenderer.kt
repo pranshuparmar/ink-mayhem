@@ -222,13 +222,21 @@ class WorldRenderer(
         }
         val lw = 1.6f * px
         shapes.color(pal[Tok.GRAPHITE])
-        val leftEnd = if (r.edgeLTo.isNaN()) bottom else min(bottom, r.edgeLTo)
-        val rightEnd = if (r.edgeRTo.isNaN()) bottom else min(bottom, r.edgeRTo)
-        if (leftEnd > r.y) shapes.line(r.x, leftEnd, r.x, r.y - lw / 2f, lw)
+        sideEdge(r.x, r.y - lw / 2f, bottom, r.edgeLTo, r.edgeLFrom, lw)
         shapes.line(r.x, r.y, r.x + r.w, r.y, lw)
-        if (rightEnd > r.y) shapes.line(r.x + r.w, r.y - lw / 2f, r.x + r.w, rightEnd, lw)
+        sideEdge(r.x + r.w, r.y - lw / 2f, bottom, r.edgeRTo, r.edgeRFrom, lw)
         // floating ledges show their underside
         if (r.y + r.h <= screenBottom) shapes.line(r.x - lw / 2f, r.y + r.h, r.x + r.w + lw / 2f, r.y + r.h, lw)
+    }
+
+    /** A block's side from [top] to [bottom], minus the stretch a flush neighbour covers. */
+    private fun sideEdge(x: Float, top: Float, bottom: Float, coverTop: Float, coverBottom: Float, lw: Float) {
+        if (coverTop.isNaN()) {
+            shapes.line(x, top, x, bottom, lw)
+            return
+        }
+        if (coverTop > top) shapes.line(x, top, x, min(coverTop, bottom), lw)
+        if (coverBottom < bottom) shapes.line(x, max(coverBottom, top), x, bottom, lw)
     }
 
     private val slopePoly = FloatArray(8)
@@ -257,11 +265,9 @@ class WorldRenderer(
         }
         val lw = 1.6f * px
         shapes.color(pal[Tok.GRAPHITE])
-        val leftEnd = if (r.edgeLTo.isNaN()) bottom else min(bottom, r.edgeLTo)
-        val rightEnd = if (r.edgeRTo.isNaN()) bottom else min(bottom, r.edgeRTo)
-        if (leftEnd > r.y) shapes.line(r.x, leftEnd, r.x, r.y, lw)
+        sideEdge(r.x, r.y, bottom, r.edgeLTo, r.edgeLFrom, lw)
         shapes.capsule(r.x, r.y, x1, r.yR, lw)
-        if (rightEnd > r.yR) shapes.line(x1, r.yR, x1, rightEnd, lw)
+        sideEdge(x1, r.yR, bottom, r.edgeRTo, r.edgeRFrom, lw)
     }
 
     /** Castle masonry: mortar rows every 0.5 m, joints every 1 m, offset on alternate rows. */

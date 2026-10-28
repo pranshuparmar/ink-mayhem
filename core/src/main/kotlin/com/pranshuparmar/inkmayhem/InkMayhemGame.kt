@@ -169,7 +169,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         // first run: calibrate, then the tutorial, then the title card
         tutorialPending = dev.tutorialLesson != null || (!settings.tutorialDone && !dev.skipTutorial && !dev.autoplay)
         if (dev.openSettings) sheet.show()
-        if (dev.openSelect) screen = Screen.SELECT
+        if (dev.openSelect) openSelect()
         // Android back closes an overlay first, then leaves the game as usual.
         Gdx.input.setCatchKey(Input.Keys.BACK, true)
         Gdx.input.inputProcessor = object : InputAdapter() {
@@ -237,6 +237,11 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
     override fun pause() {
         paused = true
         audio.scratch(0f, 0.5f)
+        // coming back to a stage shouldn't throw the player straight back in: hold it on the sheet
+        if (screen == Screen.STAGE && session?.phase == StageSession.Phase.PLAY && !calibration.open && tutorial == null) {
+            sheet.showQuit = true
+            sheet.show()
+        }
     }
 
     override fun resume() {
@@ -271,7 +276,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         platform.penQueue.drain(sample) { onSample(it, now) }
 
         // stages pause while the settings sheet is open (Endless doesn't, like the POC)
-        val stagePaused = screen == Screen.STAGE && sheet.open
+        val stagePaused = screen == Screen.STAGE && (sheet.open || calibration.open)
         if (!paused && !stagePaused) {
             acc += dt * dev.speed
             var n = 0
@@ -338,7 +343,10 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         val card = tutorialCard
         if (tut == null && cardSample(s, x, y)) return
         val ses = session
-        val playing = tut != null || screen == Screen.ENDLESS || (ses != null && ses.phase == StageSession.Phase.PLAY)
+        // a stage takes ink in play and during a retry's short intro (the runner is held; the first
+        // intro covers the page)
+        val playing = tut != null || screen == Screen.ENDLESS ||
+            (ses != null && (ses.phase == StageSession.Phase.PLAY || (ses.phase == StageSession.Phase.INTRO && !ses.firstIntro)))
         when (s.phase) {
             PenPhase.DOWN -> {
                 if (tut != null && card.box.contains(x, y)) {
@@ -391,44 +399,51 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
      */
     private fun cardSample(s: PenSample, x: Float, y: Float): Boolean {
         val ses = session
-        val press: Press
-        val target: Any?
-        when {
-            screen == Screen.TITLE -> { press = titleCard.press; target = titleCard.targetAt(x, y) }
-            screen == Screen.SELECT -> { press = selectCard.press; target = selectCard.targetAt(x, y) }
-            ses != null && ses.phase == StageSession.Phase.GAME_OVER -> { press = gameOverCard.press; target = gameOverCard.targetAt(x, y) }
-            ses != null && ses.phase == StageSession.Phase.CLEARED -> { press = clearCard.press; target = clearCard.targetAt(x, y) }
+        val card = when {
+            screen == Screen.TITLE -> 0
+            screen == Screen.SELECT -> 1
+            ses != null && ses.phase == StageSession.Phase.GAME_OVER -> 2
+            ses != null && ses.phase == StageSession.Phase.CLEARED -> 3
             else -> return false
         }
+        val press = when (card) { 0 -> titleCard.press; 1 -> selectCard.press; 2 -> gameOverCard.press; else -> clearCard.press }
         when (s.phase) {
             PenPhase.DOWN -> {
-                if (hud.rightArea.contains(x, y) && screen == Screen.TITLE) return false // the settings button
-                press.down(s.pointerId, target)
+                if (hud.rightArea.contains(x, y)) return false // the settings button stays reachable
+                press.down(s.pointerId, cardTarget(card, x, y))
                 return true
             }
             PenPhase.UP -> {
                 if (s.pointerId != press.pointer) return false
-                val hit = press.up(s.pointerId, target) ?: return true
+                val hit = press.up(s.pointerId, cardTarget(card, x, y)) ?: return true
                 onCard(hit)
                 return true
             }
             PenPhase.CANCEL -> {
-                if (s.pointerId == press.pointer) press.cancel()
-                return s.pointerId == press.pointer
+                val mine = s.pointerId == press.pointer
+                if (mine) press.cancel()
+                return mine
             }
-            else -> return false
+            else -> return false // hovers and moves don't hit-test the cards
         }
+    }
+
+    private fun cardTarget(card: Int, x: Float, y: Float): Any? = when (card) {
+        0 -> titleCard.targetAt(x, y)
+        1 -> selectCard.targetAt(x, y)
+        2 -> gameOverCard.targetAt(x, y)
+        else -> clearCard.targetAt(x, y)
     }
 
     private fun onCard(hit: Any) {
         val ses = session
         when {
-            hit === titleCard.stagesButton -> screen = Screen.SELECT
+            hit === titleCard.stagesButton -> openSelect()
             hit === titleCard.endlessButton -> {
                 screen = Screen.ENDLESS
                 sim.begin()
             }
-            hit === selectCard.back -> screen = Screen.TITLE
+            hit === selectCard.back -> openTitle()
             hit is StageDef -> startStage(hit)
             ses == null -> Unit
             hit === gameOverCard.again -> {
@@ -466,12 +481,22 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         audio.play(Sfx.STAGE_START)
     }
 
+    private fun openSelect() {
+        selectCard.refresh()
+        screen = Screen.SELECT
+    }
+
+    private fun openTitle() {
+        starsTotal = -1
+        screen = Screen.TITLE
+    }
+
     /** Leaves stage play for the stage list. */
     private fun endStage() {
         session?.sim?.dispose()
         session = null
         stageBot = null
-        screen = Screen.SELECT
+        openSelect()
         fx.clear()
         toast.clear()
         audio.scratch(0f, 0.5f)
@@ -484,9 +509,9 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
             Screen.ENDLESS -> {
                 keepEndlessBest()
                 sim.toTitle()
-                screen = Screen.TITLE
+                openTitle()
             }
-            Screen.SELECT -> screen = Screen.TITLE
+            Screen.SELECT -> openTitle()
             Screen.TITLE -> Unit
         }
     }
@@ -524,7 +549,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         tutorial?.sim?.dispose()
         // the tutorial replaces whatever was being played
         if (screen == Screen.STAGE) endStage()
-        if (screen == Screen.SELECT) screen = Screen.TITLE
+        if (screen == Screen.SELECT) openTitle()
         val ts = GameSim(seed = 1, events = Events(saveBest = false), vwMetres = wDp / scale, vhMetres = hDp / scale)
         ts.scale = scale
         ts.tint = true
@@ -565,7 +590,7 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         world.hoverOn = false
         audio.scratch(0f, 0.5f)
         if (sim.state != GameState.TITLE) sim.toTitle() else fx.clear()
-        if (screen != Screen.SELECT) screen = Screen.TITLE
+        if (screen != Screen.SELECT) openTitle()
         if (finished) toast.show(READY_TOAST, clock, force = true)
     }
 
@@ -737,15 +762,23 @@ class InkMayhemGame(private val platform: Platform, private val dev: DevOptions 
         }
     }
 
+    /** Read from Preferences only when the menus open, not every frame. */
+    private var starsTotal = -1
+
     private fun totalStars(): Int {
-        var n = 0
-        for (i in Stages.ALL.indices) n += settings.stars(Stages.ALL[i].id)
-        return n
+        if (starsTotal < 0) {
+            var n = 0
+            for (i in Stages.ALL.indices) n += settings.stars(Stages.ALL[i].id)
+            starsTotal = n
+        }
+        return starsTotal
     }
 
     private fun drawStageCards(ses: StageSession) {
         when (ses.phase) {
-            StageSession.Phase.INTRO -> stageIntro.draw(shapes, text, pal, frame, ses) { a, b -> pass(a, b) }
+            StageSession.Phase.INTRO -> if (stageIntro.visible(ses)) {
+                pass({ stageIntro.drawShapes(shapes, pal, frame, ses) }, { stageIntro.drawText(text, pal, frame, ses) })
+            }
             StageSession.Phase.GAME_OVER -> {
                 gameOverCard.layout(text, frame)
                 pass({ gameOverCard.drawShapes(shapes, pal, frame) }, { gameOverCard.drawText(text, pal, ses.stage) })
