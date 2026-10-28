@@ -17,9 +17,15 @@ class Frame(var wDp: Float = 0f, var hDp: Float = 0f, var safeL: Float = 0f, var
     val cardW: Float get() = min(wDp - padL - padR, 420f)
 }
 
-/** POC #title: name, pitch, the three-ink legend, how scoring works and the call to action. */
+/**
+ * POC #title: name, pitch, the three-ink legend and how scoring works, then the two ways to play
+ * (Stages, Endless) instead of the POC's "touch the pen to the page".
+ */
 class TitleCard(private val fonts: Fonts) {
     val box = Box()
+    val stagesButton = Box()
+    val endlessButton = Box()
+    val press = Press()
     private val pitch = Flow(22.5f).setText({ fonts.get(Face.UI, 15f) }, Tok.MUTED, "Your runner never stops. Draw the way ahead, fast.")
     private val legend = listOf(
         Triple(Tok.ROPE, 3f, Flow(18f).set(
@@ -40,21 +46,31 @@ class TitleCard(private val fonts: Fonts) {
         "Clear each hazard with the lightest ink that works to grow your combo. Heavier than needed resets it. Side button erases.",
     )
     private var bestLine = ""
+    private var starsLine = ""
     private val legendRowH = FloatArray(3)
 
-    fun layout(text: Text, f: Frame, best: Int) {
-        bestLine = if (best > 0) "BEST ${Format.thousands(best)}" else ""
+    fun layout(text: Text, f: Frame, best: Int, stars: Int, maxStars: Int) {
+        bestLine = if (best > 0) "ENDLESS BEST ${Format.thousands(best)}" else ""
+        starsLine = "$stars / $maxStars"
+        starsW = text.width(fonts.get(Face.MONO_MEDIUM, 12f), starsLine)
         val inner = f.cardW - 40f
         var h = 20f + 40f + 12f + pitch.layout(text, inner) + 12f
         for ((i, row) in legend.withIndex()) {
             legendRowH[i] = max(row.second, row.third.layout(text, inner - 56f))
             h += legendRowH[i] + if (i < 2) 8f else 0f
         }
-        h += 12f + rules.layout(text, inner) + 12f + 28f
-        h += 12f // the POC's empty #title-best still takes its flex gap
-        if (bestLine.isNotEmpty()) h += 16f
-        h += 20f
+        h += 12f + rules.layout(text, inner) + 16f + 46f + 12f + 16f + 20f
         box.set((f.wDp - f.cardW) / 2f + (f.padL - f.padR) / 2f, (f.hDp - h) / 2f, f.cardW, h)
+        val by = box.bottom - 20f - 16f - 12f - 46f
+        val bw = (inner - 10f) / 2f
+        stagesButton.set(box.x + 20f, by, bw, 46f)
+        endlessButton.set(stagesButton.right + 10f, by, bw, 46f)
+    }
+
+    fun targetAt(x: Float, y: Float): Any? = when {
+        stagesButton.contains(x, y) -> stagesButton
+        endlessButton.contains(x, y) -> endlessButton
+        else -> null
     }
 
     fun drawShapes(shapes: Shapes, pal: Palette, alpha: Float) {
@@ -65,7 +81,12 @@ class TitleCard(private val fonts: Fonts) {
             shapes.color(pal[row.first], alpha).roundRect(box.x + 20f, y + rh / 2f - row.second / 2f, 44f, row.second, min(4f, row.second / 2f))
             y += rh + 8f
         }
+        Widgets.button(shapes, pal, stagesButton, primary = true, enabled = true, pressed = press.isPressed(stagesButton))
+        Widgets.button(shapes, pal, endlessButton, primary = false, enabled = true, pressed = press.isPressed(endlessButton))
+        shapes.color(pal[Tok.SPRING], alpha).star(box.right - 20f - starsW - 12f, stagesButton.bottom + 12f + 7.5f, 7.5f)
     }
+
+    private var starsW = 0f
 
     private fun pitchH() = pitch.height
 
@@ -83,10 +104,13 @@ class TitleCard(private val fonts: Fonts) {
         }
         y += 12f - 8f
         rules.draw(text, pal, x, y, alpha)
-        y += rules.height + 12f
-        text.line(fonts.get(Face.HAND_BOLD, 20f), "Touch the pen to the page to start", x, y, 28f, pal[Tok.ACCENT], alpha)
-        y += 28f
-        if (bestLine.isNotEmpty()) text.line(fonts.get(Face.MONO_MEDIUM, 12f), bestLine, x, y + 12f, 16f, pal[Tok.MUTED], alpha)
+        val font = fonts.get(Face.UI_BOLD, 15f)
+        Widgets.buttonLabel(text, font, pal, stagesButton, "Stages", primary = true, enabled = true)
+        Widgets.buttonLabel(text, font, pal, endlessButton, "Endless", primary = false, enabled = true)
+        val mono = fonts.get(Face.MONO_MEDIUM, 12f)
+        val ly = stagesButton.bottom + 12f
+        if (bestLine.isNotEmpty()) text.line(mono, bestLine, x, ly, 16f, pal[Tok.MUTED], alpha)
+        text.line(mono, starsLine, box.right - 20f, ly, 16f, pal[Tok.MUTED], alpha, com.badlogic.gdx.utils.Align.right)
     }
 
     fun invalidate() {

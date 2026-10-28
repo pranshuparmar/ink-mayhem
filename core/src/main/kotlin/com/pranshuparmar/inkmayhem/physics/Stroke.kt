@@ -55,6 +55,14 @@ class GroundRect(
     /** Game data: runner x that spawns a boulder on this runway, or NaN. */
     var boulderTrigger = Float.NaN
     var triggered = false
+    /**
+     * Stages: how far down each side edge is drawn (a flush neighbour hides the rest of it);
+     * NaN draws the whole edge, as Endless does.
+     */
+    var edgeLTo = Float.NaN
+    var edgeRTo = Float.NaN
+    /** A spike strip: true when its spikes point up (on a floor). */
+    var spikesUp = false
 
     val right: Float get() = x + w
 }

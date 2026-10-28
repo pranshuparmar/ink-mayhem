@@ -201,7 +201,7 @@ class StageBuilder(private val l: StageLayout) {
 
     /** A gap over a pit [deep] metres down with spikes on its floor; rope across by default. */
     fun spikePit(len: Float, deep: Float = 3f, type: HazardType = HazardType.GAP_M, par: Ink = type.par!!, solve: Ink = par): StageBuilder {
-        ledge(x, level + deep, len, 1f)
+        ledge(x, level + deep, len, DEPTH) // a solid floor, not a shelf over nothing
         spikes(x, level + deep, len)
         return gap(len, type, par, solve)
     }
@@ -213,7 +213,7 @@ class StageBuilder(private val l: StageLayout) {
     fun slide(width: Float = 5f, drop: Float = 4f): StageBuilder {
         val x0 = x
         val l0 = level
-        ledge(x0, l0 + 10f, width, 1f)
+        ledge(x0, l0 + 10f, width, DEPTH)
         spikes(x0, l0 + 10f, width)
         openGap(width, HazardType.GAP_M, Ink.ROPE)
         bridge(x0, l0, x0 + width, l0 + drop, Ink.ROPE)
@@ -254,7 +254,7 @@ class StageBuilder(private val l: StageLayout) {
         val a = -kotlin.math.asin(SEESAW_LIFT / half)
         seesaw(x + len / 2f, level - SEESAW_LIFT, len + 0.6f, a, a - 0.01f, -a + 0.01f)
         if (spikesBelow) {
-            ledge(x, level + 3f, len, 1f)
+            ledge(x, level + 3f, len, DEPTH)
             spikes(x, level + 3f, len)
         }
         x += len

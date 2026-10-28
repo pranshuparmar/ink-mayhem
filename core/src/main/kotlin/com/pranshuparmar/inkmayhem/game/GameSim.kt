@@ -272,6 +272,13 @@ class GameSim(
             r.level = max(b.top, b.topR)
             blocks += r
         }
+        // touching blocks share an edge: draw only the part of it that shows (a step), not a seam
+        blocks.fastEach { b ->
+            blocks.fastEach { o ->
+                if (o !== b && kotlin.math.abs(o.right - b.x) < 0.01f) b.edgeLTo = o.topAt(o.right)
+                if (o !== b && kotlin.math.abs(o.x - b.right) < 0.01f) b.edgeRTo = o.topAt(o.x)
+            }
+        }
         for (k in l.rocks) {
             ceilings += if (k.spiked) ink.addSpikedRock(k.x, k.bottom - ROCK_H, k.w, ROCK_H, SPIKE_DEPTH)
             else ink.addRect(k.x, k.bottom - ROCK_H, k.w, ROCK_H)
@@ -354,6 +361,11 @@ class GameSim(
     }
 
     private fun camTargetX(runnerX: Float) = if (camFocusX.isNaN()) runnerX - vw * 0.28f else camFocusX - vw / 2f
+
+    /** Starts the Endless run from the title card (its "Endless" button). */
+    fun begin() {
+        if (state == GameState.TITLE) startRun()
+    }
 
     private fun startRun() {
         if (state == GameState.TITLE) {

@@ -14,7 +14,9 @@ import kotlin.math.min
 
 /**
  * POC .hud: score with the ×combo chip and "N m · best X" on the left; ink meter and the settings
- * button on the right. Text is cached and rebuilt only when the numbers change.
+ * button on the right. In a stage the second line is "WORLD 1-1" with the lives, and a progress
+ * line runs underneath with the checkpoint and the flag. Text is cached and rebuilt only when the
+ * numbers change.
  */
 class Hud {
     /** The right-hand cluster (meter + button) swallows pen-downs, as in the POC. */
@@ -30,19 +32,32 @@ class Hud {
     private var lastBest = -1
     private var lastCombo = 0
     private var bump = 0f
+    private var stageId: String? = null
+    private var lastLives = -1
+    private var livesText = ""
 
     private var left = 16f
     private var top = 10f
     private var scoreW = 0f
 
-    fun update(dt: Float, sim: GameSim, best: Int, reducedMotion: Boolean) {
+    /** [lives] ≥ 0 in a stage (shown with the stage id), −1 in Endless. */
+    fun update(dt: Float, sim: GameSim, best: Int, reducedMotion: Boolean, lives: Int = -1) {
         val sc = floor(sim.score).toInt()
         val d = floor(sim.dist).toInt()
         val shownBest = max(best, sc)
+        val id = sim.stage?.id
+        if (id != stageId) {
+            stageId = id
+            lastScore = -1
+        }
         if (sc != lastScore || d != lastDist || shownBest != lastBest) {
             scoreText = Format.thousands(sc)
-            bestText = "$d m · best ${Format.thousands(shownBest)}".uppercase()
+            bestText = if (id != null) "WORLD $id" else "$d m · best ${Format.thousands(shownBest)}".uppercase()
             lastScore = sc; lastDist = d; lastBest = shownBest
+        }
+        if (lives != lastLives) {
+            livesText = "× $lives"
+            lastLives = lives
         }
         if (sim.combo != lastCombo) {
             if (sim.combo > lastCombo && !reducedMotion) bump = BUMP_S
@@ -72,6 +87,13 @@ class Hud {
     }
 
     private val tmpBar = Box()
+    private var livesX = 0f
+
+    /** The heart before the lives count (shapes pass; uses the previous frame's text width). */
+    fun drawLivesHeart(shapes: Shapes, pal: Palette) {
+        if (stageId == null || livesX == 0f) return
+        shapes.color(pal[Tok.BEAM]).heart(livesX + 6f, top + 48f, 6f)
+    }
 
     /** Chip scale for the "bump" when the combo grows (CSS .bump: 1.25 with a 0.15 s transition). */
     private fun chipScale(): Float {
@@ -80,6 +102,26 @@ class Hud {
         val up = min(1f, t / 0.15f)
         val down = if (t > 0.16f) min(1f, (t - 0.16f) / 0.15f) else 0f
         return 1f + 0.25f * (up - down)
+    }
+
+    /** The stage progress line under the HUD: start to flag, with the checkpoint and the runner. */
+    fun drawProgress(shapes: Shapes, pal: Palette, wDp: Float, sim: GameSim, safeRight: Float) {
+        val l = sim.stage?.layout ?: return
+        val x0 = left
+        val x1 = wDp - max(16f, safeRight) - 14f
+        val y = top + 62f
+        val span = l.finishX - l.startX
+        fun at(wx: Float) = x0 + (x1 - x0) * ((wx - l.startX) / span).coerceIn(0f, 1f)
+        shapes.color(pal[Tok.RULE]).roundRect(x0, y, x1 - x0, 4f, 2f)
+        val rx = at(sim.runner.body.position.x)
+        shapes.color(pal[Tok.ACCENT]).roundRect(x0, y, rx - x0, 4f, 2f)
+        if (!l.checkpointX.isNaN()) {
+            val cx = at(l.checkpointX)
+            shapes.color(if (sim.stageRun?.checkpoint == true) pal[Tok.ROPE] else pal[Tok.GRAPHITE]).rect(cx - 1f, y - 4f, 2f, 12f)
+        }
+        shapes.color(pal[Tok.GRAPHITE]).rect(x1 - 1f, y - 10f, 2f, 14f)
+        shapes.color(pal[Tok.BEAM]).triangle(x1 + 1f, y - 10f, x1 + 11f, y - 6.5f, x1 + 1f, y - 3f)
+        shapes.color(pal[Tok.INK]).circle(rx, y + 2f, 5f)
     }
 
     fun drawShapes(shapes: Shapes, pal: Palette, wDp: Float, ink: Float, combo: Int, pressedSettings: Boolean) {
@@ -124,7 +166,12 @@ class Hud {
         if (s != 1f) comboFont.data.setScale(comboFont.data.scaleX * s)
         text.line(comboFont, comboText, chip.x + chip.w / 2f, chip.y + chip.h / 2f - 8f, 16f, if (hot) pal[Tok.ROPE] else pal[Tok.MUTED], align = Align.center)
         if (s != 1f) comboFont.data.setScale(comboFont.data.scaleX / s)
-        text.line(fonts.get(Face.MONO_MEDIUM, 11f), bestText, left, top + 40f, 16f, pal[Tok.MUTED])
+        val small = fonts.get(Face.MONO_MEDIUM, 11f)
+        text.line(small, bestText, left, top + 40f, 16f, pal[Tok.MUTED])
+        if (stageId != null) {
+            livesX = left + text.width(small, bestText) + 12f
+            text.line(small, livesText, livesX + 15f, top + 40f, 16f, pal[Tok.MUTED])
+        }
         val bar = barBox(wDp)
         text.line(fonts.get(Face.MONO_MEDIUM, 11f), "INK", bar.x - 8f, bar.y - 3f, 16f, pal[Tok.MUTED], align = Align.right)
     }

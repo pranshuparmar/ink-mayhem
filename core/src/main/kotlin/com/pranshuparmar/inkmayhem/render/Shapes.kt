@@ -187,6 +187,25 @@ class Shapes : Disposable {
         }
     }
 
+    /** A five-pointed star (point up) of outer radius [r]; [inner] is the inner radius as a fraction. */
+    fun star(cx: Float, cy: Float, r: Float, inner: Float = 0.45f) {
+        for (i in 0 until 10) {
+            val a0 = (-PI / 2 + i * PI / 5).toFloat()
+            val a1 = (-PI / 2 + (i + 1) * PI / 5).toFloat()
+            val r0 = if (i % 2 == 0) r else r * inner
+            val r1 = if (i % 2 == 0) r * inner else r
+            sr.triangle(cx, cy, cx + cos(a0) * r0, cy + sin(a0) * r0, cx + cos(a1) * r1, cy + sin(a1) * r1)
+        }
+    }
+
+    /** A filled heart of half-width [s] centred on ([cx], [cy]) (y down). */
+    fun heart(cx: Float, cy: Float, s: Float) {
+        val r = s * 0.52f
+        circle(cx - r * 0.92f, cy - s * 0.28f, r)
+        circle(cx + r * 0.92f, cy - s * 0.28f, r)
+        sr.triangle(cx - s * 0.98f, cy - s * 0.1f, cx + s * 0.98f, cy - s * 0.1f, cx, cy + s * 0.95f)
+    }
+
     /** Draws [n] evenly spaced zig-zag strokes along a segment, perpendicular amplitude [amp]. */
     fun zigzag(ax: Float, ay: Float, bx: Float, by: Float, k: Int, amp: Float, width: Float) {
         val len = hypot(bx - ax, by - ay)

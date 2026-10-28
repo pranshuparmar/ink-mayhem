@@ -1,12 +1,13 @@
 package com.pranshuparmar.inkmayhem
 
 import com.badlogic.gdx.Preferences
+import com.pranshuparmar.inkmayhem.game.StageStore
 
 /**
  * Persisted settings, calibration and best score (libGDX Preferences "ink-mayhem"). Values are
  * cached in memory because the game reads several of them every frame; writes go straight through.
  */
-class Settings(private val prefs: Preferences) {
+class Settings(private val prefs: Preferences) : StageStore {
     var sound: Boolean = prefs.getBoolean("sound", true)
         set(v) { field = v; put { putBoolean("sound", v) } }
 
@@ -35,6 +36,17 @@ class Settings(private val prefs: Preferences) {
 
     var best: Int = prefs.getInteger("best", 0)
         set(v) { field = v; put { putInteger("best", v) } }
+
+    // ---- stage results: best stars and score per stage (never lowered) ----
+
+    override fun stars(id: String): Int = prefs.getInteger("stars.$id", 0)
+
+    override fun best(id: String): Int = prefs.getInteger("best.$id", 0)
+
+    override fun record(id: String, stars: Int, score: Int) = put {
+        putInteger("stars.$id", maxOf(stars(id), stars))
+        putInteger("best.$id", maxOf(best(id), score))
+    }
 
     private inline fun put(block: Preferences.() -> Unit) {
         prefs.block()

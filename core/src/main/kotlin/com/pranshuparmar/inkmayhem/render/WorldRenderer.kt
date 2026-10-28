@@ -6,6 +6,7 @@ import com.badlogic.gdx.math.Matrix4
 import com.badlogic.gdx.utils.Align
 import com.pranshuparmar.inkmayhem.game.GameSim
 import com.pranshuparmar.inkmayhem.game.GameState
+import com.pranshuparmar.inkmayhem.game.Theme
 import com.pranshuparmar.inkmayhem.physics.GroundRect
 import com.pranshuparmar.inkmayhem.physics.Ink
 import kotlin.math.cos
@@ -69,15 +70,44 @@ class WorldRenderer(
         val vx0 = sim.cam.x - 2f
         val vx1 = sim.cam.x + vw + 2f
 
-        // ruled lines scroll with the page; the margin stays put
+        // the paper scrolls with the page (ruled, graph or dot grid by theme); the margin stays put
+        val theme = sim.stage?.theme ?: Theme.PAGE
         shapes.begin(uiCam.combined, density)
         shapes.color(pal[Tok.RULE])
         val gap = 30f
         val off = (((-camY * scale) % gap) + gap) % gap
-        var y = off
-        while (y < hDp) {
-            shapes.rect(0f, floor(y), wDp, 1f)
-            y += gap
+        val offX = (((-camX * scale) % gap) + gap) % gap
+        when (theme) {
+            Theme.PAGE, Theme.CASTLE -> {
+                var y = off
+                while (y < hDp) {
+                    shapes.rect(0f, floor(y), wDp, 1f)
+                    y += gap
+                }
+            }
+            Theme.CELLAR -> {
+                var y = off
+                while (y < hDp) {
+                    shapes.rect(0f, floor(y), wDp, 1f)
+                    y += gap
+                }
+                var x = offX
+                while (x < wDp) {
+                    shapes.rect(floor(x), 0f, 1f, hDp)
+                    x += gap
+                }
+            }
+            Theme.SKY -> {
+                var y = off
+                while (y < hDp) {
+                    var x = offX
+                    while (x < wDp) {
+                        shapes.circle(x, y, 1.4f)
+                        x += gap
+                    }
+                    y += gap
+                }
+            }
         }
         shapes.color(pal[Tok.MARGIN]).rect(min(56f, wDp * 0.12f) - 0.75f, 0f, 1.5f, hDp)
         shapes.end()
@@ -103,8 +133,14 @@ class WorldRenderer(
         text.batch.end()
 
         shapes.begin(worldCam.combined, density * scale)
-        sim.blocks.fastEach { r -> drawBlock(r, pal, vx0, vx1, sim.cam.y + vh + 2f, px) }
-        sim.ceilings.fastEach { c -> drawCeiling(c, pal, vx0, vx1, sim.cam.y - 2f, px) }
+        val brick = theme == Theme.CASTLE
+        drawFlags(sim, pal, px, behind = true)
+        sim.blocks.fastEach { r -> drawBlock(r, pal, vx0, vx1, sim.cam.y + vh + 2f, px, brick) }
+        sim.ceilings.fastEach { c -> drawCeiling(c, pal, vx0, vx1, sim.cam.y - 2f, px, brick) }
+        sim.spikeStrips.fastEach { k -> drawSpikes(k, pal, vx0, vx1) }
+        drawLifts(sim, pal, px)
+        drawSeesaws(sim, pal, px)
+        drawFlags(sim, pal, px, behind = false)
         drawDrops(sim, pal, vx0, vx1, px)
         drawStrokes(sim, pal, tint, vx0, vx1, px)
         drawLiveStroke(sim, pal, tint)
@@ -162,25 +198,93 @@ class WorldRenderer(
         }
     }
 
-    private fun drawBlock(r: GroundRect, pal: Palette, vx0: Float, vx1: Float, screenBottom: Float, px: Float) {
+    private fun drawBlock(r: GroundRect, pal: Palette, vx0: Float, vx1: Float, screenBottom: Float, px: Float, brick: Boolean) {
         if (r.x > vx1 || r.x + r.w < vx0) return
         val bottom = min(r.y + r.h, screenBottom)
         val h = bottom - r.y
         if (h <= 0f) return
+        if (r.sloped) {
+            drawSlope(r, pal, vx0, vx1, bottom, px)
+            return
+        }
         shapes.color(pal[Tok.ROCK]).rect(r.x, r.y, r.w, h)
+        if (brick) {
+            bricks(r.x, r.y, r.w, h, max(r.x, vx0), min(r.x + r.w, vx1), pal, px)
+        } else {
+            shapes.color(pal[Tok.GRAPHITE], 0.32f)
+            val a0 = max(r.x, vx0)
+            val a1 = min(r.x + r.w, vx1)
+            var d = floor((a0 - h - r.x) / HATCH) * HATCH + r.x
+            while (d < a1) {
+                hatch(d, r.y + h, h, r.x, r.x + r.w, px)
+                d += HATCH
+            }
+        }
+        val lw = 1.6f * px
+        shapes.color(pal[Tok.GRAPHITE])
+        val leftEnd = if (r.edgeLTo.isNaN()) bottom else min(bottom, r.edgeLTo)
+        val rightEnd = if (r.edgeRTo.isNaN()) bottom else min(bottom, r.edgeRTo)
+        if (leftEnd > r.y) shapes.line(r.x, leftEnd, r.x, r.y - lw / 2f, lw)
+        shapes.line(r.x, r.y, r.x + r.w, r.y, lw)
+        if (rightEnd > r.y) shapes.line(r.x + r.w, r.y - lw / 2f, r.x + r.w, rightEnd, lw)
+        // floating ledges show their underside
+        if (r.y + r.h <= screenBottom) shapes.line(r.x - lw / 2f, r.y + r.h, r.x + r.w + lw / 2f, r.y + r.h, lw)
+    }
+
+    private val slopePoly = FloatArray(8)
+
+    /** A hill side: a quad with a sloped top, hatched below the slope. */
+    private fun drawSlope(r: GroundRect, pal: Palette, vx0: Float, vx1: Float, bottom: Float, px: Float) {
+        val x1 = r.x + r.w
+        slopePoly[0] = r.x; slopePoly[1] = r.y
+        slopePoly[2] = x1; slopePoly[3] = r.yR
+        slopePoly[4] = x1; slopePoly[5] = bottom
+        slopePoly[6] = r.x; slopePoly[7] = bottom
+        shapes.color(pal[Tok.ROCK]).fan(slopePoly, 4)
         shapes.color(pal[Tok.GRAPHITE], 0.32f)
+        val k = (r.yR - r.y) / r.w
+        val h = bottom - min(r.y, r.yR)
         val a0 = max(r.x, vx0)
-        val a1 = min(r.x + r.w, vx1)
+        val a1 = min(x1, vx1)
         var d = floor((a0 - h - r.x) / HATCH) * HATCH + r.x
         while (d < a1) {
-            hatch(d, r.y + h, h, r.x, r.x + r.w, px)
+            // the hatch rises from (d, bottom) at 45° until it meets the slope
+            val xm = (bottom + d - r.y + k * r.x) / (1f + k)
+            val s0 = max(0f, r.x - d)
+            val s1 = minOf(bottom - min(r.y, r.yR), x1 - d, xm - d)
+            if (s1 > s0) shapes.line(d + s0, bottom - s0, d + s1, bottom - s1, px)
             d += HATCH
         }
         val lw = 1.6f * px
         shapes.color(pal[Tok.GRAPHITE])
-        shapes.line(r.x, bottom, r.x, r.y - lw / 2f, lw)
-        shapes.line(r.x, r.y, r.x + r.w, r.y, lw)
-        shapes.line(r.x + r.w, r.y - lw / 2f, r.x + r.w, bottom, lw)
+        val leftEnd = if (r.edgeLTo.isNaN()) bottom else min(bottom, r.edgeLTo)
+        val rightEnd = if (r.edgeRTo.isNaN()) bottom else min(bottom, r.edgeRTo)
+        if (leftEnd > r.y) shapes.line(r.x, leftEnd, r.x, r.y, lw)
+        shapes.capsule(r.x, r.y, x1, r.yR, lw)
+        if (rightEnd > r.yR) shapes.line(x1, r.yR, x1, rightEnd, lw)
+    }
+
+    /** Castle masonry: mortar rows every 0.5 m, joints every 1 m, offset on alternate rows. */
+    private fun bricks(x: Float, y: Float, w: Float, h: Float, a0: Float, a1: Float, pal: Palette, px: Float) {
+        shapes.color(pal[Tok.GRAPHITE], 0.3f)
+        val rowH = 0.5f
+        var row = 0
+        var yy = y + rowH
+        while (yy < y + h) {
+            shapes.rect(a0, yy - px / 2f, a1 - a0, px)
+            yy += rowH
+        }
+        yy = y
+        while (yy < y + h) {
+            val off = if (row % 2 == 0) 0f else 0.5f
+            var xx = floor((a0 - x - off) / 1f) * 1f + x + off
+            while (xx < a1) {
+                if (xx > x && xx < x + w) shapes.rect(xx - px / 2f, yy, px, min(rowH, y + h - yy))
+                xx += 1f
+            }
+            yy += rowH
+            row++
+        }
     }
 
     /** One 45° hatch line from (d, base) to (d + h, base - h), clipped to x in [x0, x1]. */
@@ -191,17 +295,21 @@ class WorldRenderer(
         shapes.line(d + s0, base - s0, d + s1, base - s1, px)
     }
 
-    private fun drawCeiling(c: GroundRect, pal: Palette, vx0: Float, vx1: Float, screenTop: Float, px: Float) {
+    private fun drawCeiling(c: GroundRect, pal: Palette, vx0: Float, vx1: Float, screenTop: Float, px: Float, brick: Boolean) {
         if (c.x > vx1 || c.x + c.w < vx0) return
         val top = max(c.y, screenTop)
         val h = c.y + c.h - top
         if (h <= 0f) return
         shapes.color(pal[Tok.ROCK]).rect(c.x, top, c.w, h)
-        shapes.color(pal[Tok.GRAPHITE], 0.32f)
-        var d = c.x - h
-        while (d < c.x + c.w) {
-            hatch(d, top + h, h, c.x, c.x + c.w, px)
-            d += HATCH
+        if (brick) {
+            bricks(c.x, top, c.w, h, max(c.x, vx0), min(c.x + c.w, vx1), pal, px)
+        } else {
+            shapes.color(pal[Tok.GRAPHITE], 0.32f)
+            var d = c.x - h
+            while (d < c.x + c.w) {
+                hatch(d, top + h, h, c.x, c.x + c.w, px)
+                d += HATCH
+            }
         }
         val lw = 1.6f * px
         shapes.color(pal[Tok.GRAPHITE])
@@ -209,6 +317,7 @@ class WorldRenderer(
         shapes.line(c.x - lw / 2f, top + h, c.x + c.w + lw / 2f, top + h, lw)
         shapes.line(c.x, top, c.x, top + h, lw)
         shapes.line(c.x + c.w, top, c.x + c.w, top + h, lw)
+        if (c.kind != com.pranshuparmar.inkmayhem.physics.FixtureKind.CEILING) return // plain cave roof
         val by = c.y + c.h
         shapes.color(pal[Tok.BEAM])
         var x = c.x + 0.2f
@@ -218,11 +327,134 @@ class WorldRenderer(
         }
     }
 
+    /** A strip of spikes on a floor (pointing up) or under a ledge (pointing down). */
+    private fun drawSpikes(k: GroundRect, pal: Palette, vx0: Float, vx1: Float) {
+        if (k.x > vx1 || k.x + k.w < vx0) return
+        val up = k.spikesUp
+        shapes.color(pal[Tok.BEAM])
+        val base = k.y + k.h
+        var x = k.x + 0.16f
+        while (x < k.x + k.w - 0.1f) {
+            if (up) shapes.triangle(x - 0.15f, base, x, k.y, x + 0.15f, base)
+            else shapes.triangle(x - 0.15f, k.y, x, base, x + 0.15f, k.y)
+            x += 0.32f
+        }
+    }
+
+    private fun drawLifts(sim: GameSim, pal: Palette, px: Float) {
+        val lw = 1.6f * px
+        for (li in sim.lifts.indices) {
+            val lf = sim.lifts[li]
+            val d = lf.def
+            val cx = lf.prev.lerpX(alpha)
+            val cy = lf.prev.lerpY(alpha)
+            val x0 = cx - d.w / 2f
+            val y0 = cy - lf.h / 2f
+            // the track it runs on, then the platform
+            shapes.color(pal[Tok.GRAPHITE], 0.35f)
+            var y = d.highY
+            while (y < d.lowY + lf.h) {
+                shapes.rect(cx - lw / 2f, y, lw, min(0.25f, d.lowY + lf.h - y))
+                y += 0.45f
+            }
+            shapes.color(pal[Tok.ROCK]).rect(x0, y0, d.w, lf.h)
+            shapes.color(pal[Tok.GRAPHITE]).roundRectOutline(x0, y0, d.w, lf.h, 0.08f, lw)
+            if (lf.dir == 0 && lf.top > d.highY + 0.01f) {
+                // waiting: an up arrow on the platform
+                shapes.color(pal[Tok.ACCENT])
+                shapes.triangle(cx - 0.22f, y0 + lf.h * 0.75f, cx, y0 + lf.h * 0.2f, cx + 0.22f, y0 + lf.h * 0.75f)
+            }
+        }
+    }
+
+    private fun drawSeesaws(sim: GameSim, pal: Palette, px: Float) {
+        for (si in sim.seesaws.indices) {
+            val sw = sim.seesaws[si]
+            val cx = sw.prev.lerpX(alpha)
+            val cy = sw.prev.lerpY(alpha)
+            val a = sw.prev.lerpA(alpha)
+            val hx = cos(a) * sw.len / 2f
+            val hy = sin(a) * sw.len / 2f
+            shapes.color(pal[Tok.GRAPHITE]).triangle(sw.px, sw.py, sw.px - 0.4f, sw.py + 1.1f, sw.px + 0.4f, sw.py + 1.1f)
+            shapes.color(pal[Tok.GRAPHITE]).line(cx - hx, cy - hy, cx + hx, cy + hy, GameSim.SEESAW_THICK)
+            shapes.color(pal[Tok.ROCK]).line(cx - hx, cy - hy, cx + hx, cy + hy, GameSim.SEESAW_THICK - 3.2f * px)
+            shapes.color(pal[Tok.PAPER]).circle(sw.px, sw.py, 0.07f)
+        }
+    }
+
+    /**
+     * The checkpoint bookmark and the finish flag (with a little doodled castle past it). Poles
+     * draw [behind] the ground; flags in front.
+     */
+    private fun drawFlags(sim: GameSim, pal: Palette, px: Float, behind: Boolean) {
+        val l = sim.stage?.layout ?: return
+        val lw = 1.6f * px
+        if (!l.checkpointX.isNaN()) {
+            val x = l.checkpointX
+            val y = l.checkpointLevel
+            val reached = sim.stageRun?.checkpoint == true
+            if (behind) {
+                shapes.color(pal[Tok.GRAPHITE]).line(x, y, x, y - 2.4f, lw * 1.4f)
+            } else {
+                shapes.color(if (reached) pal[Tok.ROPE] else pal[Tok.ACCENT])
+                // a bookmark ribbon: a strip with a notch at the bottom
+                shapes.rect(x, y - 2.4f, 0.55f, 0.75f)
+                shapes.triangle(x, y - 1.65f, x + 0.275f, y - 1.65f, x, y - 1.35f)
+                shapes.triangle(x + 0.275f, y - 1.65f, x + 0.55f, y - 1.65f, x + 0.55f, y - 1.35f)
+            }
+        }
+        if (!l.finishX.isNaN()) {
+            val x = l.finishX
+            val y = l.finishLevel
+            if (behind) {
+                castle(x + 4f, y, pal, lw)
+                shapes.color(pal[Tok.GRAPHITE]).line(x, y, x, y - 3.4f, lw * 1.6f)
+                shapes.color(pal[Tok.GRAPHITE]).circle(x, y - 3.45f, 0.12f)
+            } else {
+                // a pennant, waving a little
+                val wave = sin(sim.simT * 4f) * 0.08f
+                shapes.color(pal[Tok.BEAM]).triangle(x, y - 3.3f, x + 1.2f, y - 2.95f + wave, x, y - 2.5f)
+            }
+        }
+    }
+
+    /** A hand-drawn tower: walls, battlements and an arched door. */
+    private fun castle(x: Float, ground: Float, pal: Palette, lw: Float) {
+        val w = 2.6f
+        val h = 2.2f
+        val top = ground - h
+        shapes.color(pal[Tok.ROCK]).rect(x, top, w, h)
+        shapes.color(pal[Tok.GRAPHITE])
+        shapes.line(x, ground, x, top - 0.5f, lw)
+        shapes.line(x + w, ground, x + w, top - 0.5f, lw)
+        // battlements
+        var bx = x
+        var up = true
+        while (bx < x + w - 0.01f) {
+            val nx = min(x + w, bx + w / 5f)
+            val yy = if (up) top - 0.5f else top
+            shapes.color(pal[Tok.ROCK]).rect(bx, yy, nx - bx, top - yy + 0.01f)
+            shapes.color(pal[Tok.GRAPHITE]).line(bx, yy, nx, yy, lw)
+            if (nx < x + w - 0.01f) shapes.line(nx, top - 0.5f, nx, top, lw)
+            bx = nx
+            up = !up
+        }
+        // door
+        val dx = x + w / 2f
+        shapes.color(pal[Tok.GRAPHITE]).rect(dx - 0.4f, ground - 0.9f, 0.8f, 0.9f)
+        shapes.circle(dx, ground - 0.9f, 0.4f)
+    }
+
     private fun drawDrops(sim: GameSim, pal: Palette, vx0: Float, vx1: Float, px: Float) {
         for (di in sim.drops.indices) {
             val d = sim.drops[di]
             if (d.taken || d.x < vx0 || d.x > vx1) continue
             val bob = sin(d.t * 3f) * 0.08f
+            if (d.heart) {
+                shapes.color(pal[Tok.BEAM]).heart(d.x, d.y + bob, 0.34f)
+                shapes.color(pal[Tok.BEAM]).ring(d.x, d.y + bob - 0.05f, 0.62f, 1.2f * px, 2f * px, 3f * px)
+                continue
+            }
             val s = if (d.high) 0.36f else 0.26f
             val cx = d.x
             val cy = d.y + bob

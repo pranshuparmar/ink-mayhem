@@ -104,6 +104,7 @@ class InkPhysics(
     fun addSpikes(x: Float, y: Float, w: Float, up: Boolean): GroundRect {
         val top = if (up) y - SPIKE_H else y
         val r = GroundRect(x, top, w, SPIKE_H, FixtureKind.CEILING)
+        r.spikesUp = up
         box.setAsBox(w / 2f, SPIKE_H / 2f, v.set(x + w / 2f, top + SPIKE_H / 2f), 0f)
         fd.reset()
         fd.shape = box

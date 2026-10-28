@@ -113,7 +113,37 @@ object SfxSynth {
     val NAMES: List<String> = listOf(
         "anchor", "hop", "boing", "boulder_boing", "snap", "erase", "speed_up", "rumble", "pickup", "pickup_high",
         "featherweight", "combo_lost", "death", "scratch",
+        "stage_start", "checkpoint", "clear", "one_up", "game_over", "star",
     ) + (2..9).map { "chime_$it" }
+
+    /**
+     * Notes ([freq] Hz, [dur] s) one after another, each a [tone] with its own decay: the short
+     * chiptune jingles of stage play (all original).
+     */
+    fun melody(wave: Wave, vol: Double, vararg notes: Pair<Double, Double>): FloatArray {
+        var len = 0.0
+        for ((_, d) in notes) len += d
+        val out = FloatArray(((len + 0.05) * RATE).roundToInt())
+        var at = 0
+        for ((f, d) in notes) {
+            val t = tone(f, d, wave, vol)
+            for (i in t.indices) if (at + i < out.size) out[at + i] += t[i]
+            at += (d * RATE).roundToInt()
+        }
+        return out
+    }
+
+    private const val C4 = 261.63
+    private const val E4 = 329.63
+    private const val G4 = 392.0
+    private const val C5 = 523.25
+    private const val E5 = 659.25
+    private const val G5 = 783.99
+    private const val A5 = 880.0
+    private const val C6 = 1046.5
+    private const val E6 = 1318.5
+    private const val G6 = 1568.0
+    private const val C7 = 2093.0
 
     /** Every sound file the game loads, by name. */
     fun all(): Map<String, FloatArray> = linkedMapOf(
@@ -131,6 +161,12 @@ object SfxSynth {
         "combo_lost" to tone(200.0, 0.2, Wave.TRIANGLE, 0.08, 0.7),
         "death" to tone(140.0, 0.35, Wave.TRIANGLE, 0.18, 0.5),
         "scratch" to scratchLoop(seed = 3),
+        "stage_start" to melody(Wave.SQUARE, 0.05, G4 to 0.09, C5 to 0.09, E5 to 0.09, G5 to 0.09, C6 to 0.3),
+        "checkpoint" to melody(Wave.TRIANGLE, 0.1, E5 to 0.08, A5 to 0.22),
+        "clear" to melody(Wave.SQUARE, 0.05, C5 to 0.11, E5 to 0.11, G5 to 0.11, C6 to 0.11, G5 to 0.11, C6 to 0.45),
+        "one_up" to melody(Wave.SQUARE, 0.045, C6 to 0.07, E6 to 0.07, G6 to 0.07, C7 to 0.22),
+        "game_over" to melody(Wave.TRIANGLE, 0.11, G4 to 0.2, E4 to 0.2, C4 to 0.2, C4 / 2 to 0.55),
+        "star" to tone(E6, 0.18, Wave.SINE, 0.09, 1.2),
     ).apply {
         // combo chime: 660 + combo × 40 Hz, one file per combo level 2..9
         for (c in 2..9) put("chime_$c", tone(660.0 + c * 40.0, 0.1, Wave.SINE, 0.08, 1.2))
