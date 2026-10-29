@@ -49,15 +49,39 @@ class StageSession(val sim: GameSim, private val store: StageStore) {
     /** True for the first intro of a stage (the long one, with the stage name). */
     var firstIntro = true
         private set
+    /** Stars taken since the lives were last reset; every [GameSim.STARS_PER_LIFE] is a life. */
+    var stars = 0
+        private set
 
-    fun start(def: StageDef, freshLives: Boolean = true) {
+    /**
+     * Starts [def]. [quick] skips the intro card: the runner is off at once (the game opening
+     * straight into play).
+     */
+    fun start(def: StageDef, freshLives: Boolean = true, quick: Boolean = false) {
         stage = def
-        if (freshLives) lives = START_LIVES
+        if (freshLives) {
+            lives = START_LIVES
+            stars = 0
+        }
         deaths = 0
         result = null
         firstIntro = true
         sim.loadStage(def, fromCheckpoint = false)
-        enter(Phase.INTRO)
+        if (quick) {
+            firstIntro = false
+            sim.runnerHeld = false
+            enter(Phase.PLAY)
+        } else {
+            enter(Phase.INTRO)
+        }
+    }
+
+    /** A star was taken. Returns true when it made an extra life. */
+    fun addStar(): Boolean {
+        stars++
+        if (stars % GameSim.STARS_PER_LIFE != 0) return false
+        extraLife()
+        return true
     }
 
     /** A heart: one more life. */

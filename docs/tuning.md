@@ -74,6 +74,31 @@ Made after playtesting the port on a phone, at the owner's request.
    slides to keep a chasing boulder in view (that last part applies in landscape too; otherwise
    landscape is unchanged). Long toasts wrap to two lines, and notes stay whole on screen.
 
+Slice 1 of the reimagining ("Your doodle is alive. The page fights back."), approved by the
+owner: the Ink Rush theme, Slice 1 as pitched, no Endless, straight into play. Numbers under
+[Slice 1](#slice-1).
+
+11. **No Endless, no title card.** The game opens straight into play: the first stage not yet
+    cleared starts running at once, with no intro card (1-1 on a first launch). The stage list
+    has a Play button; Android back there leaves the app. The endless run, its title and death
+    cards and its best score are gone from the game. `GameSim` keeps the POC's generator, which
+    the reference tests still play.
+12. **Music.** Ink Rush (original, 168 bpm, A minor, eight bars) loops through a stage's intro
+    and play and restarts after a lost life; the settings sheet and leaving the app pause it.
+    The stage start, clear, extra-life and game-over jingles are cut from its motif, and a lost
+    life plays a falling jingle instead of the POC's death thud. Off with "Music" in settings.
+13. **Silent tuning.** First launch no longer asks for pen tuning or runs the tutorial (both
+    stay in settings). Instead 1-1's first three obstacles are tuning gates: until the pen is
+    tuned, a stroke begun at one is that gate's ink whatever its pressure, and once a rope, a
+    spring and a beam stroke have been drawn there, their raw settled pressures tune the pen,
+    exactly as the tuning lines would, if they rise enough (otherwise a toast points to "Tune
+    your pen" and the gates keep asking on the next try).
+14. **Star trails**, **Blots**, **doodle boxes** with the **marker cap** (Bold), and the
+    **runner's face** are new.
+15. **1-1 is rebuilt** around them: rope gap, spring wall, beam chasm (the three gates), a Blot,
+    a doodle box with a cap, a second Blot, then the old page's hills, high road, seesaw and
+    gaps. Hints are dotted guides with one word, not paragraphs.
+
 ## Physics (`core/.../physics/InkPhysics.kt`, `Ink.kt`)
 
 | Constant | Value | POC name |
@@ -148,7 +173,7 @@ reproduces exactly for the same viewport and the same play.
 
 | | |
 |---|---|
-| Pen tuning | the player draws a rope, a spring and a beam line along a guide. Each line's pressure is the median of its middle 70 % (samples > 0.001, at least 8); it must run half the guide, and each must be at least 1.2× and 0.004 (spring) / 0.008 (beam) raw harder than the last (a beam at ≥ 0.98 only has to be harder). Then a free try, with live ink colour and a chip per ink seen in a stroke of 40 dp or more. Asked once, stored; "Recalibrate" in settings |
+| Pen tuning | the player draws a rope, a spring and a beam line along a guide. Each line's pressure is the median of its middle 70 % (samples > 0.001, at least 8); it must run half the guide, and each must be at least 1.2× and 0.004 (spring) / 0.008 (beam) raw harder than the last (a beam at ≥ 0.98 only has to be harder). Then a free try, with live ink colour and a chip per ink seen in a stroke of 40 dp or more. From "Tune your pen" in settings; an untuned pen is tuned by 1-1's gates instead (see [Slice 1](#slice-1)) |
 | Normalized pressure | piecewise linear: 0 → 0, √(rope·spring) → 0.33, √(spring·beam) → 0.62, beam + (beam − √(spring·beam)) → 1, clamped. Skipped or never tuned: the POC's straight line p = 0.45 × raw / 0.32. An old one-number calibration carries over as that straight line (cal in place of 0.32), and the game asks for tuning once more |
 | Fingers and mouse (debug) | fixed p = 0.45 |
 | Smoothing | p = 0.7 prev + 0.3 new (thickness and the pressure before the pen has landed) |
@@ -203,13 +228,13 @@ Two notes on scenario design, both true of the POC as well:
 ## Stages
 
 `core/.../game/Stage.kt` (layout and builder), `World1.kt` (the stages), `StageSession.kt` (lives,
-retries, stars). Each stage runs on its own `GameSim`; Endless is untouched.
+retries, stars). Each stage runs on its own `GameSim`.
 
 ### World 1
 
 | Stage | Theme | Speed | Length | What's in it |
 |---|---|---|---|---|
-| 1-1 First Page | ruled paper | 3.4 m/s | 179 m | gaps (rope), hills, a wall (spring), a high road with a heart, a seesaw, a hill-top gap |
+| 1-1 First Page | ruled paper | 3.4 m/s | 204 m | a rope gap, a spring wall and a beam chasm (the tuning gates), a Blot, a doodle box with the marker cap, a second Blot, hills, a high road with a heart, a seesaw |
 | 1-2 Cellar | graph paper, cave roof 3.6 m up | 3.5 m/s | 131 m | tunnels, a rope slide down a shaft, spike pits, a lift up a 5 m wall |
 | 1-3 Up High | dot grid, islands 5 m deep | 3.6 m/s | 123 m | a three-spring climb, a 7.6 m beam gap, a seesaw, sloping bridges down, a cloud with a heart |
 | 1-4 Castle | brickwork | 3.8 m/s | 134 m | spike pits, a tunnel, a 6 m lift, a seesaw over spikes, a climb, a beam gap over spikes, a boulder runway |
@@ -230,10 +255,11 @@ Ground starts at level 20; blocks are 40 m deep unless the theme says otherwise.
 | Checkpoint | a bookmark; the snapshot is taken 0.6 m past it (once the hazard just before is judged) and a retry starts 1 m past it, with at least 8 m of flat before the next hazard |
 | Finish | a flag; past it the runner brakes to a stop |
 | Heart | +1 life (max 9), pickup radius 0.85 m like drops |
+| Hint | a dotted guide in an ink's colour with an arrow and the ink's name 1.35 m above it; fades in from 12 m to 9 m before it and out over 0.5 s once passed. A tuning gate is a hint that also tunes |
 
-### Rules that differ from Endless
+### Rules that differ from the POC's endless run
 
-| | Endless | Stages |
+| | Endless (POC) | Stages |
 |---|---|---|
 | Speed | 3.4 → 6 m/s with distance | fixed per stage |
 | Drive braking | torque clamp ±7 | −1.5 / +7, so downhill rolls build speed (1-1's hills reach 4.5 m/s, a 27° slope 5.6 m/s) |
@@ -245,8 +271,8 @@ Ground starts at level 20; blocks are 40 m deep unless the theme says otherwise.
 
 | | |
 |---|---|
-| Lives | 3 at the start of a stage from the list; carried into Next; +1 per heart, max 9 |
-| Intro | 2.2 s (stage name and lives) before the first try, 1.2 s before a retry; the runner waits, and during a retry's intro ink can already go down |
+| Lives | 3 at the start of a stage from the list; carried into Next; +1 per heart and per 50 stars, max 9 |
+| Intro | 2.2 s (stage name and lives) before the first try, 1.2 s before a retry; the runner waits, and during a retry's intro ink can already go down. The stage the game opens on has none: it is running at once |
 | Death | −1 life; after 1.6 s, retry from the checkpoint (or the start) with the score, combo, ink and hazard judgements the player had there |
 | Game over | no lives left: Try again restarts the stage with 3 lives |
 | Clear | 1 s after the flag: score + ink left × 10 = total |
@@ -256,6 +282,26 @@ Ground starts at level 20; blocks are 40 m deep unless the theme says otherwise.
 Every stage has a scripted solution (rope, spring and beam at mid-band pressure, drawn 8 m
 ahead); `StageTest` plays each one through with no deaths and light ink, and checks that wrong
 ink or no ink fails.
+
+## Slice 1
+
+`GameSim` (`takeStars`, `updateBlots`, `crushBlots`, `hitBox`, `updateCaps`, `hurt`,
+`updateMood`), `Level.kt` (the pieces), `InkMayhemGame.learnGate` (silent tuning),
+`MusicSynth` and `SfxSynth` (sound). `Slice1Test` covers each rule below.
+
+| | |
+|---|---|
+| Star | pickup radius 0.32 m + the runner's; +20 points. Taken within 0.9 s of the last, it rings one step higher on the A-minor pentatonic (8 steps, then stays on the top one); every 50 in a session (reset with fresh lives) is +1 life. Stars behind a checkpoint stay taken on a retry |
+| Blot | r 0.38, density 1, upright; stands on ground, ink and boulders, passes through the runner and other Blots. Wakes when the runner is within 11 m and walks at 1.1 m/s towards it, turning at walls (and at its patrol ends, if it has any); falls off edges. Gone 10 m below the ground |
+| Stomp | the runner meets a Blot coming down from above (falling faster than 0.5 m/s, centre 0.15 m higher; reach +0.3 m) or anywhere within 2.3 s of a spring bounce: the Blot is squashed (+100) and the runner hops at 6.5 m/s |
+| Beam drop | a beam stroke falling faster than 0.5 m/s onto a Blot squashes it (+100); so does a boulder |
+| Touch | any other touch: Bold rolls the Blot flat (+100); otherwise "Blotted", a life |
+| Doodle box | 0.9 m square, solid (ink hooks to it); a runner touching its underside pops what it holds, once: the marker cap, or 5 stars |
+| Marker cap | r 0.24, hops out at (2.2, −4) m/s and slides at 2.2 m/s, turning at walls; caught within 0.1 m of touching: +500, Bold |
+| Bold | runner r 0.52 instead of 0.4, the same mass (density scaled); rolls Blots flat; a Blot or spike hit takes Bold instead of a life, knocks the runner up at 7.5 m/s (down at 2 m/s from a ceiling) and nothing hurts for 1.5 s (it blinks). Falls and boulders still cost a life. Lost with a life |
+| Face | by priority: hurt or dead (× eyes), a boulder within 14 m behind (sweat), 1.5 s after a spring bounce (grin) then 0.9 s dizzy, on the ground with no ground, lift, seesaw or ink 1.2 m ahead (wide eyes), 1.2 s after a star, a squash or a clean judgement, or a combo of 4+ (grin) |
+| Tuning gates | a stroke begun within 1.5 m of a gate the runner hasn't passed. Tuned when rope, spring and beam rise by the tuning lines' rule (each ≥ 1.2× and 0.004 / 0.008 raw harder) |
+| Music | Ink Rush: 168 bpm, 8 bars, square lead (3.2 kHz low-pass), triangle bass, noise drums; one 11.4 s loop at 22.05 kHz mono, 504 KB (under SoundPool's 1 MB), played at 0.42 volume |
 
 ## Tutorial
 
@@ -278,7 +324,7 @@ stroke is finished and the pen lifted; in lesson 4 until the post is gone. A wai
 isn't launched by springs drawn under it. While drawing in the tutorial or a stage, a pill
 16 dp right of and 44 dp above the pen names the ink being laid. A death, or 3 s without 0.3 m of progress, fails the lesson with a hint for
 what went wrong; the scene resets 2.2 s later. A pass moves on after 1.6 s. The tutorial runs
-once after calibration on first launch and again from "How to play"; Skip (or Android back)
+from "How to play" (no longer on first launch: 1-1 teaches by playing); Skip (or Android back)
 ends it.
 
 ## Where the brief and the POC differ

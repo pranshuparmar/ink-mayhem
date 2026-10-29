@@ -51,6 +51,14 @@ class StageLayout {
 
     class Runway(val x: Float, val level: Float, val triggerX: Float)
 
+    /** A Blot standing on the ground at [x]; it paces between [x0] and [x1] (NaN: no limits). */
+    class BlotSpec(val x: Float, val y: Float, val x0: Float, val x1: Float)
+
+    /** A doodle box with its top-left at ([x], [top]), [size] square, holding [holds]. */
+    class Box(val x: Float, val top: Float, val size: Float, val holds: ItemKind)
+
+    class GateSpec(val ink: Ink, val x0: Float, val x1: Float, val gx0: Float, val gy0: Float, val gx1: Float, val gy1: Float, val label: String, val tunes: Boolean)
+
     /** One stroke of the scripted solution, drawn once the runner reaches [atX]. */
     class Stroke(val atX: Float, val xs: FloatArray, val ys: FloatArray, val ink: Ink)
 
@@ -63,6 +71,9 @@ class StageLayout {
     val notes = ArrayList<Text>()
     val hazards = ArrayList<Hazard>()
     val runways = ArrayList<Runway>()
+    val blots = ArrayList<BlotSpec>()
+    val boxes = ArrayList<Box>()
+    val gates = ArrayList<GateSpec>()
     val solution = ArrayList<Stroke>()
 
     var startX = 0f
@@ -84,7 +95,7 @@ class StageLayout {
     }
 }
 
-enum class ItemKind { DROP, HIGH_DROP, HEART }
+enum class ItemKind { DROP, HIGH_DROP, HEART, STAR, CAP }
 
 /**
  * Lays out a stage left to right. [x] is the cursor and [level] the ground height there (y down,
@@ -283,6 +294,58 @@ class StageBuilder(private val l: StageLayout) {
         l.items += StageLayout.Item(x0, y, ItemKind.HEART)
     }
 
+    /** A star [up] metres above the ground at [x0]. */
+    fun star(x0: Float, up: Float = 0.6f) {
+        l.items += StageLayout.Item(x0, ground(x0) - up, ItemKind.STAR)
+    }
+
+    fun starAt(x0: Float, y: Float) {
+        l.items += StageLayout.Item(x0, y, ItemKind.STAR)
+    }
+
+    /** A row of [n] stars [gap] apart along the ground from [x0]. */
+    fun stars(x0: Float, n: Int, gap: Float = 0.9f, up: Float = 0.6f) {
+        for (i in 0 until n) star(x0 + i * gap, up)
+    }
+
+    /** [n] stars on a straight line from (x0, y0) to (x1, y1): across a bridge, say. */
+    fun starLine(x0: Float, y0: Float, x1: Float, y1: Float, n: Int) {
+        for (i in 0 until n) {
+            val u = if (n == 1) 0.5f else i / (n - 1f)
+            starAt(x0 + (x1 - x0) * u, y0 + (y1 - y0) * u)
+        }
+    }
+
+    /**
+     * [n] stars along a spring's bounce: launched at [x0] from [y0] at [vx] m/s across and 9.6 m/s up
+     * (gravity 10), where the runner's centre will pass. A bounce carries on at about 2.75 m/s.
+     */
+    fun starArc(x0: Float, y0: Float, vx: Float = 2.75f, n: Int, from: Float = 0.25f, to: Float = 1.6f) {
+        for (i in 0 until n) {
+            val t = from + (to - from) * i / (n - 1f)
+            starAt(x0 + vx * t, y0 - 9.6f * t + 5f * t * t)
+        }
+    }
+
+    /** A Blot on the ground at [x0], pacing [patrol] metres either way once it wakes (0: free). */
+    fun blot(x0: Float, patrol: Float = 0f) {
+        val g = ground(x0)
+        l.blots += StageLayout.BlotSpec(x0, g, if (patrol > 0f) x0 - patrol else Float.NaN, if (patrol > 0f) x0 + patrol else Float.NaN)
+    }
+
+    /** A doodle box with its underside [up] metres above the ground at [x0] (a spring's bounce reaches it). */
+    fun box(x0: Float, up: Float = 2.6f, holds: ItemKind = ItemKind.CAP) {
+        l.boxes += StageLayout.Box(x0 - BOX / 2f, ground(x0) - up - BOX, BOX, holds)
+    }
+
+    /**
+     * A doodled hint over [x0]..[x1]: a dotted guide from (gx0, gy0) to (gx1, gy1) in [ink]'s colour,
+     * labelled with the ink's name. A [tunes] gate also tunes an untuned pen (see [Gate]).
+     */
+    fun hint(ink: Ink, x0: Float, x1: Float, gx0: Float, gy0: Float, gx1: Float, gy1: Float, tunes: Boolean = false) {
+        l.gates += StageLayout.GateSpec(ink, x0, x1, gx0, gy0, gx1, gy1, ink.label, tunes)
+    }
+
     fun note(text: String, dx: Float = 0.6f, up: Float = 3.4f, maxW: Float = Float.POSITIVE_INFINITY) {
         l.notes += StageLayout.Text(x + dx, level - up, text, maxW)
     }
@@ -337,6 +400,8 @@ class StageBuilder(private val l: StageLayout) {
         const val LEDGE_THICK = 0.6f
         /** A seesaw's pivot sits this far above the ground on either side. */
         const val SEESAW_LIFT = 0.6f
+        /** A doodle box's side. */
+        const val BOX = 0.9f
         /** Mid-band pressure for each ink, as the Endless bot uses. */
         val PRESSURE = mapOf(Ink.ROPE to 0.2f, Ink.SPRING to 0.47f, Ink.BEAM to 0.8f)
     }

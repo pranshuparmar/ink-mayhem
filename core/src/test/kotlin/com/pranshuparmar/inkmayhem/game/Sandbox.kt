@@ -75,6 +75,9 @@ open class RecordingEvents : GameEvents {
     val toasts = ArrayList<String>()
     val pops = ArrayList<String>()
     val sounds = ArrayList<Sfx>()
+    /** The variant of each sound in [sounds] (a star's note, a chime's combo). */
+    val variants = ArrayList<Int>()
+    var stars = 0
     var deaths = ArrayList<Death>()
     var hearts = 0
     var checkpoints = 0
@@ -102,6 +105,11 @@ open class RecordingEvents : GameEvents {
 
     override fun sound(sfx: Sfx, variant: Int) {
         sounds += sfx
+        variants += variant
+    }
+
+    override fun star() {
+        stars++
     }
 
     override fun died(death: Death) {

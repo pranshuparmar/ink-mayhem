@@ -12,6 +12,10 @@ class Settings(private val prefs: Preferences) : StageStore {
     var sound: Boolean = prefs.getBoolean("sound", true)
         set(v) { field = v; put { putBoolean("sound", v) } }
 
+    /** Ink Rush plays during stages. */
+    var music: Boolean = prefs.getBoolean("music", true)
+        set(v) { field = v; put { putBoolean("music", v) } }
+
     /** "Colour ink by type": rope green, spring amber, beam red. On by default (the POC's was off). */
     var tint: Boolean = prefs.getBoolean("tint", true)
         set(v) { field = v; put { putBoolean("tint", v) } }

@@ -8,6 +8,8 @@ enum class Sfx {
     PICKUP, PICKUP_HIGH, FEATHERWEIGHT, CHIME, COMBO_LOST, DEATH,
     // stages (new): short original jingles
     STAGE_START, CHECKPOINT, CLEAR, ONE_UP, GAME_OVER, STAR,
+    // slice 1: a lost life, Blots, doodle boxes, the marker cap; star trails use [STAR_TRAIL] variants
+    LIFE_LOST, SQUASH, POP, BOLD, SHRINK, STAR_TRAIL,
 }
 
 /**
@@ -15,7 +17,7 @@ enum class Sfx {
  * audio, particles, toasts and haptics. All default to no-ops for tests.
  */
 interface GameEvents {
-    /** [variant] is the combo for [Sfx.CHIME]. */
+    /** [variant] is the combo for [Sfx.CHIME], the streak step for [Sfx.STAR_TRAIL]. */
     fun sound(sfx: Sfx, variant: Int = 0) {}
 
     /** Pen scratch loop: volume 0..~0.14 and the live pressure (pitch). */
@@ -47,6 +49,9 @@ interface GameEvents {
 
     /** Stages: the runner picked up a heart. */
     fun extraLife() {}
+
+    /** Stages: a star was taken (every [GameSim.STARS_PER_LIFE] is a life). */
+    fun star() {}
 
     object None : GameEvents
 }

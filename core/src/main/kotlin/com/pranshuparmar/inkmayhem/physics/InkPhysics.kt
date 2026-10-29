@@ -49,14 +49,15 @@ class InkPhysics(
 
     // ---- static geometry ----
 
-    fun addRect(x: Float, y: Float, w: Float, h: Float, kind: FixtureKind = FixtureKind.GROUND): GroundRect {
+    /** [tag] overrides the fixture's tag (a doodle box keeps its own, to tell which was hit). */
+    fun addRect(x: Float, y: Float, w: Float, h: Float, kind: FixtureKind = FixtureKind.GROUND, tag: FixtureTag? = null): GroundRect {
         val r = GroundRect(x, y, w, h, kind)
         box.setAsBox(w / 2f, h / 2f, v.set(x + w / 2f, y + h / 2f), 0f)
         fd.reset()
         fd.shape = box
         fd.friction = 0.9f
         r.fixture = ground.createFixture(fd).also {
-            it.userData = if (kind == FixtureKind.CEILING) FixtureTag.CEILING else FixtureTag.GROUND
+            it.userData = tag ?: if (kind == FixtureKind.CEILING) FixtureTag.CEILING else FixtureTag.GROUND
         }
         rects += r
         return r
@@ -467,6 +468,43 @@ class InkPhysics(
         return b
     }
 
+    /**
+     * Something that walks or slides on its own (a Blot, the marker cap): an upright ball that
+     * stands on the ground and ink but passes through the runner (the game decides what touching
+     * it does) and through others of its kind.
+     */
+    fun addWalker(x: Float, y: Float, r: Float, density: Float, tag: FixtureTag): Body {
+        bd.type = BodyDef.BodyType.DynamicBody
+        bd.position.set(x, y)
+        bd.angle = 0f
+        bd.fixedRotation = true
+        val b = world.createBody(bd)
+        bd.fixedRotation = false
+        circle.radius = r
+        circle.position = v.set(0f, 0f)
+        fd.reset()
+        fd.shape = circle
+        fd.density = density
+        fd.friction = 0.6f
+        fd.filter.categoryBits = WALKER_BITS
+        fd.filter.maskBits = 0x0001
+        b.createFixture(fd).userData = tag
+        return b
+    }
+
+    /** Resizes a ball made by [addBall] to radius [r], keeping its mass (the runner going Bold). */
+    fun resizeBall(b: Body, r: Float) {
+        val f = b.fixtureList.first()
+        val shape = f.shape as CircleShape
+        val old = shape.radius
+        if (old == r) return
+        f.density = f.density * (old * old) / (r * r)
+        shape.radius = r
+        b.resetMassData()
+        // grow upwards: the ball stays on the ground instead of sinking into it
+        if (r > old) b.setTransform(b.position.x, b.position.y - (r - old), b.angle)
+    }
+
     fun addCrate(x: Float, y: Float, size: Float, density: Float): Body {
         bd.type = BodyDef.BodyType.DynamicBody
         bd.position.set(x, y)
@@ -533,6 +571,8 @@ class InkPhysics(
         /** Collision categories: wet ink touches only the runner. Everything else is category 1. */
         const val RUNNER_BITS: Short = 0x0002
         const val WET_BITS: Short = 0x0004
+        /** Blots and the marker cap: they touch the world (category 1) only. */
+        const val WALKER_BITS: Short = 0x0008
         /** Depth of a spike strip on a floor or ceiling. */
         const val SPIKE_H = 0.3f
         /** Seesaw planks: light enough for the runner (about 1 kg) to tip. */

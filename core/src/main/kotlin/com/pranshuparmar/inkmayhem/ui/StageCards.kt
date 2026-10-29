@@ -29,7 +29,8 @@ internal fun drawStars(shapes: Shapes, pal: Palette, cx: Float, cy: Float, r: Fl
 /** World 1's stages as rows with their stars and best; locked ones until the one before is cleared. */
 class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
     val box = Box()
-    val back = Box()
+    /** Picks up where the player left off: the next stage not yet cleared. */
+    val play = Box()
     val press = Press()
     private val defs = Stages.ALL
     private val rows = Array(defs.size) { Box() }
@@ -59,13 +60,13 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
             rows[i].set(box.x + 20f, y, box.w - 40f, ROW_H)
             y += ROW_H + 8f
         }
-        val bw = text.width(fonts.get(Face.UI_BOLD, 14f), "Back") + 32f
-        back.set(box.right - 20f - bw, y + 6f, bw, 42f)
+        val bw = text.width(fonts.get(Face.UI_BOLD, 14f), "Play") + 48f
+        play.set(box.right - 20f - bw, y + 6f, bw, 42f)
     }
 
-    /** The stage under (x, y) if it can be played, or [back]. */
+    /** The stage under (x, y) if it can be played, or [play]. */
     fun targetAt(x: Float, y: Float): Any? {
-        if (back.contains(x, y)) return back
+        if (play.contains(x, y)) return play
         for (i in rows.indices) if (rows[i].contains(x, y) && open[i]) return defs[i]
         return null
     }
@@ -78,7 +79,7 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
             Widgets.button(shapes, pal, b, primary = false, enabled = open[i], pressed = press.isPressed(defs[i]))
             if (open[i]) drawStars(shapes, pal, b.right - 46f, b.y + b.h / 2f, 9f, stars[i], 21f)
         }
-        Widgets.button(shapes, pal, back, primary = false, enabled = true, pressed = press.isPressed(back))
+        Widgets.button(shapes, pal, play, primary = true, enabled = true, pressed = press.isPressed(play))
     }
 
     fun drawText(text: Text, pal: Palette) {
@@ -93,7 +94,7 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
             text.line(nameFont, defs[i].name, b.x + 58f, b.y + 9f, 20f, fg)
             text.line(small, subs[i], b.x + 58f, b.y + 30f, 14f, pal[Tok.MUTED])
         }
-        Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 14f), pal, back, "Back", primary = false, enabled = true)
+        Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 14f), pal, play, "Play", primary = true, enabled = true)
     }
 
     companion object {

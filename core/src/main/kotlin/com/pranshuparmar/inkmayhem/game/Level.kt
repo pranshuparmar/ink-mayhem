@@ -46,6 +46,73 @@ class Note(val x: Float, val y: Float, val text: String) {
     var maxW = Float.POSITIVE_INFINITY
 }
 
+/** A star of a trail: worth points, rings a rising chime, and every 50 is a life. */
+class Star(val x: Float, val y: Float, val phase: Float) {
+    var taken = false
+}
+
+/**
+ * A Blot: an ink smudge that waddles at the runner. A bounce onto it (or a beam dropped on it)
+ * squashes it; touching it otherwise costs a life, unless the runner is Bold. It wakes when the
+ * runner comes near and paces between [x0] and [x1] (no limits when they're NaN).
+ */
+class Blot(val body: Body, val x0: Float, val x1: Float) {
+    val prev = Pose(body)
+    var awake = false
+    /** −1 walking left (towards the runner), +1 right. */
+    var dir = -1
+    /** simT it was squashed at, or NaN. */
+    var squashedAt = Float.NaN
+    val squashed: Boolean get() = !squashedAt.isNaN()
+    /** Where it was squashed (the splat stays there a moment). */
+    var sx = 0f
+    var sy = 0f
+    /** Fell off the page or was culled: its body is gone and nothing is drawn. */
+    var gone = false
+    /** It has been set walking (a stop after that means it walked into something). */
+    var walking = false
+    /** No body any more (squashed or gone): never touch [body] then. */
+    val dead: Boolean get() = squashed || gone
+}
+
+/** A doodle box: solid, and a hit from below pops out what it holds (once). */
+class DoodleBox(
+    val rect: com.pranshuparmar.inkmayhem.physics.GroundRect,
+    val holds: ItemKind,
+    /** Its fixture's tag: a contact with it names this box. */
+    val tag: com.pranshuparmar.inkmayhem.physics.FixtureTag,
+) {
+    var used = false
+    /** simT it was hit at (for the bump), or NaN. */
+    var hitAt = Float.NaN
+}
+
+/** The marker cap a doodle box pops out: it rolls away along the ground until the runner catches it. */
+class Cap(val body: Body) {
+    val prev = Pose(body)
+    /** Picked up, or lost off the page: its body is gone. */
+    var taken = false
+    var dir = 1
+}
+
+/**
+ * A doodled hint over x0..x1: a dotted guide from (gx0, gy0) to (gx1, gy1) in [ink]'s colour with
+ * a one-word [label]. A tuning gate ([tunes], the first page's first three obstacles) also tunes
+ * the pen: while it is untuned, a stroke drawn there is that ink, and its pressure is learnt.
+ */
+class Gate(
+    val ink: Ink, val x0: Float, val x1: Float,
+    val gx0: Float, val gy0: Float, val gx1: Float, val gy1: Float,
+    val label: String, val tunes: Boolean,
+) {
+    /** The runner is past it: the guide fades out. */
+    var passed = false
+    var passedAt = 0f
+}
+
+/** How the runner's face looks this frame. */
+enum class Mood { CALM, WORRIED, HAPPY, DIZZY, SCARED, OUCH }
+
 class Boulder(val body: Body) {
     /** simT before which springs can't launch it again (NaN = never launched). */
     var bounceUntil = Float.NaN
@@ -71,16 +138,22 @@ class Pose(private val body: Body) {
 
 class Runner(val body: Body) {
     val prev = Pose(body)
+    /** Its radius: bigger while [bold]. */
+    var r = GameSim.RUNNER_R
     var stuck = 0f
     var bounceCd = 0f
     var bestX = 0f
     var bestT = 0f
     /** 1 right after a spring bounce, decays to 0; squashes the blot. */
     var squash = 0f
+    /** The marker cap: survives one hit, flattens Blots by rolling into them. */
+    var bold = false
+    /** After losing Bold, nothing hurts until this simT. */
+    var safeUntil = -1f
 }
 
 /** Why a run ended; picks the death-card tips. */
-enum class DeathKind { FELL, BOULDER, SPIKED, STUCK }
+enum class DeathKind { FELL, BOULDER, SPIKED, STUCK, BLOT }
 
 class Death(
     val reason: String,

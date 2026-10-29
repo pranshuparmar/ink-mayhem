@@ -62,6 +62,12 @@ class GameSim(
     val spikeStrips = ArrayList<com.pranshuparmar.inkmayhem.physics.GroundRect>()
     val lifts = ArrayList<Lift>()
     val seesaws = ArrayList<Seesaw>()
+    /** Stage only: star trails, Blots, doodle boxes, the marker caps they pop and the doodled hints. */
+    val stars = ArrayList<Star>()
+    val blots = ArrayList<Blot>()
+    val boxes = ArrayList<DoodleBox>()
+    val caps = ArrayList<Cap>()
+    val gates = ArrayList<Gate>()
 
     var combo = 1
         private set
@@ -71,6 +77,11 @@ class GameSim(
     private var pendingDeath: String? = null
     private var pendingBounce = false
     private val boulderBounce = ArrayList<Body>(2)
+    /** The doodle box the runner touched this step, if any. */
+    private var pendingBox: FixtureTag? = null
+    /** Blots hit by a beam or a boulder this step, with what hit them. */
+    private val blotHits = ArrayList<Body>(4)
+    private val blotHitBy = ArrayList<Body>(4)
 
     private var genX = 0f
     private var level = 20f
@@ -112,6 +123,30 @@ class GameSim(
         private set
     /** Spring bounces of the runner this run. */
     var bounces = 0
+        private set
+    /** Stars collected this attempt, Blots squashed and doodle boxes popped. */
+    var starsTaken = 0
+        private set
+    var squashed = 0
+        private set
+    /** The streak of stars taken close together: each rings a note higher. */
+    private var starStep = -1
+    private var lastStarT = -10f
+    /** How the runner's face looks (see [updateMood]). */
+    var mood = Mood.CALM
+        private set
+    private var bounceAt = -10f
+    private var happyUntil = -10f
+    /** simT the runner last lost Bold or squashed something (the face reacts). */
+    private var ouchAt = -10f
+
+    /**
+     * The pen hasn't been tuned: a stroke drawn at a tuning gate is the gate's ink whatever the
+     * pressure, and [lastGate] tells the caller which ink its pressure was meant to be.
+     */
+    var gateTuning = false
+    /** The tuning gate the last finished stroke was drawn at, or null. */
+    var lastGate: Gate? = null
         private set
 
     /** Tutorial: the runner stands still (no drive, no stuck rules) until released. */
@@ -178,7 +213,10 @@ class GameSim(
         }
 
     /** The ink the stroke being drawn will be, or null. */
-    val drawingInk: Ink? get() = if (drawing == null) null else Ink.of(drawingPressure)
+    val drawingInk: Ink? get() = drawing?.let { inkOf(it, drawingPressure) }
+
+    /** A stroke's ink at steady pressure [p]: a tuning gate's own while the pen is untuned. */
+    private fun inkOf(d: Drawing, p: Float): Ink = d.forced?.ink ?: Ink.of(p)
 
     /** Whether the pen's current end of the stroke being drawn touches a surface and would hook. */
     val tipHooks: Boolean
@@ -186,7 +224,7 @@ class GameSim(
             val d = drawing ?: return false
             val n = d.size
             if (n == 0 || d.smoothed.isNaN()) return false
-            val kind = Ink.of(drawingPressure)
+            val kind = inkOf(d, drawingPressure)
             return ink.anchorable(d.xs[n - 1], d.ys[n - 1], Ink.thickness(Ink.clampTo(d.ps[n - 1], kind)))
         }
 
@@ -220,6 +258,8 @@ class GameSim(
         var startAnchored = false
         var wetRope = 0f
         var tooLong = false
+        /** Drawn at this tuning gate while the pen is untuned: its ink is the gate's. */
+        var forced: Gate? = null
     }
 
     val difficulty: Float get() = (dist / 600f).coerceIn(0f, 1f)
@@ -260,6 +300,10 @@ class GameSim(
         ink.world.setContactListener(contacts)
         blocks.clear(); drops.clear(); notes.clear(); boulders.clear()
         ceilings.clear(); hazards.clear(); spikeStrips.clear(); lifts.clear(); seesaws.clear()
+        stars.clear(); blots.clear(); boxes.clear(); caps.clear(); gates.clear()
+        blotHits.clear(); blotHitBy.clear(); pendingBox = null
+        starsTaken = 0; squashed = 0; starStep = -1; lastStarT = -10f
+        mood = Mood.CALM; bounceAt = -10f; happyUntil = -10f; ouchAt = -10f; lastGate = null
         stage = null; runnerOnLift = 0
         combo = 1; score = 0.0; scoredDist = 0f; pendingDeath = null; boulderBounce.clear()
         dist = 0f; inkLeft = INK_START; timeScale = 1f; simT = 0f; snaps = 0; bounces = 0; nextSpeedNote = 100f
@@ -287,6 +331,8 @@ class GameSim(
         boulders.fastEach { it.prev.snapshot() }
         lifts.fastEach { it.prev.snapshot() }
         seesaws.fastEach { it.prev.snapshot() }
+        blots.fastEach { if (!it.dead) it.prev.snapshot() }
+        caps.fastEach { if (!it.taken) it.prev.snapshot() }
         ink.strokes.fastEach { s -> s.groups.fastEach { it.snapshot() } }
     }
 
@@ -334,8 +380,22 @@ class GameSim(
                 ItemKind.DROP -> Drop(k.x, k.y, DROP_INK, false, fx.nextFloat() * 6f)
                 ItemKind.HIGH_DROP -> Drop(k.x, k.y, HIGH_DROP_INK, true, fx.nextFloat() * 6f)
                 ItemKind.HEART -> Drop(k.x, k.y, 0f, true, fx.nextFloat() * 6f, heart = true)
+                ItemKind.STAR -> {
+                    stars += Star(k.x, k.y, fx.nextFloat() * 6f)
+                    continue
+                }
+                ItemKind.CAP -> continue // only doodle boxes hold caps
             }
         }
+        for (k in l.blots) {
+            val body = ink.addWalker(k.x, k.y - BLOT_R - 0.02f, BLOT_R, 1f, FixtureTag.BLOT)
+            blots += Blot(body, k.x0, k.x1)
+        }
+        for (k in l.boxes) {
+            val tag = FixtureTag(com.pranshuparmar.inkmayhem.physics.FixtureKind.BOX)
+            boxes += DoodleBox(ink.addRect(k.x, k.top, k.size, k.size, tag = tag), k.holds, tag)
+        }
+        for (k in l.gates) gates += Gate(k.ink, k.x0, k.x1, k.gx0, k.gy0, k.gx1, k.gy1, k.label, k.tunes)
         for (k in l.notes) notes += Note(k.x, k.y, k.text).also { it.maxW = k.maxW }
         for ((i, k) in l.hazards.withIndex()) hazards += Hazard(k.type, k.x0, k.x1, k.par).also { it.index = i }
         for (k in l.runways) blocks.firstOrNull { it.x == k.x }?.boulderTrigger = k.triggerX
@@ -348,6 +408,9 @@ class GameSim(
         speedOverride = def.speed
         hazards.fastEach { if (it.x1 < sx) it.done = true }
         drops.fastEach { if (it.x < sx) it.taken = true }
+        stars.fastEach { if (it.x < sx) it.taken = true }
+        gates.fastEach { if (it.x1 < sx) it.passed = true }
+        boxes.fastEach { if (it.rect.right < sx) it.used = true }
         val run = keep ?: StageRun(def, l.hazards.size)
         if (keep != null) run.restore(this)
         stageRun = run
@@ -587,6 +650,17 @@ class GameSim(
             val ub = fb.userData as? FixtureTag
             val other = if (ua?.kind == FixtureKind.RUNNER) ub else if (ub?.kind == FixtureKind.RUNNER) ua else null
             if (other?.kind == FixtureKind.SPRING) pendingBounce = true
+            if (other?.kind == FixtureKind.BOX) pendingBox = other
+            // a beam dropped on a Blot, or a boulder rolling into one, squashes it
+            val blotA = ua?.kind == FixtureKind.BLOT
+            val blotB = ub?.kind == FixtureKind.BLOT
+            if (blotA != blotB) {
+                val hitter = if (blotA) ub else ua
+                if (hitter?.kind == FixtureKind.BEAM || hitter?.kind == FixtureKind.BOULDER) {
+                    blotHits += if (blotA) fa.body else fb.body
+                    blotHitBy += if (blotA) fb.body else fa.body
+                }
+            }
             if (other?.kind == FixtureKind.CEILING) pendingDeath = "Spiked"
             if (other?.kind == FixtureKind.LIFT) {
                 runnerOnLift++
@@ -637,7 +711,7 @@ class GameSim(
             events.toast(OUT_OF_INK)
             return
         }
-        drawing = Drawing(pointer)
+        drawing = Drawing(pointer).also { it.forced = if (gateTuning) tuningGateAt(x) else null }
         steady.reset()
         addPoint(x, y, n, t)
     }
@@ -661,7 +735,7 @@ class GameSim(
         val d = drawing ?: return
         d.smoothed = if (d.smoothed.isNaN()) n else d.smoothed * 0.7f + n * 0.3f
         steady.add(t, n)
-        val kind = Ink.of(steady.value(d.smoothed))
+        val kind = inkOf(d, steady.value(d.smoothed))
         val last = d.size - 1
         if (last >= 0) {
             val len = hypot(x - d.xs[last], y - d.ys[last])
@@ -737,9 +811,10 @@ class GameSim(
         ink.clearWet()
         events.scratch(0f, 0.5f)
         lastStrokeInk = null
+        lastGate = null
         if (d == null || d.size < 2) return
-        // one ink for the whole stroke, from the pressure it settled at
-        val kind = Ink.of(steady.finish(d.smoothed))
+        // one ink for the whole stroke, from the pressure it settled at (or the tuning gate's)
+        val kind = d.forced?.ink ?: Ink.of(steady.finish(d.smoothed))
         val n = d.size
         val ps = d.ps
         // Flatten the pen-down and pen-up pressure ramps.
@@ -753,6 +828,7 @@ class GameSim(
         for (i in 0 until n) ps[i] = Ink.clampTo(ps[i], kind)
         val s = ink.buildStroke(d.xs.items, d.ys.items, ps.items, n) ?: return
         lastStrokeInk = kind
+        lastGate = d.forced
         if (!unlimitedInk) inkLeft = max(0f, inkLeft - s.cost)
         // footprint + heaviest ink, for scoring against each hazard's par
         var x0 = Float.POSITIVE_INFINITY
@@ -818,7 +894,7 @@ class GameSim(
         if (state == GameState.RUN || state == GameState.DEAD) {
             if (state == GameState.RUN && !runnerHeld) {
                 val w = rb.angularVelocity
-                val wt = runSpeed / RUNNER_R
+                val wt = runSpeed / runner.r
                 // stages let a downhill roll build speed: the drive barely brakes there
                 rb.applyTorque((3f * (wt - w)).coerceIn(if (stage != null) -STAGE_BRAKE else -7f, 7f), true)
                 val v = rb.linearVelocity
@@ -850,8 +926,9 @@ class GameSim(
                 runner.bounceCd = 0.3f
                 bounces++
                 runner.squash = 1f
+                bounceAt = simT
                 val p = rb.position
-                events.burst(p.x, p.y + RUNNER_R, 8, 2f, Tok.SPRING, 0f)
+                events.burst(p.x, p.y + runner.r, 8, 2f, Tok.SPRING, 0f)
                 events.sound(Sfx.BOING)
             }
             pendingBounce = false
@@ -868,12 +945,13 @@ class GameSim(
             }
             boulderBounce.clear()
             val pd = pendingDeath
-            if (pd != null && state == GameState.RUN) {
-                val p = rb.position
-                events.burst(p.x, p.y - RUNNER_R, 16, 3f, Tok.INK)
-                die(pd, DeathKind.SPIKED)
-            }
+            if (pd != null && state == GameState.RUN) hurt(pd, DeathKind.SPIKED)
             pendingDeath = null
+            if (state == GameState.RUN) {
+                crushBlots()
+                hitBox()
+            }
+            blotHits.clear(); blotHitBy.clear(); pendingBox = null
             while (ink.events.isNotEmpty()) {
                 val ev = ink.events.removeFirst()
                 snaps++
@@ -907,7 +985,7 @@ class GameSim(
             }
             boulders.fastEach { bo ->
                 val q = bo.body.position
-                if (hypot(q.x - px, q.y - py) < BOULDER_R + RUNNER_R + 0.04f) die("Flattened", DeathKind.BOULDER)
+                if (hypot(q.x - px, q.y - py) < BOULDER_R + runner.r + 0.04f) die("Flattened", DeathKind.BOULDER)
             }
             drops.fastEach { dr ->
                 if (dr.taken) return@fastEach
@@ -924,6 +1002,10 @@ class GameSim(
                     events.sound(if (dr.high) Sfx.PICKUP_HIGH else Sfx.PICKUP)
                 }
             }
+            takeStars(px, py)
+            updateBlots(px, py)
+            updateCaps(px, py)
+            gates.fastEach { if (!it.passed && px > it.x1 + 0.6f) { it.passed = true; it.passedAt = simT } }
             // score: every metre is worth the current combo
             if (dist > scoredDist) {
                 score += (dist - scoredDist).toDouble() * combo
@@ -952,6 +1034,7 @@ class GameSim(
 
         runner.squash = max(0f, runner.squash - dt * 4f)
         drops.fastEach { it.t += dt }
+        updateMood()
     }
 
     private fun judgeHazards(px: Float, py: Float) {
@@ -974,10 +1057,12 @@ class GameSim(
                 combo = min(COMBO_MAX, combo + 1)
                 val bonus = 50 * combo
                 score += bonus
+                happyUntil = simT + HAPPY_S
                 events.pop(cx, cy, "Featherweight +$bonus", Tok.ROPE)
                 events.sound(Sfx.FEATHERWEIGHT)
             } else if (heavy == par) {
                 combo = min(COMBO_MAX, combo + 1)
+                happyUntil = simT + HAPPY_S
                 events.pop(cx, cy, "Clean ×$combo", Tok.ROPE)
                 events.sound(Sfx.CHIME, combo)
             } else {
@@ -992,6 +1077,231 @@ class GameSim(
     private fun liveStrokeComplete(d: Drawing): Boolean {
         val n = d.size
         return n >= 2 && d.startAnchored && tipHooks
+    }
+
+    // ---------------------------------------------------------------- slice 1: stars, Blots, boxes, Bold
+
+    /**
+     * A Blot or spikes got the runner. Bold takes the hit: the runner shrinks back and nothing
+     * hurts for [SAFE_S]. Otherwise it's a life.
+     */
+    private fun hurt(why: String, kind: DeathKind) {
+        if (state != GameState.RUN || simT < runner.safeUntil) return
+        val rb = runner.body
+        val p = rb.position
+        if (!runner.bold) {
+            events.burst(p.x, p.y - runner.r, 16, 3f, Tok.INK)
+            die(why, kind)
+            return
+        }
+        setBold(false)
+        runner.safeUntil = simT + SAFE_S
+        ouchAt = simT
+        events.burst(p.x, p.y, 12, 2.5f, Tok.ACCENT)
+        events.sound(Sfx.SHRINK)
+        events.shake(0.2f)
+        events.haptic(Haptic.SNAP)
+        // knocked clear: up off floor spikes and Blots, down from a spiked ceiling
+        val v = rb.linearVelocity
+        rb.setLinearVelocity(max(v.x, runSpeed * 0.9f), if (kind == DeathKind.SPIKED && v.y < -0.5f) 2f else -7.5f)
+    }
+
+    /** The marker cap on or off: Bold is a bigger runner of the same weight. */
+    private fun setBold(on: Boolean) {
+        runner.bold = on
+        runner.r = if (on) BOLD_R else RUNNER_R
+        ink.resizeBall(runner.body, runner.r)
+    }
+
+    private fun takeStars(px: Float, py: Float) {
+        val reach = runner.r + STAR_R
+        stars.fastEach { st ->
+            if (st.taken || kotlin.math.abs(st.x - px) > reach || hypot(st.x - px, st.y - py) > reach) return@fastEach
+            st.taken = true
+            // taken close together, each rings one note higher (eight in all)
+            starStep = if (simT - lastStarT < STREAK_S) min(STAR_NOTES - 1, starStep + 1) else 0
+            lastStarT = simT
+            starsTaken++
+            score += STAR_POINTS
+            happyUntil = simT + HAPPY_S
+            events.burst(st.x, st.y, 6, 1.4f, Tok.SPRING)
+            events.sound(Sfx.STAR_TRAIL, starStep)
+            events.star()
+        }
+    }
+
+    /**
+     * Blots wake when the runner comes within [BLOT_WAKE], then walk at it (pacing their patrol,
+     * turning round at walls). Touching one from above squashes it and bounces the runner; a Bold
+     * runner flattens it whatever the angle; any other touch hurts.
+     */
+    private fun updateBlots(px: Float, py: Float) {
+        val rb = runner.body
+        blots.fastEach { b ->
+            if (b.dead) return@fastEach
+            val body = b.body
+            val q = body.position
+            if (q.y > levelNear(q.x) + 10f) {
+                b.gone = true
+                ink.destroyBody(body)
+                return@fastEach
+            }
+            if (!b.awake && q.x - px < BLOT_WAKE) b.awake = true
+            val v = body.linearVelocity
+            if (b.awake) {
+                if (b.walking && kotlin.math.abs(v.x) < BLOT_SPEED * 0.3f) b.dir = -b.dir // walked into something
+                if (!b.x0.isNaN() && q.x <= b.x0) b.dir = 1
+                if (!b.x1.isNaN() && q.x >= b.x1) b.dir = -1
+                body.setLinearVelocity(b.dir * BLOT_SPEED, v.y)
+                b.walking = true
+            }
+            if (state != GameState.RUN) return@fastEach
+            val d = hypot(q.x - px, q.y - py)
+            val rv = rb.linearVelocity
+            // coming down on it counts a little wide, like a stomp in any platformer, and so does
+            // meeting one anywhere in a spring's bounce, landing included
+            val stomp = (rv.y > 0.5f && py < q.y - 0.15f) || simT - bounceAt < BOUNCE_STOMP_S
+            if (d > runner.r + BLOT_R + if (stomp) STOMP_SLACK else 0.04f) return@fastEach
+            when {
+                stomp -> {
+                    squash(b, "Stomp! +$BLOT_POINTS")
+                    rb.setLinearVelocity(rv.x, STOMP_VY)
+                    runner.squash = 1f
+                }
+                runner.bold -> squash(b, "Flattened! +$BLOT_POINTS", atRunner = true)
+                simT < runner.safeUntil -> Unit
+                else -> hurt("Blotted", DeathKind.BLOT)
+            }
+        }
+    }
+
+    /** Beams that fell on a Blot (rather than one it walked into) and boulders squash it. */
+    private fun crushBlots() {
+        for (i in blotHits.indices) {
+            val b = blots.firstOrNull { !it.dead && it.body === blotHits[i] } ?: continue
+            val by = blotHitBy[i]
+            val boulder = (by.fixtureList.first().userData as? FixtureTag)?.kind == FixtureKind.BOULDER
+            if (boulder || by.linearVelocity.y > 0.5f) squash(b, if (boulder) "Squashed! +$BLOT_POINTS" else "Beam drop! +$BLOT_POINTS")
+        }
+    }
+
+    /** [atRunner]: the score pops over the runner (it rolled through, and may be far across the view). */
+    private fun squash(b: Blot, label: String, atRunner: Boolean = false) {
+        val q = b.body.position
+        b.sx = q.x
+        b.sy = q.y
+        val popX = if (atRunner) runner.body.position.x else b.sx
+        b.squashedAt = simT
+        ink.destroyBody(b.body)
+        squashed++
+        score += BLOT_POINTS
+        happyUntil = simT + HAPPY_S
+        events.burst(b.sx, b.sy, 14, 2.6f, Tok.INK)
+        events.pop(popX, b.sy - 1.2f, label, Tok.ACCENT)
+        events.sound(Sfx.SQUASH)
+        events.shake(0.1f)
+    }
+
+    /** The runner bumped a doodle box from below: it pops what it holds, once. */
+    private fun hitBox() {
+        val tag = pendingBox ?: return
+        val box = boxes.firstOrNull { it.tag === tag } ?: return
+        val p = runner.body.position
+        val r = box.rect
+        if (box.used || p.y < r.bottom || kotlin.math.abs(p.x - (r.x + r.w / 2f)) > r.w / 2f + runner.r * 0.7f) return
+        box.used = true
+        box.hitAt = simT
+        val cx = r.x + r.w / 2f
+        events.sound(Sfx.POP)
+        events.burst(cx, r.y, 8, 1.8f, Tok.GRAPHITE)
+        when (box.holds) {
+            ItemKind.CAP -> {
+                val body = ink.addWalker(cx, r.y - CAP_R - 0.05f, CAP_R, 1f, FixtureTag.CAP)
+                body.setLinearVelocity(CAP_SPEED, CAP_HOP)
+                caps += Cap(body)
+                events.toast("A marker cap! Catch it.", force = true)
+            }
+            else -> {
+                // a box of stars: they spill out and count at once
+                repeat(BOX_STARS) {
+                    starStep = min(STAR_NOTES - 1, starStep + 1)
+                    starsTaken++
+                    score += STAR_POINTS
+                    events.star()
+                }
+                lastStarT = simT
+                events.sound(Sfx.STAR_TRAIL, starStep)
+                events.burst(cx, r.y - 0.5f, 12, 2f, Tok.SPRING)
+            }
+        }
+    }
+
+    /** Caps slide away along the ground (turning at walls) until the runner catches one. */
+    private fun updateCaps(px: Float, py: Float) {
+        caps.fastEach { c ->
+            if (c.taken) return@fastEach
+            val body = c.body
+            val q = body.position
+            if (q.y > levelNear(q.x) + 10f) {
+                c.taken = true
+                ink.destroyBody(body)
+                return@fastEach
+            }
+            val v = body.linearVelocity
+            // it hops out of the box first; once down it slides
+            if (v.y >= 0f && kotlin.math.abs(v.y) < 0.5f) {
+                if (kotlin.math.abs(v.x) < CAP_SPEED * 0.3f) c.dir = -c.dir
+                body.setLinearVelocity(c.dir * CAP_SPEED, v.y)
+            }
+            if (hypot(q.x - px, q.y - py) > runner.r + CAP_R + 0.1f || state != GameState.RUN) return@fastEach
+            c.taken = true
+            ink.destroyBody(body)
+            if (!runner.bold) setBold(true)
+            score += CAP_POINTS
+            happyUntil = simT + HAPPY_S * 2f
+            events.burst(q.x, q.y, 16, 2.4f, Tok.ACCENT)
+            events.pop(q.x, q.y - 1.2f, "Bold! +$CAP_POINTS", Tok.ACCENT)
+            events.sound(Sfx.BOLD)
+            events.toast("Bold: you survive one hit and flatten Blots.", force = true)
+        }
+    }
+
+    /** The first tuning gate a stroke begun at [x] belongs to, if the runner hasn't passed it. */
+    private fun tuningGateAt(x: Float): Gate? {
+        val rx = runner.body.position.x
+        return gates.firstOrNull { it.tunes && !it.passed && rx < it.x1 && x >= it.x0 - GATE_SLACK && x <= it.x1 + GATE_SLACK }
+    }
+
+    /**
+     * The face: hurt, then scared of a boulder behind, wide-eyed at an edge with nothing ahead,
+     * whee on a bounce and dizzy after it, a grin after anything good.
+     */
+    private fun updateMood() {
+        val p = runner.body.position
+        mood = when {
+            state == GameState.DEAD || simT < runner.safeUntil || simT - ouchAt < 0.4f -> Mood.OUCH
+            state == GameState.CLEAR -> Mood.HAPPY
+            boulders.any { val bx = it.body.position.x; bx < p.x && p.x - bx < CHASE_VIEW } -> Mood.SCARED
+            simT - bounceAt < 1.5f -> Mood.HAPPY
+            simT - bounceAt < 2.4f -> Mood.DIZZY
+            edgeAhead(p.x, p.y) -> Mood.WORRIED
+            simT < happyUntil || combo >= 4 -> Mood.HAPPY
+            else -> Mood.CALM
+        }
+    }
+
+    /** On the ground with no ground and no ink just ahead: a gap edge. */
+    private fun edgeAhead(px: Float, py: Float): Boolean {
+        if (kotlin.math.abs(runner.body.linearVelocity.y) > 0.6f) return false
+        val ax = px + runner.r + 1.2f
+        val feet = py + runner.r
+        blocks.fastEach { b -> if (ax >= b.x && ax <= b.right && b.topAt(ax) < feet + 1.5f && b.topAt(ax) > feet - 1.5f) return false }
+        lifts.fastEach { if (kotlin.math.abs(it.body.position.x - ax) < it.def.w / 2f + 0.5f) return false }
+        seesaws.fastEach { if (kotlin.math.abs(it.px - ax) < it.len / 2f) return false }
+        ink.strokes.fastEach { s -> if (!s.x1.isNaN() && ax >= s.x0 - 0.3f && ax <= s.x1 + 0.3f) return false }
+        val d = drawing
+        if (d != null && ax >= d.x0 && ax <= d.x1) return false
+        return true
     }
 
     private fun liftMoving(): Boolean {
@@ -1086,6 +1396,13 @@ class GameSim(
         }
         drops.removeAll { it.taken || it.x <= lim }
         notes.removeAll { it.x <= lim - 10f }
+        stars.removeAll { it.taken || it.x <= lim }
+        blots.removeAll { b ->
+            if (b.dead) b.sx < lim
+            else (b.body.position.x < lim).also { if (it) ink.destroyBody(b.body) }
+        }
+        caps.removeAll { c -> c.taken || (c.body.position.x < lim).also { if (it) ink.destroyBody(c.body) } }
+        boxes.removeAll { b -> (b.rect.right < lim).also { if (it) ink.removeRect(b.rect) } }
     }
 
     fun dispose() {
@@ -1126,6 +1443,36 @@ class GameSim(
         const val HIGH_DROP_INK = 25f
         const val COMBO_MAX = 9
         const val RESTART_DELAY = 0.7
+        /** Slice 1. Stars: pickup radius, points, the streak window and its notes. */
+        const val STAR_R = 0.32f
+        const val STAR_POINTS = 20
+        const val STREAK_S = 0.9f
+        const val STAR_NOTES = 8
+        /** Every this many stars is an extra life. */
+        const val STARS_PER_LIFE = 50
+        /** Blots: size, walking speed, how near they wake, points, and the stomp's hop (m/s, up). */
+        const val BLOT_R = 0.38f
+        const val BLOT_SPEED = 1.1f
+        const val BLOT_WAKE = 11f
+        const val BLOT_POINTS = 100
+        const val STOMP_VY = -6.5f
+        /** A stomp reaches this much further than a touch. */
+        const val STOMP_SLACK = 0.3f
+        /** A spring bounce (about 1.9 s in the air) squashes any Blot met this long after it. */
+        const val BOUNCE_STOMP_S = 2.3f
+        /** The marker cap and Bold: cap size, slide speed and hop, points, Bold's radius and the safe time after a hit. */
+        const val CAP_R = 0.24f
+        const val CAP_SPEED = 2.2f
+        const val CAP_HOP = -4f
+        const val CAP_POINTS = 500
+        const val BOLD_R = 0.52f
+        const val SAFE_S = 1.5f
+        /** A doodle box of stars holds this many. */
+        const val BOX_STARS = 5
+        /** How long the face grins after something good. */
+        const val HAPPY_S = 1.2f
+        /** A stroke begun this far either side of a tuning gate still belongs to it. */
+        const val GATE_SLACK = 1.5f
         const val OUT_OF_INK = "Out of ink. Grab the blue drops."
         const val TOO_LONG_FOR_ROPE = "Too long for rope. Press harder."
 
@@ -1161,6 +1508,10 @@ class GameSim(
             DeathKind.STUCK to listOf(
                 "Thick beams make walls. Erase with the side button.",
                 "A spring in front of a wall bounces you over.",
+            ),
+            DeathKind.BLOT to listOf(
+                "Bounce on Blots: a spring just before one.",
+                "Drop a beam on a Blot from above.",
             ),
         )
     }

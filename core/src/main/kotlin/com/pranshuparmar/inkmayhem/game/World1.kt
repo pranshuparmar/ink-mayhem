@@ -8,21 +8,53 @@ import com.pranshuparmar.inkmayhem.physics.Ink
  * boulder chase to finish. Positions are in metres from the start; the ground starts at 20.
  */
 object Stages {
+    /**
+     * The game opens on this page, already running. Its first three obstacles each ask for one
+     * ink with a doodled guide (and tune an untuned pen from the strokes drawn for them): a rope
+     * gap, a spring wall and a beam chasm. Then a Blot to bounce on, a doodle box with the marker
+     * cap, and a second Blot that a Bold runner just rolls flat.
+     */
     val FIRST_PAGE = StageDef(1, 1, "First Page", Theme.PAGE, 3.4f) {
-        start(16f)
-        note("Light touch makes rope. Bridge the gaps.", dx = -12f)
+        start(13f)
+        hint(Ink.ROPE, x - 1f, x + 3f, x - 0.1f, level - 0.05f, x + 3.1f, level - 0.05f, tunes = true)
+        starLine(x + 0.6f, level - 0.65f, x + 2.4f, level - 0.65f, 3)
         gap(3f, HazardType.GAP_S)
-        flat(8f)
-        drops(x - 6f, 3)
+        flat(9f)
+        hint(Ink.SPRING, x - 4.6f, x + 1f, x - 3.8f, level - 0.1f, x - 2.2f, level - 0.1f, tunes = true)
+        starArc(x - 3.6f, level - 0.55f, 2.75f, 5, from = 0.3f, to = 1.3f)
+        wall(2.4f)
+        flat(10f)
+        hint(Ink.BEAM, x - 1f, x + 7.6f, x - 0.1f, level - 0.05f, x + 7.7f, level - 0.05f, tunes = true)
+        starLine(x + 1.2f, level - 0.75f, x + 6.4f, level - 0.75f, 4)
+        gap(7.6f, HazardType.GAP_L)
+        flat(20f)
+        // a Blot walks at you: a spring before it bounces you onto it
+        val b1 = x - 5f
+        blot(b1)
+        hint(Ink.SPRING, b1 - 9.5f, b1 - 5f, b1 - 8.6f, level - 0.1f, b1 - 7.4f, level - 0.1f)
+        spring(b1 - 8.1f, b1 - 7.3f, level, lead = 4f)
+        flat(18f)
+        // a doodle box overhead: bounce up into it and catch the marker cap it pops out
+        val bx = x - 14f
+        box(bx, up = 2.6f)
+        hint(Ink.SPRING, bx - 2f, bx + 1.5f, bx - 0.8f, level - 0.1f, bx + 0.4f, level - 0.1f)
+        spring(bx - 0.5f, bx + 0.3f, level, lead = 4f)
+        stars(bx + 3f, 4)
+        flat(16f)
+        // Bold rolls straight through the next one
+        blot(x - 3f)
+        flat(4f)
         slope(10f, 2f)
         flat(4f)
         drop(x - 2f)
-        note("Downhill, you speed up.", dx = -2f, up = 3.2f)
         slope(10f, -2f)
-        flat(6f)
+        stars(x + 1f, 4)
+        flat(8f)
+        checkpoint()
+        flat(4f)
+        starLine(x + 0.8f, level - 0.65f, x + 3.7f, level - 0.65f, 4)
         gap(4.5f)
         flat(10f)
-        note("Write normally for a spring.", dx = -9f)
         wall(2.4f)
         // the high road: a second spring reaches a ledge with drops and a heart
         val hx = x
@@ -31,24 +63,15 @@ object Stages {
         spring(hx + 4.4f, hx + 5.2f, level)
         for (i in 0 until 3) dropAt(hx + 9f + i * 1.8f, level - 3.95f)
         heart(hx + 15.6f, level - 4.1f)
-        note("Spring again for the high road.", dx = -18f, up = 2.2f)
-        checkpoint()
         stepDown(2.4f)
         flat(8f)
         note("Seesaws tip as you cross.", dx = -6f)
         seesawGap(6f)
         flat(8f)
-        slope(12f, 3f)
-        flat(3f)
-        gap(4f)
-        flat(3f)
-        slope(12f, -3f)
-        flat(8f)
         drops(x - 6f, 3)
         gap(5f)
         flat(8f)
-        wall(2.4f)
-        flat(10f)
+        stars(x - 6f, 5)
         finish()
     }
 
@@ -56,6 +79,7 @@ object Stages {
         cave(40f, 3.6f)
         start(16f)
         note("Underground, springs hit the roof. Rope it.", dx = -12f, up = 2.6f)
+        starLine(x + 0.6f, level - 0.65f, x + 2.4f, level - 0.65f, 3)
         gap(3f, HazardType.GAP_S)
         flat(8f)
         drops(x - 6f, 3)
@@ -68,6 +92,7 @@ object Stages {
         cave(30f, 3.6f)
         flat(10f)
         drops(x - 7f, 3)
+        starLine(x + 0.6f, level - 0.65f, x + 3.4f, level - 0.65f, 4)
         spikePit(4f)
         checkpoint()
         flat(11f)
@@ -79,6 +104,7 @@ object Stages {
         liftUp(3f, 5f)
         flat(10f)
         drops(x - 7f, 3)
+        stars(x - 9f, 4)
         cave(24f, 3.6f)
         gap(4.5f)
         flat(6f)
@@ -94,12 +120,14 @@ object Stages {
         climb(3, 2.4f, 7.5f)
         flat(2f)
         note("Too far for rope. Press hard for a beam.", dx = -8f, up = 3f)
+        starLine(x + 1.2f, level - 0.75f, x + 6.4f, level - 0.75f, 4)
         gap(7.6f, HazardType.GAP_L)
         flat(8f)
         drops(x - 6f, 3)
         seesawGap(6f)
         checkpoint()
         flat(11f)
+        stars(x - 10f, 4)
         note("Down the islands: bridges can slope.", dx = -4f)
         gapDown(3.5f, 2f)
         flat(6f)
@@ -121,6 +149,7 @@ object Stages {
     val CASTLE = StageDef(1, 4, "Castle", Theme.CASTLE, 3.8f) {
         start(16f)
         note("The castle. Spikes below, spikes above.", dx = -12f)
+        starLine(x + 0.6f, level - 0.65f, x + 2.9f, level - 0.65f, 3)
         spikePit(3.5f)
         flat(6f)
         tunnel(4.5f)
@@ -130,6 +159,7 @@ object Stages {
         liftUp(3f, 6f)
         flat(6f)
         drops(x - 5f, 3)
+        starLine(x + 0.6f, level - 0.65f, x + 3.9f, level - 0.65f, 4)
         spikePit(4.5f)
         checkpoint()
         flat(10f)

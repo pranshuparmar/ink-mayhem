@@ -10,7 +10,7 @@ import com.pranshuparmar.inkmayhem.render.Shapes
 import com.pranshuparmar.inkmayhem.render.Text
 import com.pranshuparmar.inkmayhem.render.Tok
 
-/** POC #sheet: a bottom sheet of checkbox rows with "How to play", "Recalibrate" and "Done". */
+/** POC #sheet: a bottom sheet of checkbox rows with "How to play", "Tune your pen" and "Done". */
 class SettingsSheet(
     private val fonts: Fonts,
     private val settings: Settings,
@@ -22,7 +22,7 @@ class SettingsSheet(
     /** Debug builds that record input: "Share input recording". */
     private val onShareRecording: (() -> Unit)? = null,
 ) {
-    /** Show "Quit to menu" (during a run or a stage). */
+    /** Show "Stage list" (during a stage). */
     var showQuit = false
 
     private class Option(val title: String, val detail: String, val get: () -> Boolean, val set: (Boolean) -> Unit) {
@@ -34,6 +34,7 @@ class SettingsSheet(
 
     private val options = buildList {
         add(Option("Sound", "Pen scratch, snaps, bounces", { settings.sound }, { settings.sound = it }))
+        add(Option("Music", "Ink Rush, while you play a stage", { settings.music }, { settings.music = it }))
         add(Option("Colour ink by type", "Rope green, spring amber, beam red", { settings.tint }, { settings.tint = it }))
         add(Option("Pen readout", "Pointer type, pressure, buttons, hover rate", { settings.penReadout }, { settings.penReadout = it }))
         add(Option("Haptics", "A short buzz on snaps and crashes", { settings.haptics }, { settings.haptics = it }))
@@ -169,7 +170,7 @@ class SettingsSheet(
         }
         val font = fonts.get(Face.UI_BOLD, 14f)
         Widgets.buttonLabel(text, font, pal, howTo, HOW_TO_PLAY, primary = false, enabled = true)
-        if (showQuit) Widgets.buttonLabel(text, font, pal, quit, "Quit to menu", primary = false, enabled = true)
+        if (showQuit) Widgets.buttonLabel(text, font, pal, quit, "Stage list", primary = false, enabled = true)
         if (onShareRecording != null) Widgets.buttonLabel(text, font, pal, share, "Share input recording", primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, recal, RECALIBRATE, primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, done, "Done", primary = true, enabled = true)
@@ -178,6 +179,6 @@ class SettingsSheet(
     companion object {
         private const val COL_GAP = 16f
         const val HOW_TO_PLAY = "How to play"
-        const val RECALIBRATE = "Recalibrate"
+        const val RECALIBRATE = "Tune your pen"
     }
 }

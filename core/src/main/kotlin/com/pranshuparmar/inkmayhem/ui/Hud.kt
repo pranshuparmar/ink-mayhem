@@ -14,7 +14,7 @@ import kotlin.math.min
 
 /**
  * POC .hud: score with the ×combo chip and "N m · best X" on the left; ink meter and the settings
- * button on the right. In a stage the second line is "WORLD 1-1" with the lives, and a progress
+ * button on the right. In a stage the second line is "WORLD 1-1" with the lives and stars, and a progress
  * line runs underneath with the checkpoint and the flag. Text is cached and rebuilt only when the
  * numbers change.
  */
@@ -35,13 +35,15 @@ class Hud {
     private var stageId: String? = null
     private var lastLives = -1
     private var livesText = ""
+    private var lastStars = -1
+    private var starsText = ""
 
     private var left = 16f
     private var top = 10f
     private var scoreW = 0f
 
-    /** [lives] ≥ 0 in a stage (shown with the stage id), −1 in Endless. */
-    fun update(dt: Float, sim: GameSim, best: Int, reducedMotion: Boolean, lives: Int = -1) {
+    /** [lives] ≥ 0 in a stage (shown with the stage id and the [stars] towards a life), −1 outside one. */
+    fun update(dt: Float, sim: GameSim, best: Int, reducedMotion: Boolean, lives: Int = -1, stars: Int = 0) {
         val sc = floor(sim.score).toInt()
         val d = floor(sim.dist).toInt()
         val shownBest = max(best, sc)
@@ -58,6 +60,10 @@ class Hud {
         if (lives != lastLives) {
             livesText = "× $lives"
             lastLives = lives
+        }
+        if (stars != lastStars) {
+            starsText = "× $stars"
+            lastStars = stars
         }
         if (sim.combo != lastCombo) {
             if (sim.combo > lastCombo && !reducedMotion) bump = BUMP_S
@@ -88,11 +94,13 @@ class Hud {
 
     private val tmpBar = Box()
     private var livesX = 0f
+    private var starsX = 0f
 
-    /** The heart before the lives count (shapes pass; uses the previous frame's text width). */
+    /** The heart before the lives and the star before the stars (shapes pass; uses the previous frame's text widths). */
     fun drawLivesHeart(shapes: Shapes, pal: Palette) {
         if (stageId == null || livesX == 0f) return
         shapes.color(pal[Tok.BEAM]).heart(livesX + 6f, top + 48f, 6f)
+        if (starsX > 0f) shapes.color(pal[Tok.SPRING]).star(starsX + 6f, top + 47.5f, 7f)
     }
 
     /** Chip scale for the "bump" when the combo grows (CSS .bump: 1.25 with a 0.15 s transition). */
@@ -124,7 +132,12 @@ class Hud {
         shapes.color(pal[Tok.INK]).circle(rx, y + 2f, 5f)
     }
 
-    fun drawShapes(shapes: Shapes, pal: Palette, wDp: Float, ink: Float, combo: Int, pressedSettings: Boolean) {
+    /** [full] = false on the stage list: only the settings button. */
+    fun drawShapes(shapes: Shapes, pal: Palette, wDp: Float, ink: Float, combo: Int, pressedSettings: Boolean, full: Boolean = true) {
+        if (!full) {
+            drawSettingsButton(shapes, pal, pressedSettings)
+            return
+        }
         // combo chip
         val hot = combo > 1
         val s = chipScale()
@@ -149,7 +162,10 @@ class Hud {
                 shapes.roundRect(bar.x, bar.y + (5f - fw / 2f).coerceAtLeast(0f), fw, min(bar.h, fw), fw / 2f)
             }
         }
-        // settings button
+        drawSettingsButton(shapes, pal, pressedSettings)
+    }
+
+    private fun drawSettingsButton(shapes: Shapes, pal: Palette, pressedSettings: Boolean) {
         val b = settingsButton
         shapes.color(pal[Tok.LINE]).circle(b.x + 20f, b.y + 20f, 20f)
         shapes.color(pal[Tok.UI]).circle(b.x + 20f, b.y + 20f, 19f)
@@ -158,7 +174,8 @@ class Hud {
         for (i in -1..1) shapes.circle(b.x + 20f + i * 5.5f, b.y + 20f, 1.7f)
     }
 
-    fun drawText(text: Text, fonts: Fonts, pal: Palette, wDp: Float, combo: Int) {
+    fun drawText(text: Text, fonts: Fonts, pal: Palette, wDp: Float, combo: Int, full: Boolean = true) {
+        if (!full) return
         text.line(fonts.get(Face.HAND_BOLD, 40f, Fonts.DIGITS), scoreText, left, top, 40f, pal[Tok.INK])
         val hot = combo > 1
         val comboFont = fonts.get(Face.MONO_BOLD, 16f)
@@ -171,6 +188,8 @@ class Hud {
         if (stageId != null) {
             livesX = left + text.width(small, bestText) + 12f
             text.line(small, livesText, livesX + 15f, top + 40f, 16f, pal[Tok.MUTED])
+            starsX = livesX + 15f + text.width(small, livesText) + 12f
+            text.line(small, starsText, starsX + 15f, top + 40f, 16f, pal[Tok.MUTED])
         }
         val bar = barBox(wDp)
         text.line(fonts.get(Face.MONO_MEDIUM, 11f), "INK", bar.x - 8f, bar.y - 3f, 16f, pal[Tok.MUTED], align = Align.right)

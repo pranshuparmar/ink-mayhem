@@ -304,3 +304,33 @@ colour, the player's three inks overlap (14 or 16 of 18 separable at best), whil
 colour they separate cleanly; tuning with colour practice, and separate portrait and landscape
 tunings (the player presses about 1.4× harder in portrait), are the next candidates.
 
+
+## 25. Slice 1: the page fights back
+
+The owner asked for the game to be more engaging, the way Mario was: something happening in
+the first ten seconds, a reason to grin every few seconds, a tune to hum. A design pitch offered
+three themes and a plan in slices; the owner picked Ink Rush, approved Slice 1 as listed, said
+Endless could go, and chose straight into play over a short tuning step.
+
+- **Straight into play.** The first stage not yet cleared starts at once, with no intro card.
+  The POC's endless generator stays in `GameSim`, because the reference tests and the physics
+  checks against the POC play it, but nothing in the game reaches it.
+- **Tuning by playing.** Pen tuning was the first thing a new player saw. Now 1-1's first three
+  obstacles each ask for one ink with a guide; while the pen is untuned, a stroke begun there is
+  forced to that ink (so a new player always succeeds), and the three strokes' raw settled
+  pressures, from a second `SteadyPressure` fed raw samples, feed `PenCalibration.fromLines`
+  just as the tuning lines do. The forcing is in the sim (a `Drawing` remembers its gate); the
+  learning is in the game, which alone sees raw pressure. If the three don't rise, nothing is
+  tuned and the gates ask again next time.
+- **Music as a looping sound.** Ink Rush is synthesized like the effects and committed: a
+  seamless 11.4 s loop (tails folded onto the start) at 22.05 kHz, 504 KB, played as a looping
+  `Sound` rather than streamed `Music`, so it starts in sync and costs no decoder. Android's
+  SoundPool holds sounds under 1 MB; a test keeps the file under that.
+- **Blots are walkers, not obstacles.** They collide with the world (ground, ink, boulders) but
+  not with the runner, and the sim decides what a touch means: a stomp from above or during a
+  spring bounce, Bold rolling through, or a lost life. A sweep of where a player's spring lands
+  showed a strict "from above" rule turned a 1.5 m stretch of near-misses into a coin flip
+  between a stomp and a death, so anything met during a bounce counts as a stomp: a spring
+  drawn 3–9 m before an oncoming Blot is always safe.
+- **Bold keeps the runner's mass.** A bigger runner of the same weight rolls the same and
+  doesn't snap ropes a normal one wouldn't; only its radius (and so its drive target) changes.

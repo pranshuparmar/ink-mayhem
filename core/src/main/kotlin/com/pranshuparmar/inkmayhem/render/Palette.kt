@@ -4,7 +4,9 @@ import com.badlogic.gdx.graphics.Color
 
 /** Colour tokens from the POC's CSS custom properties. */
 enum class Tok {
-    PAPER, RULE, MARGIN, INK, GRAPHITE, ROCK, DROP, UI, UI_FG, MUTED, LINE, ACCENT, ACCENT_FG, ROPE, SPRING, BEAM, SHADOW
+    PAPER, RULE, MARGIN, INK, GRAPHITE, ROCK, DROP, UI, UI_FG, MUTED, LINE, ACCENT, ACCENT_FG, ROPE, SPRING, BEAM, SHADOW,
+    /** Slice 1: Blots (violet ink, never the runner's) and stars (gold, never a spring's amber). */
+    BLOT, STAR,
 }
 
 class Palette private constructor(private val colors: Array<Color>) {
@@ -24,6 +26,7 @@ class Palette private constructor(private val colors: Array<Color>) {
             Tok.ACCENT to "2C57CF", Tok.ACCENT_FG to "FFFFFF",
             Tok.ROPE to "2A8656", Tok.SPRING to "B97C0C", Tok.BEAM to "C03D37",
             Tok.SHADOW to "1C2B4F29", // rgba(28, 43, 79, 0.16)
+            Tok.BLOT to "6A3FB5", Tok.STAR to "E3A500",
         )
 
         val DARK = of(
@@ -33,6 +36,7 @@ class Palette private constructor(private val colors: Array<Color>) {
             Tok.ACCENT to "7FA3FF", Tok.ACCENT_FG to "0E1424",
             Tok.ROPE to "5CC98D", Tok.SPRING to "E8B24A", Tok.BEAM to "F07A73",
             Tok.SHADOW to "00000080", // rgba(0, 0, 0, 0.5)
+            Tok.BLOT to "B597F5", Tok.STAR to "FFD04D",
         )
     }
 }

@@ -6,6 +6,7 @@ import com.badlogic.gdx.math.Matrix4
 import com.badlogic.gdx.utils.Align
 import com.pranshuparmar.inkmayhem.game.GameSim
 import com.pranshuparmar.inkmayhem.game.GameState
+import com.pranshuparmar.inkmayhem.game.Mood
 import com.pranshuparmar.inkmayhem.game.Theme
 import com.pranshuparmar.inkmayhem.physics.GroundRect
 import com.pranshuparmar.inkmayhem.physics.Ink
@@ -159,13 +160,18 @@ class WorldRenderer(
         sim.blocks.fastEach { r -> drawBlock(r, pal, vx0, vx1, sim.cam.y + vh + 2f, px, brick) }
         sim.ceilings.fastEach { c -> drawCeiling(c, pal, vx0, vx1, sim.cam.y - 2f, px, brick) }
         sim.spikeStrips.fastEach { k -> drawSpikes(k, pal, vx0, vx1) }
+        drawBoxes(sim, pal, vx0, vx1, px)
+        drawGates(sim, pal, px)
         if (guideOn) drawGuide(sim, pal, px)
         drawLifts(sim, pal, px)
         drawSeesaws(sim, pal, px)
         drawFlags(sim, pal, px, behind = false)
         drawDrops(sim, pal, vx0, vx1, px)
+        drawStars(sim, pal, vx0, vx1)
         drawStrokes(sim, pal, tint, vx0, vx1, px)
         drawLiveStroke(sim, pal, tint, px)
+        drawBlots(sim, pal, vx0, vx1, px)
+        drawCaps(sim, pal, px)
         drawBoulders(sim, pal, px)
         drawRunner(sim, pal, px)
         fx.particles.fastEach { q ->
@@ -181,6 +187,15 @@ class WorldRenderer(
             val sx = (q.x - viewX) * scale
             val sy = (q.y - viewY) * scale
             text.draw(popFont, q.text, sx, sy - popFont.capHeight, pal[q.color], min(1f, q.life * 1.5f), Align.center)
+        }
+        // the hints' one-word labels, over their guides
+        val labelFont = fonts.get(Face.HAND_BOLD, max(16f, scale * 0.62f))
+        sim.gates.fastEach { g ->
+            val a = gateAlpha(sim, g)
+            if (a <= 0f) return@fastEach
+            val sx = ((g.gx0 + g.gx1) / 2f - viewX) * scale
+            val sy = (min(g.gy0, g.gy1) - GATE_LABEL_UP - viewY) * scale
+            text.draw(labelFont, g.label, sx, sy - labelFont.capHeight, pal[inkTok(g.ink)], a, Align.center)
         }
         text.batch.end()
 
@@ -623,22 +638,239 @@ class WorldRenderer(
     }
 
     private fun drawRunner(sim: GameSim, pal: Palette, px: Float) {
-        val pose = sim.runner.prev
+        val run = sim.runner
+        val pose = run.prev
         val cx = pose.lerpX(alpha)
         val cy = pose.lerpY(alpha)
-        val sq = sim.runner.squash
+        val sq = run.squash
         val sx = 1f + sq * 0.2f
         val sy = 1f - sq * 0.2f
-        val r = GameSim.RUNNER_R
-        shapes.color(pal[Tok.INK]).ellipse(cx, cy, r * sx, r * sy)
-        shapes.color(pal[Tok.PAPER], 0.35f).arcScaled(cx, cy, r * 0.62f, 2f * px, 0.3f, 1.4f, pose.lerpA(alpha), sx, sy)
-        val eye = if (sim.state == GameState.DEAD) 0.05f else r * 0.14f
-        shapes.color(pal[Tok.PAPER])
-        shapes.ellipse(cx + r * 0.2f * sx, cy - r * 0.25f * sy, eye * sx, eye * sy)
-        shapes.ellipse(cx + r * 0.58f * sx, cy - r * 0.25f * sy, eye * sx, eye * sy)
+        val r = run.r
+        // just lost Bold: it blinks while nothing can hurt it
+        val a = if (sim.simT < run.safeUntil && sin(sim.simT * 30f) > 0f) 0.35f else 1f
+        if (run.bold) shapes.color(pal[Tok.ACCENT], a).ellipse(cx, cy, r * sx + 2.4f * px, r * sy + 2.4f * px)
+        shapes.color(pal[Tok.INK], a).ellipse(cx, cy, r * sx, r * sy)
+        shapes.color(pal[Tok.PAPER], 0.35f * a).arcScaled(cx, cy, r * 0.62f, 2f * px, 0.3f, 1.4f, pose.lerpA(alpha), sx, sy)
+        drawFace(sim, pal, cx, cy, r, sx, sy, px, a)
+        if (run.bold) {
+            // the marker cap, worn like a hat
+            val w = r * 0.62f
+            val h = r * 0.62f
+            val x0 = cx - w * 0.62f
+            val y0 = cy - r * sy - h * 0.72f
+            shapes.color(pal[Tok.ACCENT], a).roundRect(x0, y0, w, h, w * 0.3f)
+            shapes.color(pal[Tok.INK], 0.35f * a).rect(x0, y0 + h * 0.72f, w, h * 0.16f)
+            shapes.color(pal[Tok.GRAPHITE], a).line(x0 + w + 0.6f * px, y0 + h * 0.15f, x0 + w + 0.6f * px, y0 + h * 0.7f, 2.2f * px)
+        }
+    }
+
+    /** The runner's face, looking the way it rolls, by [GameSim.mood]. */
+    private fun drawFace(sim: GameSim, pal: Palette, cx: Float, cy: Float, r: Float, sx: Float, sy: Float, px: Float, a: Float) {
+        val paper = pal[Tok.PAPER]
+        val lx = cx + r * 0.2f * sx
+        val rx = cx + r * 0.58f * sx
+        val ey = cy - r * 0.25f * sy
+        val mx = cx + r * 0.4f * sx
+        val my = cy + r * 0.12f * sy
+        val lw = max(1.4f * px, r * 0.07f)
+        when (if (sim.state == GameState.DEAD) Mood.OUCH else sim.mood) {
+            Mood.CALM -> {
+                eyes(pal, lx, rx, ey, r * 0.15f, r * 0.07f, r * 0.04f, 0f, sx, sy, a)
+                shapes.color(paper, a).arc(mx, my - r * 0.1f, r * 0.2f, lw, 0.5f, (PI_F - 0.5f))
+            }
+            Mood.HAPPY -> {
+                // ^ ^ and a grin
+                shapes.color(paper, a)
+                shapes.arc(lx, ey + r * 0.07f, r * 0.12f, lw, PI_F + 0.3f, 2f * PI_F - 0.3f)
+                shapes.arc(rx, ey + r * 0.07f, r * 0.12f, lw, PI_F + 0.3f, 2f * PI_F - 0.3f)
+                shapes.pie(mx, my - r * 0.04f, r * 0.24f, 0f, 180f)
+            }
+            Mood.WORRIED -> {
+                // wide eyes looking down at the edge, a little "o"
+                eyes(pal, lx, rx, ey, r * 0.2f, r * 0.08f, r * 0.06f, r * 0.07f, sx, sy, a)
+                shapes.color(paper, a).ring(mx, my + r * 0.06f, r * 0.08f, lw)
+            }
+            Mood.DIZZY -> {
+                val t = sim.simT * 9f
+                shapes.color(paper, a)
+                shapes.arc(lx, ey, r * 0.13f, lw, t, t + 4.6f)
+                shapes.arc(lx, ey, r * 0.05f, lw, t + 2f, t + 6f)
+                shapes.arc(rx, ey, r * 0.13f, lw, t, t + 4.6f)
+                shapes.arc(rx, ey, r * 0.05f, lw, t + 2f, t + 6f)
+                shapes.zigzag(mx - r * 0.18f, my + r * 0.06f, mx + r * 0.18f, my + r * 0.06f, 4, r * 0.04f, lw)
+            }
+            Mood.SCARED -> {
+                // eyes on the boulder behind, a wobbly mouth and a bead of sweat
+                eyes(pal, lx, rx, ey, r * 0.2f, r * 0.08f, -r * 0.08f, 0f, sx, sy, a)
+                shapes.color(paper, a).zigzag(mx - r * 0.16f, my + r * 0.06f, mx + r * 0.16f, my + r * 0.06f, 4, r * 0.035f, lw)
+                val s = r * 0.13f
+                val dx = cx - r * 0.62f
+                val dy = cy - r * 0.62f + (sim.simT * 1.6f % 1f) * r * 0.3f
+                for (i in DROP_SHAPE.indices step 2) {
+                    dropPoly[i] = dx + DROP_SHAPE[i] * s
+                    dropPoly[i + 1] = dy + DROP_SHAPE[i + 1] * s
+                }
+                shapes.color(pal[Tok.DROP], a).fan(dropPoly, DROP_SHAPE.size / 2)
+            }
+            Mood.OUCH -> {
+                val e = r * 0.11f
+                shapes.color(paper, a)
+                shapes.line(lx - e, ey - e, lx + e, ey + e, lw)
+                shapes.line(lx - e, ey + e, lx + e, ey - e, lw)
+                shapes.line(rx - e, ey - e, rx + e, ey + e, lw)
+                shapes.line(rx - e, ey + e, rx + e, ey - e, lw)
+                shapes.ellipse(mx, my + r * 0.06f, r * 0.1f, r * 0.13f)
+            }
+        }
+    }
+
+    /** Two eyes of radius [er] with pupils [pr] looking ([lookX], [lookY]). */
+    private fun eyes(pal: Palette, lx: Float, rx: Float, ey: Float, er: Float, pr: Float, lookX: Float, lookY: Float, sx: Float, sy: Float, a: Float) {
+        shapes.color(pal[Tok.PAPER], a)
+        shapes.ellipse(lx, ey, er * sx, er * sy)
+        shapes.ellipse(rx, ey, er * sx, er * sy)
+        shapes.color(pal[Tok.INK], a)
+        shapes.circle(lx + lookX, ey + lookY, pr)
+        shapes.circle(rx + lookX, ey + lookY, pr)
+    }
+
+    private fun inkTok(k: Ink) = when (k) {
+        Ink.ROPE -> Tok.ROPE
+        Ink.SPRING -> Tok.SPRING
+        Ink.BEAM -> Tok.BEAM
+    }
+
+    /** A hint fades in as the runner nears it and out once it is passed. */
+    private fun gateAlpha(sim: GameSim, g: com.pranshuparmar.inkmayhem.game.Gate): Float {
+        if (g.passed) return (1f - (sim.simT - g.passedAt) / 0.5f).coerceIn(0f, 1f)
+        val ahead = g.gx0 - sim.runner.body.position.x
+        return (1f - (ahead - GATE_SHOW) / 3f).coerceIn(0f, 1f)
+    }
+
+    /** The hints: a dotted guide in the ink's colour with an arrow, where to draw it. */
+    private fun drawGates(sim: GameSim, pal: Palette, px: Float) {
+        val pulse = 0.6f + 0.3f * sin(sim.realTime.toFloat() * 4f)
+        sim.gates.fastEach { g ->
+            val a = gateAlpha(sim, g)
+            if (a <= 0f) return@fastEach
+            val len = kotlin.math.hypot(g.gx1 - g.gx0, g.gy1 - g.gy0)
+            val n = max(2, (len / 0.28f).toInt())
+            shapes.color(pal[inkTok(g.ink)], pulse * a)
+            for (i in 0..n) {
+                val u = i / n.toFloat()
+                shapes.circle(g.gx0 + (g.gx1 - g.gx0) * u, g.gy0 + (g.gy1 - g.gy0) * u, 0.07f)
+            }
+            val ux = (g.gx1 - g.gx0) / len
+            val uy = (g.gy1 - g.gy0) / len
+            val ax = g.gx1 + ux * 0.35f
+            val ay = g.gy1 + uy * 0.35f
+            shapes.triangle(ax, ay, ax - ux * 0.35f - uy * 0.22f, ay - uy * 0.35f + ux * 0.22f, ax - ux * 0.35f + uy * 0.22f, ay - uy * 0.35f - ux * 0.22f)
+        }
+    }
+
+    private fun drawStars(sim: GameSim, pal: Palette, vx0: Float, vx1: Float) {
+        val t = sim.simT
+        shapes.color(pal[Tok.STAR])
+        sim.stars.fastEach { st ->
+            if (st.taken || st.x < vx0 || st.x > vx1) return@fastEach
+            val bob = sin(t * 3f + st.phase) * 0.06f
+            val tw = 1f + 0.12f * sin(t * 5f + st.phase * 2f)
+            shapes.star(st.x, st.y + bob, 0.27f * tw, 0.48f)
+        }
+    }
+
+    /** Blots: a wobbly violet smudge with cross eyes and little feet; a squashed one leaves a splat. */
+    private fun drawBlots(sim: GameSim, pal: Palette, vx0: Float, vx1: Float, px: Float) {
+        val r = GameSim.BLOT_R
+        val t = sim.simT
+        sim.blots.fastEach { b ->
+            if (b.gone) return@fastEach
+            if (b.squashed) {
+                val age = t - b.squashedAt
+                val a = 1f - (age / SPLAT_S).coerceIn(0f, 1f)
+                if (a <= 0f) return@fastEach
+                val gy = b.sy + r - 0.06f
+                shapes.color(pal[Tok.BLOT], a).ellipse(b.sx, gy, r * 1.7f, r * 0.32f)
+                shapes.circle(b.sx - r * 1.5f, gy - 0.04f, r * 0.22f)
+                shapes.circle(b.sx + r * 1.4f, gy - 0.02f, r * 0.18f)
+                return@fastEach
+            }
+            val x = b.prev.lerpX(alpha)
+            val y = b.prev.lerpY(alpha)
+            if (x < vx0 || x > vx1) return@fastEach
+            val walk = if (b.awake) t * 9f else 0f
+            val c = pal[Tok.BLOT]
+            // feet, stepping
+            shapes.color(c)
+            shapes.ellipse(x - r * 0.45f, y + r * 0.88f - max(0f, sin(walk)) * 0.07f, r * 0.32f, r * 0.18f)
+            shapes.ellipse(x + r * 0.45f, y + r * 0.88f - max(0f, -sin(walk)) * 0.07f, r * 0.32f, r * 0.18f)
+            // the smudge: a body with bumps that wobble
+            shapes.ellipse(x, y, r * (1f + 0.04f * sin(t * 6f)), r * (1f - 0.04f * sin(t * 6f)))
+            for (i in 0 until 5) {
+                val ang = -PI_F * 0.9f + i * PI_F * 0.45f
+                val br = r * (0.36f + 0.05f * sin(t * 5f + i * 1.7f))
+                shapes.circle(x + kotlin.math.cos(ang) * r * 0.82f, y + sin(ang) * r * 0.82f, br)
+            }
+            // eyes on the runner (it walks at you), angry brows
+            val look = if (b.dir < 0) -1f else 1f
+            val ex0 = x - r * 0.3f
+            val ex1 = x + r * 0.3f
+            val ey = y - r * 0.12f
+            shapes.color(pal[Tok.PAPER])
+            shapes.circle(ex0, ey, r * 0.22f)
+            shapes.circle(ex1, ey, r * 0.22f)
+            shapes.color(pal[Tok.INK])
+            shapes.circle(ex0 + look * r * 0.08f, ey + r * 0.03f, r * 0.1f)
+            shapes.circle(ex1 + look * r * 0.08f, ey + r * 0.03f, r * 0.1f)
+            val bw = max(1.6f * px, r * 0.09f)
+            shapes.line(ex0 - r * 0.22f, ey - r * 0.32f, ex0 + r * 0.16f, ey - r * 0.2f, bw)
+            shapes.line(ex1 + r * 0.22f, ey - r * 0.32f, ex1 - r * 0.16f, ey - r * 0.2f, bw)
+        }
+    }
+
+    /** Doodle boxes: a sketchy box with a star in it, bumped up a moment when hit; plain once used. */
+    private fun drawBoxes(sim: GameSim, pal: Palette, vx0: Float, vx1: Float, px: Float) {
+        sim.boxes.fastEach { b ->
+            val rc = b.rect
+            if (rc.x > vx1 || rc.right < vx0) return@fastEach
+            val age = sim.simT - b.hitAt
+            val bump = if (!b.hitAt.isNaN() && age < 0.2f) -sin(age / 0.2f * PI_F) * 0.18f else 0f
+            val y = rc.y + bump
+            val lw = 1.8f * px
+            shapes.color(if (b.used) pal[Tok.ROCK] else pal[Tok.UI]).rect(rc.x, y, rc.w, rc.h)
+            shapes.color(pal[Tok.GRAPHITE]).roundRectOutline(rc.x, y, rc.w, rc.h, 0.06f, lw)
+            if (b.used) return@fastEach
+            // a hand-drawn second outline, slightly off, and the star inside
+            shapes.color(pal[Tok.GRAPHITE], 0.5f).roundRectOutline(rc.x + 0.04f, y - 0.03f, rc.w - 0.02f, rc.h + 0.02f, 0.06f, px)
+            val tw = 1f + 0.1f * sin(sim.simT * 5f)
+            shapes.color(pal[Tok.STAR]).star(rc.x + rc.w / 2f, y + rc.h / 2f + 0.02f, rc.w * 0.3f * tw, 0.48f)
+        }
+    }
+
+    /** The marker cap: an upright pen cap with its clip. */
+    private fun drawCaps(sim: GameSim, pal: Palette, px: Float) {
+        val r = GameSim.CAP_R
+        sim.caps.fastEach { c ->
+            if (c.taken) return@fastEach
+            val x = c.prev.lerpX(alpha)
+            val y = c.prev.lerpY(alpha)
+            val w = r * 1.3f
+            val h = r * 2f
+            shapes.color(pal[Tok.ACCENT]).roundRect(x - w / 2f, y - h / 2f, w, h, w * 0.3f)
+            shapes.color(pal[Tok.INK], 0.35f).rect(x - w / 2f, y + h * 0.22f, w, h * 0.14f)
+            shapes.color(pal[Tok.GRAPHITE]).line(x + w / 2f + 0.6f * px, y - h * 0.35f, x + w / 2f + 0.6f * px, y + h * 0.15f, 2f * px)
+            shapes.color(pal[Tok.ACCENT], 0.6f + 0.4f * sin(sim.simT * 8f)).ring(x, y, r * 1.9f, 1.2f * px, 2f * px, 3f * px)
+        }
     }
 
     companion object {
+        private const val PI_F = kotlin.math.PI.toFloat()
+        /** A hint shows once the runner is this close (m) to its start, fading in over 3 m. */
+        private const val GATE_SHOW = 9f
+        /** Above the guide and any stars over it. */
+        private const val GATE_LABEL_UP = 1.35f
+        /** A squashed Blot's splat lasts this long. */
+        private const val SPLAT_S = 0.9f
         private const val HATCH = 0.35f
         /** Notes: how far past the right edge one may come in early (m), how long it waits at the
          *  left edge after the runner passes its end (m) and fades over (m), and its screen margins (dp). */

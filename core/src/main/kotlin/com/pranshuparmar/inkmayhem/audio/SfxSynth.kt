@@ -113,8 +113,8 @@ object SfxSynth {
     val NAMES: List<String> = listOf(
         "anchor", "hop", "boing", "boulder_boing", "snap", "erase", "speed_up", "rumble", "pickup", "pickup_high",
         "featherweight", "combo_lost", "death", "scratch",
-        "stage_start", "checkpoint", "clear", "one_up", "game_over", "star",
-    ) + (2..9).map { "chime_$it" }
+        "stage_start", "checkpoint", "clear", "one_up", "game_over", "star", "life_lost", "squash", "pop", "bold", "shrink",
+    ) + (2..9).map { "chime_$it" } + (0..7).map { "star_$it" }
 
     /**
      * Notes ([freq] Hz, [dur] s) one after another, each a [tone] with its own decay: the short
@@ -132,6 +132,22 @@ object SfxSynth {
         }
         return out
     }
+
+    // Ink Rush's notes (A minor) for the jingles cut from it
+    private const val A3 = 220.0
+    private const val A4 = 440.0
+    private const val B4 = 493.88
+    private const val C5_ = 523.25
+    private const val D5 = 587.33
+    private const val E5_ = 659.25
+    private const val GS4 = 415.3
+    private const val G5_ = 783.99
+    private const val A5_ = 880.0
+    private const val CS6 = 1108.73
+    private const val E6_ = 1318.51
+    private const val A6 = 1760.0
+    /** Ink Rush's eighth note at 168 bpm. */
+    private const val E8 = 60.0 / 168 / 2
 
     private const val C4 = 261.63
     private const val E4 = 329.63
@@ -161,25 +177,36 @@ object SfxSynth {
         "combo_lost" to tone(200.0, 0.2, Wave.TRIANGLE, 0.08, 0.7),
         "death" to tone(140.0, 0.35, Wave.TRIANGLE, 0.18, 0.5),
         "scratch" to scratchLoop(seed = 3),
-        "stage_start" to melody(Wave.SQUARE, 0.05, G4 to 0.09, C5 to 0.09, E5 to 0.09, G5 to 0.09, C6 to 0.3),
+        // Ink Rush's first bar: the motif every jingle is cut from
+        "stage_start" to melody(Wave.SQUARE, 0.05, A4 to E8, A4 to E8, C5_ to E8, A4 to E8, E5_ to E8 * 2.5),
         "checkpoint" to melody(Wave.TRIANGLE, 0.1, E5 to 0.08, A5 to 0.22),
-        "clear" to melody(Wave.SQUARE, 0.05, C5 to 0.11, E5 to 0.11, G5 to 0.11, C6 to 0.11, G5 to 0.11, C6 to 0.45),
-        "one_up" to melody(Wave.SQUARE, 0.045, C6 to 0.07, E6 to 0.07, G6 to 0.07, C7 to 0.22),
-        "game_over" to melody(Wave.TRIANGLE, 0.11, G4 to 0.2, E4 to 0.2, C4 to 0.2, C4 / 2 to 0.55),
+        // the motif climbs to the top and lands bright (a major third over A minor)
+        "clear" to melody(Wave.SQUARE, 0.05, A4 to E8, C5_ to E8, E5_ to E8, A5_ to E8 * 2, G5_ to E8, A5_ to E8, CS6 to E8 * 4),
+        "one_up" to melody(Wave.SQUARE, 0.045, A5_ to 0.06, C6 to 0.06, E6_ to 0.06, A6 to 0.22),
+        // the motif's last bars, slowed and falling
+        "game_over" to melody(Wave.TRIANGLE, 0.11, E5_ to 0.22, C5_ to 0.22, A4 to 0.22, A3 to 0.6),
+        "life_lost" to melody(Wave.TRIANGLE, 0.1, E5_ to 0.13, D5 to 0.13, C5_ to 0.13, B4 to 0.13, GS4 to 0.26, A4 to 0.42),
         "star" to tone(E6, 0.18, Wave.SINE, 0.09, 1.2),
+        "squash" to tone(180.0, 0.16, Wave.TRIANGLE, 0.16, 0.45),
+        "pop" to tone(520.0, 0.14, Wave.SQUARE, 0.04, 1.8),
+        "bold" to melody(Wave.SQUARE, 0.045, A4 to 0.05, C5_ to 0.05, E5_ to 0.05, A5_ to 0.05, C6 to 0.05, E6_ to 0.16),
+        "shrink" to melody(Wave.SQUARE, 0.045, E6_ to 0.05, C6 to 0.05, A5_ to 0.05, E5_ to 0.05, A4 to 0.16),
     ).apply {
         // combo chime: 660 + combo × 40 Hz, one file per combo level 2..9
         for (c in 2..9) put("chime_$c", tone(660.0 + c * 40.0, 0.1, Wave.SINE, 0.08, 1.2))
+        // star trails: each star in a streak rings a step higher up Ink Rush's A minor pentatonic
+        val steps = doubleArrayOf(A5_, C6, D5 * 2, E6_, G5_ * 2, A6, C6 * 2, D5 * 4)
+        for (k in 0..7) put("star_$k", tone(steps[k], 0.11, Wave.SQUARE, 0.035, 1.02))
     }
 
     /** 16-bit PCM mono WAV. */
-    fun wav(samples: FloatArray): ByteArray {
+    fun wav(samples: FloatArray, rate: Int = RATE): ByteArray {
         val data = samples.size * 2
         val out = ByteArrayOutputStream(44 + data)
         fun i32(v: Int) { out.write(v and 0xFF); out.write(v shr 8 and 0xFF); out.write(v shr 16 and 0xFF); out.write(v shr 24 and 0xFF) }
         fun i16(v: Int) { out.write(v and 0xFF); out.write(v shr 8 and 0xFF) }
         out.write("RIFF".toByteArray()); i32(36 + data); out.write("WAVE".toByteArray())
-        out.write("fmt ".toByteArray()); i32(16); i16(1); i16(1); i32(RATE); i32(RATE * 2); i16(2); i16(16)
+        out.write("fmt ".toByteArray()); i32(16); i16(1); i16(1); i32(rate); i32(rate * 2); i16(2); i16(16)
         out.write("data".toByteArray()); i32(data)
         for (s in samples) i16((s.coerceIn(-1f, 1f) * 32767f).roundToInt())
         return out.toByteArray()

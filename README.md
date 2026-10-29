@@ -1,7 +1,7 @@
 # Ink Mayhem
 
-An S Pen-only Android game in the Mayhem series. A blot of ink rolls across an endless ruled page
-and you draw the way ahead. How hard you press decides what the ink becomes:
+An S Pen-only Android game in the Mayhem series. A blot of ink rolls across a ruled page and
+you draw the way ahead. How hard you press decides what the ink becomes:
 
 | Pressure | Ink | |
 |---|---|---|
@@ -9,9 +9,19 @@ and you draw the way ahead. How hard you press decides what the ink becomes:
 | Normal writing | **Spring** | Bounces you (and boulders) high. Fatal under spiked ceilings. |
 | Press hard | **Beam** | Spans anything, carries anything, costs far more ink. |
 
-Two ways to play: **Stages**, hand-built levels in numbered worlds with lives, a checkpoint, a
-finish flag and up to three stars each (World 1 has four: First Page, Cellar, Up High and
-Castle), and **Endless**, the original endless run for high scores.
+The game is **stages**: hand-built levels in numbered worlds with lives, a checkpoint, a finish
+flag and up to three stars each (World 1 has four: First Page, Cellar, Up High and Castle). The
+page fights back and pays out:
+
+- **Star trails** mark the good line, over a spring's bounce or along a bridge. Stars taken
+  close together ring a note higher each; every 50 is an extra life.
+- **Blots**, violet ink smudges, waddle at you. Bounce on one with a spring, or drop a beam on
+  it; touching one otherwise costs a life.
+- **Doodle boxes** hang overhead. Bounce up into one and it pops a **marker cap**: catch it and
+  the runner goes **Bold**, bigger, rolling Blots flat and surviving one hit.
+- The runner has a **face**: wide-eyed at an edge, a grin on a combo, dizzy after a bounce,
+  sweating when a boulder is behind it.
+- **Ink Rush**, an original chiptune theme, plays while you run; the jingles come from it.
 
 Clear each hazard with the lightest ink that works to grow the combo. Ink is solid the moment
 it's drawn, so the runner can roll onto a stroke you're still finishing. Hover to see where the
@@ -45,15 +55,16 @@ previous one if both were signed with the same debug key. CI keeps one (see
 [Debug signing](#debug-signing)); if Android still says the app conflicts, uninstall the old one
 first, which clears its best score, calibration and tutorial progress.
 
-On first launch the game asks you to **tune your pen**: draw a rope (barely touching), a spring
-(the way you write) and a beam (pressing hard) along a dotted guide, then try a few strokes of
-your own. Your three pressures become the middle of the three ink bands. Each stroke becomes
-one ink, from the pressure it settles at once the pen has landed. Then a
-short **tutorial**: four lessons on rope, spring, beam and erasing, on real terrain, each with a
-dotted guide showing where to draw. Both happen once; after that the
-game opens on the title card with **Stages** and **Endless**. The ⋯ menu has
-**How to play** (the tutorial again), **Recalibrate**, and the **Pen readout** (tool type, raw
-and normalized pressure, buttons, tilt, hover and event rates) for checking the S Pen.
+The game opens **straight into play**: 1-1 is already running when it starts (later launches
+pick up at the first stage not yet cleared). Its first three obstacles each ask for one ink
+with a dotted guide and a word: a rope gap, a spring wall and a beam chasm. Until the pen has
+been tuned, a stroke drawn at one of them is that ink whatever the pressure, and the pressures
+of those three strokes **tune the pen** (if they rise from rope to beam). Each stroke becomes
+one ink, from the pressure it settles at once the pen has landed. The ⋯ menu has **Tune your
+pen** (draw a rope, a spring and a beam line along a guide, then try a few strokes), **How to
+play** (four short lessons on rope, spring, beam and erasing), **Music**, the **Stage list**,
+and the **Pen readout** (tool type, raw and normalized pressure, buttons, tilt, hover and event
+rates) for checking the S Pen.
 
 ### Sending a recording
 
@@ -88,20 +99,20 @@ still build. `-Pinkmayhem.android=false` skips it explicitly.
 For fast iteration with a mouse (`lwjgl3` module):
 
 ```sh
-./gradlew :lwjgl3:run -Pargs="--emulate-pen --skip-calibration --skip-tutorial"
+./gradlew :lwjgl3:run -Pargs="--emulate-pen"
 ```
 
 | Option | |
 |---|---|
 | *(none)* | The mouse is a mouse: like a finger on Android, it only draws with **Allow finger and mouse** on (⋯ menu). |
 | `--emulate-pen` | The mouse acts as an S Pen. Keys `1` / `2` / `3` give light / normal / hard pressure; the right button is the side button. |
-| `--autoplay` | The correct-ink bot plays (`--seed N` for a fixed level). |
-| `--wrong-ink TUNNEL=SPRING` | The bot uses the wrong ink for a hazard type, to reach a death. |
+| `--autoplay` | Each stage's scripted solution plays it, then the next. |
+| `--wrong-ink ROPE=SPRING` | The bot draws the second ink wherever its solution has the first, to reach a death. |
 | `--landscape`, `--size WxH`, `--density D` | Window size in dp and pixels per dp. |
 | `--dark`, `--reduced-motion` | Simulate the system settings. |
-| `--settings`, `--calibration`, `--skip-calibration` | Open or skip overlays at start. |
+| `--settings`, `--calibration` | Open the settings sheet or pen tuning at start. |
 | `--demo-tune N` | With `--calibration`: draws N tuning lines with a light pen's pressures (4 adds a free stroke). |
-| `--tutorial N`, `--skip-tutorial` | Open the tutorial at lesson N (1–4), or don't open it on first run. |
+| `--tutorial N` | Open the tutorial at lesson N (1–4). |
 | `--stage 1-2`, `--select` | Start straight into a stage (with `--autoplay`, its scripted solution plays it), or open the stage list. |
 | `--speed N` | Run the game N times faster (to screenshot late moments). |
 | `--rotate-after S` | Swap width and height after S seconds, like rotating the phone mid-run. |
@@ -112,8 +123,9 @@ For fast iteration with a mouse (`lwjgl3` module):
 
 ### Sound effects
 
-The sounds are synthesized from the POC's WebAudio recipes and committed as WAVs. After changing
-`SfxSynth`, regenerate them (a test fails if they drift):
+The sounds are synthesized from the POC's WebAudio recipes (and, for the new ones, from the Ink
+Rush motif) and committed as WAVs; so is the theme itself (`MusicSynth`, one seamless loop at
+22.05 kHz). After changing either, regenerate them (a test fails if they drift):
 
 ```sh
 ./gradlew :core:generateSfx

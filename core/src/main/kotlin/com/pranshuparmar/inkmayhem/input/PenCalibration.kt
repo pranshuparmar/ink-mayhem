@@ -86,10 +86,14 @@ class PenTuning {
         return Verdict.ACCEPTED
     }
 
-    private fun heavier(m: Float, before: Float, minStep: Float): Boolean =
-        (m >= before * MIN_RATIO && m - before >= minStep) || (m >= SATURATED && m > before)
-
     companion object {
+        private fun heavier(m: Float, before: Float, minStep: Float): Boolean =
+            (m >= before * MIN_RATIO && m - before >= minStep) || (m >= SATURATED && m > before)
+
+        /** Whether three raw pressures rise enough apart, as the tuning steps require, to tune from. */
+        fun rising(rope: Float, spring: Float, beam: Float): Boolean =
+            rope > FLOOR && heavier(spring, rope, MIN_STEP_SPRING) && heavier(beam, spring, MIN_STEP_BEAM)
+
         /** A line must run at least this much of the guide. */
         const val MIN_LENGTH = 0.5f
         /** Each line must press at least this much harder than the one before (ratio and raw step). */

@@ -10,7 +10,6 @@ import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.PixmapIO
 import com.pranshuparmar.inkmayhem.DevOptions
 import com.pranshuparmar.inkmayhem.InkMayhemGame
-import com.pranshuparmar.inkmayhem.game.HazardType
 import com.pranshuparmar.inkmayhem.physics.Ink
 import com.pranshuparmar.inkmayhem.Platform
 import com.pranshuparmar.inkmayhem.input.PenButtons
@@ -62,9 +61,7 @@ private fun devOptions(opts: Options, seed: Long?) = DevOptions(
     autoplay = opts.autoplay,
     openSettings = opts.openSettings,
     openCalibration = opts.openCalibration,
-    skipCalibration = opts.skipCalibration || opts.autoplay,
     tutorialLesson = opts.tutorialLesson?.minus(1),
-    skipTutorial = opts.skipTutorial,
     stage = opts.stage,
     openSelect = opts.openSelect,
     speed = opts.speed,
@@ -86,17 +83,15 @@ private class Options(args: Array<String>) {
     val seed = value("--seed")?.toLong()
     val openSettings = "--settings" in list
     val openCalibration = "--calibration" in list
-    val skipCalibration = "--skip-calibration" in list
     val tutorialLesson = value("--tutorial")?.toInt()
-    val skipTutorial = "--skip-tutorial" in list
     val stage = value("--stage")
     val openSelect = "--select" in list
     val speed = value("--speed")?.toFloat() ?: 1f
     val toast = value("--toast")
-    /** e.g. --wrong-ink TUNNEL=SPRING */
+    /** e.g. --wrong-ink ROPE=SPRING */
     val wrongInk = value("--wrong-ink")?.split(',')?.associate {
-        val (h, i) = it.split('=')
-        HazardType.valueOf(h) to Ink.valueOf(i)
+        val (a, b) = it.split('=')
+        Ink.valueOf(a) to Ink.valueOf(b)
     } ?: emptyMap()
     /** Starts a run, hovers, then slowly draws a stroke with rising pressure (to see the gauge). */
     val demoDraw = "--demo-draw" in list
