@@ -97,7 +97,14 @@ owner: the Ink Rush theme, Slice 1 as pitched, no Endless, straight into play. N
     **runner's face** are new.
 15. **1-1 is rebuilt** around them: rope gap, spring wall, beam chasm (the three gates), a Blot,
     a doodle box with a cap, a second Blot, then the old page's hills, high road, seesaw and
-    gaps. Hints are dotted guides with one word, not paragraphs.
+    gaps. Each new thing gets a dotted guide with the ink's name and a short handwritten note
+    saying what to do with the pen (the first version had only the guides; a first-time player
+    couldn't tell what rope or spring meant).
+16. **A first-timer's runner waits** (asked for by the owner). While the pen is untuned, the
+    runner brakes to a stop before each of 1-1's three tuning gates and waits until a stroke
+    is drawn there; notes and guides past the gate it will stop at stay hidden until then. Once
+    the gates have tuned the pen, 1-1 plays like any stage. Notes held on screen that would
+    overlap stack upwards, or wait for room.
 
 ## Physics (`core/.../physics/InkPhysics.kt`, `Ink.kt`)
 
@@ -149,7 +156,7 @@ owner: the Ink Rush theme, Slice 1 as pitched, no Endless, straight into play. N
 | Judging | once the runner passes x1 + 0.6, heaviest stroke overlapping [x0 − 3, x1 + 1] |
 | Camera | runner at 28 % / 60 % (22 % across on a view narrower than 18 m); lerp x 4/s, y 2.5/s; a new run starts at 62 %. A boulder within 14 m behind the runner is kept on screen: the runner slides up to 50 % across |
 | Scale | clamp(min(min(W, H) / 12, W / 15), 22, 64) dp per metre: the POC's, except that a portrait screen zooms out to show at least 15 m across |
-| Notes | stay whole on screen while relevant: they come in up to 4 m early at the right edge, ride the page, wait at the left edge until the runner is 2 m past their end, then fade over 2 m |
+| Notes | stay whole on screen while relevant: they come in up to 4 m early at the right edge, ride the page, wait at the left edge until the runner is 2 m past their end, then fade over 2 m. One that would overlap another goes above it (10 dp apart), or waits for room |
 | Cull | every 0.5 s, everything more than 25 m behind the camera (notes 35 m) |
 
 ### World generation (`genSection`)
@@ -234,7 +241,7 @@ retries, stars). Each stage runs on its own `GameSim`.
 
 | Stage | Theme | Speed | Length | What's in it |
 |---|---|---|---|---|
-| 1-1 First Page | ruled paper | 3.4 m/s | 204 m | a rope gap, a spring wall and a beam chasm (the tuning gates), a Blot, a doodle box with the marker cap, a second Blot, hills, a high road with a heart, a seesaw |
+| 1-1 First Page | ruled paper | 3.4 m/s | 222 m | a rope gap, a spring wall and a beam chasm (the tuning gates), a Blot, a doodle box with the marker cap, a second Blot, hills, a high road with a heart, a seesaw |
 | 1-2 Cellar | graph paper, cave roof 3.6 m up | 3.5 m/s | 131 m | tunnels, a rope slide down a shaft, spike pits, a lift up a 5 m wall |
 | 1-3 Up High | dot grid, islands 5 m deep | 3.6 m/s | 123 m | a three-spring climb, a 7.6 m beam gap, a seesaw, sloping bridges down, a cloud with a heart |
 | 1-4 Castle | brickwork | 3.8 m/s | 134 m | spike pits, a tunnel, a 6 m lift, a seesaw over spikes, a climb, a beam gap over spikes, a boulder runway |
@@ -301,6 +308,7 @@ ink or no ink fails.
 | Bold | runner r 0.52 instead of 0.4, the same mass (density scaled); rolls Blots flat; a Blot or spike hit takes Bold instead of a life, knocks the runner up at 7.5 m/s (down at 2 m/s from a ceiling) and nothing hurts for 1.5 s (it blinks). Falls and boulders still cost a life. Lost with a life |
 | Face | by priority: hurt or dead (× eyes), a boulder within 14 m behind (sweat), 1.5 s after a spring bounce (grin) then 0.9 s dizzy, on the ground with no ground, lift, seesaw or ink 1.2 m ahead (wide eyes), 1.2 s after a star, a squash or a clean judgement, or a combo of 4+ (grin) |
 | Tuning gates | a stroke begun within 1.5 m of a gate the runner hasn't passed. Tuned when rope, spring and beam rise by the tuning lines' rule (each ≥ 1.2× and 0.004 / 0.008 raw harder) |
+| Waiting | untuned pen only: from 8 m before a gate's wait point the drive aims for √(2 × 3 m/s² × distance left), so the runner stops there (1.4 m before the rope and beam gaps, 5 m before the spring wall) and holds until a stroke has been drawn at the gate; it never counts as stuck |
 | Music | Ink Rush: 168 bpm, 8 bars, square lead (3.2 kHz low-pass), triangle bass, noise drums; one 11.4 s loop at 22.05 kHz mono, 504 KB (under SoundPool's 1 MB), played at 0.42 volume |
 
 ## Tutorial

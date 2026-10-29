@@ -56,10 +56,12 @@ previous one if both were signed with the same debug key. CI keeps one (see
 first, which clears its best score, calibration and tutorial progress.
 
 The game opens **straight into play**: 1-1 is already running when it starts (later launches
-pick up at the first stage not yet cleared). Its first three obstacles each ask for one ink
-with a dotted guide and a word: a rope gap, a spring wall and a beam chasm. Until the pen has
-been tuned, a stroke drawn at one of them is that ink whatever the pressure, and the pressures
-of those three strokes **tune the pen** (if they rise from rope to beam). Each stroke becomes
+pick up at the first stage not yet cleared). A short handwritten note introduces each new thing
+just before it. The first three obstacles each ask for one ink with a dotted guide and a word:
+a rope gap, a spring wall and a beam chasm. Until the pen has been tuned, the runner stops at
+each of them and waits for a stroke, notes past the next one stay hidden, a stroke drawn there
+is that ink whatever the pressure, and the pressures of those three strokes **tune the pen**
+(if they rise from rope to beam). Each stroke becomes
 one ink, from the pressure it settles at once the pen has landed. The ⋯ menu has **Tune your
 pen** (draw a rope, a spring and a beam line along a guide, then try a few strokes), **How to
 play** (four short lessons on rope, spring, beam and erasing), **Music**, the **Stage list**,

@@ -148,6 +148,9 @@ class GameSim(
     /** The tuning gate the last finished stroke was drawn at, or null. */
     var lastGate: Gate? = null
         private set
+    /** The tuning gate the runner is stopping or stopped at, waiting for a stroke, or null. */
+    var waitingAt: Gate? = null
+        private set
 
     /** Tutorial: the runner stands still (no drive, no stuck rules) until released. */
     var runnerHeld = false
@@ -395,7 +398,7 @@ class GameSim(
             val tag = FixtureTag(com.pranshuparmar.inkmayhem.physics.FixtureKind.BOX)
             boxes += DoodleBox(ink.addRect(k.x, k.top, k.size, k.size, tag = tag), k.holds, tag)
         }
-        for (k in l.gates) gates += Gate(k.ink, k.x0, k.x1, k.gx0, k.gy0, k.gx1, k.gy1, k.label, k.tunes)
+        for (k in l.gates) gates += Gate(k.ink, k.x0, k.x1, k.gx0, k.gy0, k.gx1, k.gy1, k.label, k.tunes, k.waitX)
         for (k in l.notes) notes += Note(k.x, k.y, k.text).also { it.maxW = k.maxW }
         for ((i, k) in l.hazards.withIndex()) hazards += Hazard(k.type, k.x0, k.x1, k.par).also { it.index = i }
         for (k in l.runways) blocks.firstOrNull { it.x == k.x }?.boulderTrigger = k.triggerX
@@ -829,6 +832,7 @@ class GameSim(
         val s = ink.buildStroke(d.xs.items, d.ys.items, ps.items, n) ?: return
         lastStrokeInk = kind
         lastGate = d.forced
+        d.forced?.drawn = true
         if (!unlimitedInk) inkLeft = max(0f, inkLeft - s.cost)
         // footprint + heaviest ink, for scoring against each hazard's par
         var x0 = Float.POSITIVE_INFINITY
@@ -892,7 +896,15 @@ class GameSim(
         }
 
         if (state == GameState.RUN || state == GameState.DEAD) {
-            if (state == GameState.RUN && !runnerHeld) {
+            waitingAt = if (state == GameState.RUN && !runnerHeld) gateToWaitAt(rb.position.x) else null
+            val wg = waitingAt
+            if (wg != null) {
+                // a first-timer's runner rolls to a stop before the obstacle and waits for their stroke
+                val vDes = kotlin.math.sqrt(2f * WAIT_DECEL * max(0f, wg.waitX - rb.position.x))
+                val wt = min(runSpeed, vDes) / runner.r
+                rb.applyTorque((3f * (wt - rb.angularVelocity)).coerceIn(-7f, 7f), true)
+                runner.stuck = 0f
+            } else if (state == GameState.RUN && !runnerHeld) {
                 val w = rb.angularVelocity
                 val wt = runSpeed / runner.r
                 // stages let a downhill roll build speed: the drive barely brakes there
@@ -1015,7 +1027,7 @@ class GameSim(
             stageProgress(px)
             if (py > levelNear(px) + 4f) die("Fell in", DeathKind.FELL)
             // riding a lift isn't being stuck
-            if (px > runner.bestX + 0.5f || runnerHeld || (runnerOnLift > 0 && liftMoving())) {
+            if (px > runner.bestX + 0.5f || runnerHeld || waitingAt != null || (runnerOnLift > 0 && liftMoving())) {
                 runner.bestX = px
                 runner.bestT = simT
             } else if (simT - runner.bestT > 5f) {
@@ -1266,6 +1278,19 @@ class GameSim(
         }
     }
 
+    /**
+     * While the pen is untuned, the next tuning gate the runner will wait at (however far ahead):
+     * what lies past it isn't introduced yet.
+     */
+    val pendingGate: Gate?
+        get() = if (!gateTuning) null else gates.firstOrNull { it.tunes && !it.waitX.isNaN() && !it.drawn && !it.passed }
+
+    /** While the pen is untuned: the tuning gate ahead that the runner has to wait at, if any. */
+    private fun gateToWaitAt(rx: Float): Gate? {
+        if (!gateTuning) return null
+        return gates.firstOrNull { it.tunes && !it.waitX.isNaN() && !it.drawn && !it.passed && rx < it.x1 && rx > it.waitX - WAIT_FROM }
+    }
+
     /** The first tuning gate a stroke begun at [x] belongs to, if the runner hasn't passed it. */
     private fun tuningGateAt(x: Float): Gate? {
         val rx = runner.body.position.x
@@ -1473,6 +1498,9 @@ class GameSim(
         const val HAPPY_S = 1.2f
         /** A stroke begun this far either side of a tuning gate still belongs to it. */
         const val GATE_SLACK = 1.5f
+        /** An untuned pen's runner brakes at this rate (m/s²) from this far (m) before a tuning gate's wait. */
+        const val WAIT_DECEL = 3f
+        const val WAIT_FROM = 8f
         const val OUT_OF_INK = "Out of ink. Grab the blue drops."
         const val TOO_LONG_FOR_ROPE = "Too long for rope. Press harder."
 

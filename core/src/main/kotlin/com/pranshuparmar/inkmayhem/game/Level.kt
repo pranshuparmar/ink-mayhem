@@ -98,16 +98,19 @@ class Cap(val body: Body) {
 /**
  * A doodled hint over x0..x1: a dotted guide from (gx0, gy0) to (gx1, gy1) in [ink]'s colour with
  * a one-word [label]. A tuning gate ([tunes], the first page's first three obstacles) also tunes
- * the pen: while it is untuned, a stroke drawn there is that ink, and its pressure is learnt.
+ * the pen: while it is untuned, a stroke drawn there is that ink, and its pressure is learnt; and
+ * the runner stops at [waitX] until one has been drawn (NaN: it never waits).
  */
 class Gate(
     val ink: Ink, val x0: Float, val x1: Float,
     val gx0: Float, val gy0: Float, val gx1: Float, val gy1: Float,
-    val label: String, val tunes: Boolean,
+    val label: String, val tunes: Boolean, val waitX: Float = Float.NaN,
 ) {
     /** The runner is past it: the guide fades out. */
     var passed = false
     var passedAt = 0f
+    /** A stroke has been drawn at it while the pen was untuned. */
+    var drawn = false
 }
 
 /** How the runner's face looks this frame. */

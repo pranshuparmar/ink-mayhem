@@ -131,9 +131,12 @@ class WorldRenderer(
         val maxW = min(wDp * 0.62f, 340f)
         noteFont.data.setLineHeight(noteSize * 1.15f * density)
         val rx = sim.runner.body.position.x
+        placedN = 0
+        // a first-timer learns one thing at a time: nothing past the obstacle they're stopping at
+        val focusX = sim.pendingGate?.x1 ?: Float.POSITIVE_INFINITY
         for (ni in sim.notes.indices) {
             val n = sim.notes[ni]
-            if (n.x > vx1 + NOTE_EARLY) continue
+            if (n.x > vx1 + NOTE_EARLY || n.x > focusX) continue
             val wrap = min(maxW, n.maxW * scale)
             text.layout.setText(noteFont, n.text, 0, n.text.length, pal[Tok.GRAPHITE], wrap, Align.left, true, null)
             val tw = text.layout.width
@@ -145,7 +148,23 @@ class WorldRenderer(
             val alpha = 1f - (past / NOTE_FADE).coerceIn(0f, 1f)
             if (alpha <= 0f) continue
             val sx = ((n.x - viewX) * scale).coerceIn(NOTE_MARGIN, max(NOTE_MARGIN, wDp - tw - NOTE_MARGIN))
-            val sy = ((n.y - viewY) * scale).coerceIn(NOTE_TOP + noteFont.capHeight, max(NOTE_TOP + noteFont.capHeight, hDp - th - NOTE_MARGIN))
+            val topMin = NOTE_TOP + noteFont.capHeight
+            var sy = ((n.y - viewY) * scale).coerceIn(topMin, max(topMin, hDp - th - NOTE_MARGIN))
+            // Held on screen, notes can meet: a later one goes above an earlier one it would cover,
+            // or waits until there's room.
+            var tries = 0
+            while (tries < placedN) {
+                val hit = overlapping(sx, sy - noteFont.capHeight, tw, th)
+                if (hit < 0) break
+                sy = placed[hit * 4 + 1] - NOTE_GAP - th + noteFont.capHeight
+                tries++
+            }
+            if (sy < topMin || overlapping(sx, sy - noteFont.capHeight, tw, th) >= 0) continue
+            if (placedN < MAX_PLACED) {
+                placed[placedN * 4] = sx; placed[placedN * 4 + 1] = sy - noteFont.capHeight
+                placed[placedN * 4 + 2] = sx + tw; placed[placedN * 4 + 3] = sy - noteFont.capHeight + th
+                placedN++
+            }
             noteMatrix.idt().translate(sx, sy, 0f).rotateRad(0f, 0f, 1f, -0.03f)
             text.batch.transformMatrix = noteMatrix
             // baseline at the note origin, wrapped like wrapText() with 1.15 line height
@@ -233,6 +252,19 @@ class WorldRenderer(
             shapes.color(pal[Tok.INK]).circle(mx, my, 1.6f * px)
             shapes.end()
         }
+    }
+
+    /** Screen rects (x0, y0, x1, y1 in dp) of the notes drawn so far this frame. */
+    private val placed = FloatArray(MAX_PLACED * 4)
+    private var placedN = 0
+
+    /** The first note drawn this frame that a note at (x, y), [w] × [h] dp would touch, or −1. */
+    private fun overlapping(x: Float, y: Float, w: Float, h: Float): Int {
+        for (i in 0 until placedN) {
+            val o = i * 4
+            if (x < placed[o + 2] + NOTE_GAP && x + w > placed[o] - NOTE_GAP && y < placed[o + 3] + NOTE_GAP && y + h > placed[o + 1] - NOTE_GAP) return i
+        }
+        return -1
     }
 
     private fun drawBlock(r: GroundRect, pal: Palette, vx0: Float, vx1: Float, screenBottom: Float, px: Float, brick: Boolean) {
@@ -743,6 +775,8 @@ class WorldRenderer(
     /** A hint fades in as the runner nears it and out once it is passed. */
     private fun gateAlpha(sim: GameSim, g: com.pranshuparmar.inkmayhem.game.Gate): Float {
         if (g.passed) return (1f - (sim.simT - g.passedAt) / 0.5f).coerceIn(0f, 1f)
+        val pending = sim.pendingGate
+        if (pending != null && g.x0 > pending.x1) return 0f
         val ahead = g.gx0 - sim.runner.body.position.x
         return (1f - (ahead - GATE_SHOW) / 3f).coerceIn(0f, 1f)
     }
@@ -879,6 +913,9 @@ class WorldRenderer(
         private const val NOTE_FADE = 2f
         private const val NOTE_MARGIN = 12f
         private const val NOTE_TOP = 96f
+        /** Space kept between two notes (dp), and how many are kept apart per frame. */
+        private const val NOTE_GAP = 10f
+        private const val MAX_PLACED = 8
         private val CRACK = floatArrayOf(-0.3f, -0.2f, 0.1f, 0.25f, 0.4f, 0.05f)
 
         /** Unit teardrop from the POC's two cubic Béziers, tessellated once. */

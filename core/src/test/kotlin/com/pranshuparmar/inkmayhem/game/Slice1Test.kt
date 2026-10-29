@@ -169,6 +169,38 @@ class Slice1Test {
     }
 
     @Test
+    fun `while the pen is untuned the runner waits at each first-page gate until a stroke is drawn there`() = playing(StagePlay(Stages.FIRST_PAGE, solve = false)) { p ->
+        p.sim.gateTuning = true
+        val gates = p.sim.gates.filter { it.tunes }
+        assertEquals(3, gates.size)
+        val rope = gates[0]
+        p.play(20f)
+        assertEquals(GameState.RUN, p.sim.state, p.summary)
+        assertEquals(rope, p.sim.waitingAt)
+        assertTrue(kotlin.math.abs(p.x - rope.waitX) < 0.6f && p.x < rope.x0 + 1f, "stopped before the gap at ${p.x}, wait ${rope.waitX}")
+        // a light stroke across the gap releases it; the next gate (the spring wall) stops it again
+        var t = 100.0
+        val n = 70
+        for (i in 0..n) {
+            t += 1.0 / 240
+            val x = rope.gx0 + (rope.gx1 - rope.gx0) * i / n
+            if (i == 0) p.sim.penDown(3, x, rope.gy0, 0.2f, erase = false, t = t) else p.sim.penMove(3, x, rope.gy0, 0.2f, t)
+        }
+        p.sim.penUp(3)
+        assertTrue(rope.drawn)
+        p.play(20f)
+        assertEquals(GameState.RUN, p.sim.state, p.summary)
+        assertEquals(gates[1], p.sim.waitingAt, p.summary)
+        assertTrue(p.x > rope.x1 && p.x < gates[1].waitX + 0.6f, "at the spring wall: ${p.x}")
+    }
+
+    @Test
+    fun `a tuned pen's runner doesn't wait`() = playing(StagePlay(Stages.FIRST_PAGE, solve = false)) { p ->
+        assertEquals(GameState.DEAD, p.play(20f), p.summary)
+        assertEquals(DeathKind.FELL, p.sim.death?.kind)
+    }
+
+    @Test
     fun `the gates tune only from pressures that rise`() {
         assertTrue(PenTuning.rising(0.1f, 0.2f, 0.4f))
         assertFalse(PenTuning.rising(0.2f, 0.21f, 0.4f))

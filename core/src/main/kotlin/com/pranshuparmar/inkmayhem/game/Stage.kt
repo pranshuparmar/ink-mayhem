@@ -57,7 +57,10 @@ class StageLayout {
     /** A doodle box with its top-left at ([x], [top]), [size] square, holding [holds]. */
     class Box(val x: Float, val top: Float, val size: Float, val holds: ItemKind)
 
-    class GateSpec(val ink: Ink, val x0: Float, val x1: Float, val gx0: Float, val gy0: Float, val gx1: Float, val gy1: Float, val label: String, val tunes: Boolean)
+    class GateSpec(
+        val ink: Ink, val x0: Float, val x1: Float, val gx0: Float, val gy0: Float, val gx1: Float, val gy1: Float,
+        val label: String, val tunes: Boolean, val waitX: Float,
+    )
 
     /** One stroke of the scripted solution, drawn once the runner reaches [atX]. */
     class Stroke(val atX: Float, val xs: FloatArray, val ys: FloatArray, val ink: Ink)
@@ -340,10 +343,11 @@ class StageBuilder(private val l: StageLayout) {
 
     /**
      * A doodled hint over [x0]..[x1]: a dotted guide from (gx0, gy0) to (gx1, gy1) in [ink]'s colour,
-     * labelled with the ink's name. A [tunes] gate also tunes an untuned pen (see [Gate]).
+     * labelled with the ink's name. A [tunes] gate also tunes an untuned pen, and the runner
+     * waits at [waitX] until a stroke is drawn there (see [Gate]).
      */
-    fun hint(ink: Ink, x0: Float, x1: Float, gx0: Float, gy0: Float, gx1: Float, gy1: Float, tunes: Boolean = false) {
-        l.gates += StageLayout.GateSpec(ink, x0, x1, gx0, gy0, gx1, gy1, ink.label, tunes)
+    fun hint(ink: Ink, x0: Float, x1: Float, gx0: Float, gy0: Float, gx1: Float, gy1: Float, tunes: Boolean = false, waitX: Float = Float.NaN) {
+        l.gates += StageLayout.GateSpec(ink, x0, x1, gx0, gy0, gx1, gy1, ink.label, tunes, waitX)
     }
 
     fun note(text: String, dx: Float = 0.6f, up: Float = 3.4f, maxW: Float = Float.POSITIVE_INFINITY) {

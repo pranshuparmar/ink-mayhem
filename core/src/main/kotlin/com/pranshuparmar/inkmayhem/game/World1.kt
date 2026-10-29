@@ -9,44 +9,54 @@ import com.pranshuparmar.inkmayhem.physics.Ink
  */
 object Stages {
     /**
-     * The game opens on this page, already running. Its first three obstacles each ask for one
-     * ink with a doodled guide (and tune an untuned pen from the strokes drawn for them): a rope
-     * gap, a spring wall and a beam chasm. Then a Blot to bounce on, a doodle box with the marker
-     * cap, and a second Blot that a Bold runner just rolls flat.
+     * The game opens on this page, already running. A short handwritten note introduces each new
+     * thing just before it. The first three obstacles each ask for one ink with a doodled guide:
+     * a rope gap, a spring wall and a beam chasm. While the pen is untuned, they also tune it from
+     * the strokes drawn for them, and the runner waits at each until one is drawn. Then a Blot to
+     * bounce on, a doodle box with the marker cap, and a second Blot that a Bold runner just rolls
+     * flat.
      */
     val FIRST_PAGE = StageDef(1, 1, "First Page", Theme.PAGE, 3.4f) {
-        start(13f)
-        hint(Ink.ROPE, x - 1f, x + 3f, x - 0.1f, level - 0.05f, x + 3.1f, level - 0.05f, tunes = true)
+        start(18f)
+        note("Draw the way with the S Pen. How hard you press makes different ink.", dx = -16.5f, maxW = 9f)
+        note("Light touch makes rope. Draw it across the gap.", dx = -6.5f, up = 2.6f, maxW = 7f)
+        hint(Ink.ROPE, x - 1f, x + 3f, x - 0.1f, level - 0.05f, x + 3.1f, level - 0.05f, tunes = true, waitX = x - 1.4f)
         starLine(x + 0.6f, level - 0.65f, x + 2.4f, level - 0.65f, 3)
         gap(3f, HazardType.GAP_S)
-        flat(9f)
-        hint(Ink.SPRING, x - 4.6f, x + 1f, x - 3.8f, level - 0.1f, x - 2.2f, level - 0.1f, tunes = true)
+        flat(13f)
+        note("Write normally for a spring. Lay it on the ground to bounce over the wall.", dx = -11.5f, maxW = 8f)
+        hint(Ink.SPRING, x - 4.6f, x + 1f, x - 3.8f, level - 0.1f, x - 2.2f, level - 0.1f, tunes = true, waitX = x - 5f)
         starArc(x - 3.6f, level - 0.55f, 2.75f, 5, from = 0.3f, to = 1.3f)
         wall(2.4f)
-        flat(10f)
-        hint(Ink.BEAM, x - 1f, x + 7.6f, x - 0.1f, level - 0.05f, x + 7.7f, level - 0.05f, tunes = true)
+        flat(13f)
+        note("Too far for rope. Press hard: a beam spans anything.", dx = -9f, maxW = 7f)
+        hint(Ink.BEAM, x - 1f, x + 7.6f, x - 0.1f, level - 0.05f, x + 7.7f, level - 0.05f, tunes = true, waitX = x - 1.4f)
         starLine(x + 1.2f, level - 0.75f, x + 6.4f, level - 0.75f, 4)
         gap(7.6f, HazardType.GAP_L)
-        flat(20f)
+        flat(24f)
         // a Blot walks at you: a spring before it bounces you onto it
         val b1 = x - 5f
+        note("A Blot! Don't touch it. Draw a spring and land on it.", dx = -22f, maxW = 8f)
         blot(b1)
         hint(Ink.SPRING, b1 - 9.5f, b1 - 5f, b1 - 8.6f, level - 0.1f, b1 - 7.4f, level - 0.1f)
         spring(b1 - 8.1f, b1 - 7.3f, level, lead = 4f)
-        flat(18f)
+        flat(20f)
         // a doodle box overhead: bounce up into it and catch the marker cap it pops out
         val bx = x - 14f
+        note("Spring up into the box.", dx = -20f, up = 5.4f, maxW = 6f)
         box(bx, up = 2.6f)
         hint(Ink.SPRING, bx - 2f, bx + 1.5f, bx - 0.8f, level - 0.1f, bx + 0.4f, level - 0.1f)
         spring(bx - 0.5f, bx + 0.3f, level, lead = 4f)
         stars(bx + 3f, 4)
         flat(16f)
         // Bold rolls straight through the next one
+        note("Bold rolls Blots flat. Not Bold? Bounce.", dx = -12f, maxW = 7f)
         blot(x - 3f)
         flat(4f)
         slope(10f, 2f)
         flat(4f)
         drop(x - 2f)
+        note("Downhill, you speed up.", dx = -2f, up = 3.2f)
         slope(10f, -2f)
         stars(x + 1f, 4)
         flat(8f)
@@ -59,6 +69,7 @@ object Stages {
         // the high road: a second spring reaches a ledge with drops and a heart
         val hx = x
         flat(20f)
+        note("Spring again for the high road.", dx = -18f, up = 2.2f)
         ledge(hx + 7f, level - 3.2f, 10f)
         spring(hx + 4.4f, hx + 5.2f, level)
         for (i in 0 until 3) dropAt(hx + 9f + i * 1.8f, level - 3.95f)

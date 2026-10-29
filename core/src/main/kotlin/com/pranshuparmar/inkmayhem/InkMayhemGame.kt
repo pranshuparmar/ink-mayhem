@@ -834,7 +834,9 @@ class InkMayhemGame(
         }
 
         override fun star() {
-            if (session?.addStar() != true) return
+            val ses = session ?: return
+            if (ses.stars == 0 && ses.stage === Stages.FIRST_PAGE) toast.show(FIRST_STAR, clock, force = true)
+            if (!ses.addStar()) return
             audio.play(Sfx.ONE_UP)
             toast.show("${GameSim.STARS_PER_LIFE} stars: extra life!", clock, force = true)
         }
@@ -1103,6 +1105,7 @@ class InkMayhemGame(
         const val STEP = 1f / 60f
         const val FINGER_TOAST = "Use the S Pen. Fingers don’t leave ink."
         const val TUNE_LATER = "For the best feel, tune your pen in settings."
+        const val FIRST_STAR = "Stars! Every ${GameSim.STARS_PER_LIFE} is an extra life."
         const val READY_TOAST = "You’re ready. The lightest ink that works grows your combo."
         const val SNAP_BUZZ_MS = 12
         private const val TAG_W = 58f
