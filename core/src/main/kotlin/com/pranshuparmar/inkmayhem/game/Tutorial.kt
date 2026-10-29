@@ -268,11 +268,16 @@ class Tutorial(val sim: GameSim) {
         return h
     }
 
+    /** The bridge the player drew hooked at most one end. */
+    private fun unhooked(): Boolean = sim.ink.strokes.any { it.anchors.size < 2 } && sim.ink.strokes.none { it.anchors.size >= 2 }
+
     private fun usedRope(): Boolean = sim.ink.strokes.any { s -> s.segs.any { it.kind == Ink.ROPE } }
 
     private fun deathHint(kind: DeathKind?): String = when {
         kind == DeathKind.STUCK && lesson == Lesson.SPRING -> "Stuck. That wasn’t springy: press the way you write, on the dotted mark."
         kind == DeathKind.STUCK -> "Stuck. Thick ink makes a step: start level with the ground, not on top of it."
+        (lesson == Lesson.ROPE || lesson == Lesson.BEAM) && unhooked() ->
+            "Fell in. A line only hooks where it touches: start and end it on the edges."
         lesson == Lesson.BEAM && usedRope() -> "Rope snaps over long gaps. Press hard for a beam."
         lesson == Lesson.BEAM -> "Fell in. Press hard and draw from edge to edge."
         lesson == Lesson.ROPE -> "Fell in. Draw from one edge to the other, level with the ground."

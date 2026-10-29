@@ -62,6 +62,17 @@ Made after playtesting the port on a phone, at the owner's request.
    Asked for by the player after Pen Lab: their pressure took 110–150 ms to settle after
    touchdown and rose along long strokes, so under per-segment ink only 4 of 12 aimed strokes
    came out one, right ink; by settled pressure, 12 of 12. The band numbers are unchanged.
+9. **Hooks need a surface.** In the POC a stroke end hooks to anything within 0.45 m of a
+   surface, so a rope drawn half a metre above a ledge hung from thin air. Now an end hooks only
+   where its ink touches a surface (half its thickness plus 0.12 m: a light rope about 0.19 m, a
+   beam about 0.31 m); an end that doesn't is free, and a stroke with neither end held falls.
+   While drawing, a ring marks a hooked start and pulses at the pen's end where lifting would
+   hook. Asked for by the player. The physics reference tests keep the POC's reach.
+10. **Portrait framing.** The POC's scale is set by the short side, so a portrait phone showed
+   only ~12 m across with ~3 m behind the runner: a chasing boulder appeared when it was almost
+   there. A portrait view now shows at least 15 m, the runner sits at 22 % across, and the camera
+   slides to keep a chasing boulder in view (that last part applies in landscape too; otherwise
+   landscape is unchanged). Long toasts wrap to two lines, and notes stay whole on screen.
 
 ## Physics (`core/.../physics/InkPhysics.kt`, `Ink.kt`)
 
@@ -77,7 +88,7 @@ Made after playtesting the port on a phone, at the owner's request.
 | Damping | angular 0.2, linear 0.02 | `buildStroke` |
 | Joint strength | 2400 × t N | `C.K` |
 | Anchor strength | 60000 × t N | `C.K_ANCHOR` |
-| Anchor reach | 0.45 m (InkCore defaults to 0.3; the game passes 0.45) | `ANCHOR_R` |
+| Anchor reach | The game: the ink must touch, so a stroke end hooks within its half thickness + 0.12 m of a surface. The POC (and the reference tests): 0.45 m (InkCore defaults to 0.3; the POC passes 0.45) | `InkPhysics.reach`, `CONTACT`, `ANCHOR_R` |
 | Spring weld | 5 Hz, damping ratio 0.5 | `C.SPRING_HZ`, `C.SPRING_DAMP` |
 | Torque weight in load | 0.6 × \|torque\| / t (not for rope joints) | `C.TORQUE_W` |
 | Load filter | load = 0.8 load + 0.2 raw | `step` |
@@ -111,8 +122,9 @@ Made after playtesting the port on a phone, at the owner's request.
 | Restart | pen-down 0.7 s after dying; death card after 0.6 s |
 | Combo | +1 at or under par, cap 9; lighter than par adds 50 × combo; heavier resets to 1 |
 | Judging | once the runner passes x1 + 0.6, heaviest stroke overlapping [x0 − 3, x1 + 1] |
-| Camera | runner at 28 % / 60 %; lerp x 4/s, y 2.5/s; a new run starts at 62 % |
-| Scale | clamp(min(W, H) / 12, 22, 64) dp per metre |
+| Camera | runner at 28 % / 60 % (22 % across on a view narrower than 18 m); lerp x 4/s, y 2.5/s; a new run starts at 62 %. A boulder within 14 m behind the runner is kept on screen: the runner slides up to 50 % across |
+| Scale | clamp(min(min(W, H) / 12, W / 15), 22, 64) dp per metre: the POC's, except that a portrait screen zooms out to show at least 15 m across |
+| Notes | stay whole on screen while relevant: they come in up to 4 m early at the right edge, ride the page, wait at the left edge until the runner is 2 m past their end, then fade over 2 m |
 | Cull | every 0.5 s, everything more than 25 m behind the camera (notes 35 m) |
 
 ### World generation (`genSection`)

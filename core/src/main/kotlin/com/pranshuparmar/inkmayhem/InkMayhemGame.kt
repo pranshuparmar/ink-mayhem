@@ -79,6 +79,8 @@ class DevOptions(
     val openSelect: Boolean = false,
     /** Run the simulation this many times faster (screenshots of late moments). */
     val speed: Float = 1f,
+    /** Show this toast at start (to check how long ones lay out). */
+    val toast: String? = null,
 )
 
 /**
@@ -197,6 +199,7 @@ class InkMayhemGame(
         // first run: calibrate, then the tutorial, then the title card
         tutorialPending = dev.tutorialLesson != null || (!settings.tutorialDone && !dev.skipTutorial && !dev.autoplay)
         if (dev.openSettings) sheet.show()
+
         if (dev.openSelect) openSelect()
         // Android back closes an overlay first, then leaves the game as usual.
         Gdx.input.setCatchKey(Input.Keys.BACK, true)
@@ -310,7 +313,9 @@ class InkMayhemGame(
         hDp = height / density
         uiCam.setToOrtho(true, wDp, hDp)
         uiCam.update()
-        scale = (min(wDp, hDp) / 12f).coerceIn(22f, 64f)
+        // POC: clamp(min(W, H) / 12, 22, 64). A portrait screen also has to show MIN_VIEW_W across,
+        // or the runner sees too little of what's coming (and of a boulder behind).
+        scale = min(min(wDp, hDp) / 12f, wDp / MIN_VIEW_W).coerceIn(22f, 64f)
         sim.scale = scale
         sim.setViewport(wDp / scale, hDp / scale)
         tutorial?.sim?.let {
@@ -383,6 +388,10 @@ class InkMayhemGame(
         session?.sim?.let {
             it.realTime = now
             it.tint = settings.tint
+        }
+        if (dev.toast != null && sized && !devToastShown) {
+            devToastShown = true
+            toast.show(dev.toast, now, force = true)
         }
         if (tutorialPending && sized && !calibration.open) {
             tutorialPending = false
@@ -589,6 +598,7 @@ class InkMayhemGame(
     // ------------------------------------------------------------------------------------ stages
 
     private var stageStarted = false
+    private var devToastShown = false
 
     private fun startStage(def: StageDef) {
         session?.sim?.dispose()
@@ -859,7 +869,12 @@ class InkMayhemGame(
         val boxTop = safeT + 64f
         val tv = toast.visibility
         val toastFont = fonts.get(Face.UI_BOLD, 14f)
-        val toastW = min(text.width(toastFont, toast.message) + 28f, wDp * 0.92f)
+        // a toast too long for one line wraps to two (portrait)
+        val toastMax = wDp * 0.92f
+        val toastOne = text.width(toastFont, toast.message) + 28f
+        val toastWrap = toastOne > toastMax
+        val toastW = if (toastWrap) toastMax else toastOne
+        val toastH = if (toastWrap) TOAST_LINE * 2f + 16f else 34f
         val toastTop = (if (tut != null) tutorialCard.box.bottom + 12f else safeT + if (ses != null) 84f else 70f) - (if (reduced) 0f else 8f * (1f - tv))
 
         shapes.begin(uiCam.combined, density)
@@ -876,7 +891,7 @@ class InkMayhemGame(
         val tag = inkTag(drawing, tut != null || ses != null)
         if (tag != null) shapes.color(pal[tagTok(tag)]).roundRect(tagX, tagY, TAG_W, 22f, 11f)
         if (showReadout) overlay.drawBox(shapes, pal, boxRight, boxTop, boxW, boxH)
-        if (tv > 0f) shapes.color(pal[Tok.INK], tv).roundRect(wDp / 2f - toastW / 2f, toastTop, toastW, 34f, 17f)
+        if (tv > 0f) shapes.color(pal[Tok.INK], tv).roundRect(wDp / 2f - toastW / 2f, toastTop, toastW, toastH, 17f)
         shapes.end()
         batch.projectionMatrix = uiCam.combined
         batch.begin()
@@ -884,7 +899,16 @@ class InkMayhemGame(
         gauge.drawText(text, fonts, pal, gaugeLeft, gaugeTop, live, drawing != null)
         if (tag != null) text.line(fonts.get(Face.UI_BOLD, 12f), tag.label, tagX + TAG_W / 2f, tagY, 22f, pal[Tok.PAPER], 1f, Align.center)
         if (showReadout) overlay.drawText(text, monoFont, pal, boxRight - boxW, boxTop)
-        if (tv > 0f) text.line(toastFont, toast.message, wDp / 2f, toastTop, 34f, pal[Tok.PAPER], tv, Align.center)
+        if (tv > 0f) {
+            if (toastWrap) {
+                val lineHeight = toastFont.data.lineHeight
+                toastFont.data.setLineHeight(TOAST_LINE * density)
+                text.draw(toastFont, toast.message, wDp / 2f - toastW / 2f + 14f, toastTop + 8f + (TOAST_LINE - toastFont.capHeight) / 2f, pal[Tok.PAPER], tv, Align.center, toastW - 28f)
+                toastFont.data.setLineHeight(lineHeight) // the font is shared
+            } else {
+                text.line(toastFont, toast.message, wDp / 2f, toastTop, 34f, pal[Tok.PAPER], tv, Align.center)
+            }
+        }
         batch.end()
 
         // Cards: the title card until the first pen-down; the death card 0.6 s after dying. During
@@ -1085,6 +1109,9 @@ class InkMayhemGame(
         const val READY_TOAST = "You’re ready. The lightest ink that works grows your combo."
         const val SNAP_BUZZ_MS = 12
         private const val TAG_W = 58f
+        private const val TOAST_LINE = 19f
+        /** Metres a view always shows across (portrait zooms out to fit them). */
+        private const val MIN_VIEW_W = 15f
         /** Frames between recording probes (eight a second at 120 Hz). */
         private const val PROBE_EVERY = 15L
         const val DEATH_BUZZ_MS = 45

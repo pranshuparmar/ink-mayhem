@@ -69,6 +69,7 @@ private fun devOptions(opts: Options, seed: Long?) = DevOptions(
     openSelect = opts.openSelect,
     speed = opts.speed,
     wrongInk = opts.wrongInk,
+    toast = opts.toast,
 )
 
 private class Options(args: Array<String>) {
@@ -91,6 +92,7 @@ private class Options(args: Array<String>) {
     val stage = value("--stage")
     val openSelect = "--select" in list
     val speed = value("--speed")?.toFloat() ?: 1f
+    val toast = value("--toast")
     /** e.g. --wrong-ink TUNNEL=SPRING */
     val wrongInk = value("--wrong-ink")?.split(',')?.associate {
         val (h, i) = it.split('=')

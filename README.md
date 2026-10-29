@@ -106,6 +106,7 @@ For fast iteration with a mouse (`lwjgl3` module):
 | `--speed N` | Run the game N times faster (to screenshot late moments). |
 | `--rotate-after S` | Swap width and height after S seconds, like rotating the phone mid-run. |
 | `--screenshot out.png --after S` | Save a screenshot after S seconds and quit. |
+| `--toast "text"` | Show a toast at start (to check how long ones lay out). |
 | `--record out.txt` | Record this session's input, as debug builds do on the phone. |
 | `--replay rec.txt` | Play a recording back exactly, printing what happened and checking it doesn't drift. Add `--frames dir --every N --from S --to S` to save every Nth frame between two times as PNGs (`ffmpeg -framerate 30 -i dir/f%06d.png -pix_fmt yuv420p clip.mp4` makes a video), `--screenshot out.png --after S` for one frame, `--replay-height H` for the window size, `--no-resync` to see raw drift (below). |
 

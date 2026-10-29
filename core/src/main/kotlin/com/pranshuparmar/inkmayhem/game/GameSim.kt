@@ -180,6 +180,16 @@ class GameSim(
     /** The ink the stroke being drawn will be, or null. */
     val drawingInk: Ink? get() = if (drawing == null) null else Ink.of(drawingPressure)
 
+    /** Whether the pen's current end of the stroke being drawn touches a surface and would hook. */
+    val tipHooks: Boolean
+        get() {
+            val d = drawing ?: return false
+            val n = d.size
+            if (n == 0 || d.smoothed.isNaN()) return false
+            val kind = Ink.of(drawingPressure)
+            return ink.anchorable(d.xs[n - 1], d.ys[n - 1], Ink.thickness(Ink.clampTo(d.ps[n - 1], kind)))
+        }
+
     /** The ink of the last finished stroke (recordings note it). */
     var lastStrokeInk: Ink? = null
         private set
@@ -246,7 +256,7 @@ class GameSim(
     private fun resetWorld() {
         events.runReset()
         if (::ink.isInitialized) ink.dispose()
-        ink = InkPhysics()
+        ink = InkPhysics(contactAnchors = true)
         ink.world.setContactListener(contacts)
         blocks.clear(); drops.clear(); notes.clear(); boulders.clear()
         ceilings.clear(); hazards.clear(); spikeStrips.clear(); lifts.clear(); seesaws.clear()
@@ -260,9 +270,15 @@ class GameSim(
         val body = ink.addBall(x, level - RUNNER_R - 0.02f, RUNNER_R, 2f, 1f, 0.05f, FixtureTag.RUNNER, bullet = true)
         runner = Runner(body)
         runner.bestX = x
-        cam.set(x - vw * 0.28f, level - vh * 0.62f)
+        cam.set(x - vw * runnerFrac, level - vh * 0.62f)
         camPrev.set(cam)
     }
+
+    /**
+     * Where the runner sits across the view: the POC's 28 %, or 22 % on a narrow (portrait) view so
+     * more of what's coming fits.
+     */
+    private val runnerFrac: Float get() = if (vw < NARROW_VIEW) 0.22f else 0.28f
 
     /** Records every moving thing's transform before a tick so frames between ticks can interpolate. */
     private fun snapshot() {
@@ -385,7 +401,18 @@ class GameSim(
         camPrev.set(cam)
     }
 
-    private fun camTargetX(runnerX: Float) = if (camFocusX.isNaN()) runnerX - vw * 0.28f else camFocusX - vw / 2f
+    private fun camTargetX(runnerX: Float): Float {
+        if (!camFocusX.isNaN()) return camFocusX - vw / 2f
+        // a boulder closing in from behind gets room on screen: the runner slides right to make it
+        var frac = runnerFrac
+        boulders.fastEach { bo ->
+            val bx = bo.body.position.x
+            if (bx < runnerX && runnerX - bx < CHASE_VIEW) {
+                frac = max(frac, min(CHASE_FRAC, (runnerX - bx + BOULDER_R + 1f) / vw))
+            }
+        }
+        return runnerX - vw * frac
+    }
 
     /** Starts the Endless run from the title card (its "Endless" button). */
     fun begin() {
@@ -657,7 +684,7 @@ class GameSim(
             events.scratch(min(0.09f, (len * scale / dt.toFloat()) * 0.00012f) * (0.5f + d.smoothed), d.smoothed)
         } else {
             d.lastT = t
-            d.startAnchored = ink.anchorable(x, y)
+            d.startAnchored = ink.anchorable(x, y, Ink.thickness(Ink.clampTo(d.smoothed, kind)))
         }
         d.xs.add(x); d.ys.add(y); d.ps.add(d.smoothed)
         d.x0 = min(d.x0, x)
@@ -964,7 +991,7 @@ class GameSim(
 
     private fun liveStrokeComplete(d: Drawing): Boolean {
         val n = d.size
-        return n >= 2 && d.startAnchored && ink.anchorable(d.xs[n - 1], d.ys[n - 1])
+        return n >= 2 && d.startAnchored && tipHooks
     }
 
     private fun liftMoving(): Boolean {
@@ -1088,6 +1115,12 @@ class GameSim(
         const val SPIKE_DEPTH = 0.12f
         private const val ROCK_CLEARANCE = 0.6f
         const val RUNNER_R = 0.4f
+        /** A view narrower than this (metres) is a portrait one: the runner sits further left. */
+        const val NARROW_VIEW = 18f
+        /** A chasing boulder this close behind is kept on screen... */
+        const val CHASE_VIEW = 14f
+        /** ...with the runner at most this far across. */
+        const val CHASE_FRAC = 0.5f
         const val BOULDER_R = 0.9f
         const val DROP_INK = 12f
         const val HIGH_DROP_INK = 25f

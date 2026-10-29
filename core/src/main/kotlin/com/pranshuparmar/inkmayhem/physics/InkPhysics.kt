@@ -26,6 +26,11 @@ import kotlin.math.min
 class InkPhysics(
     private val anchorR: Float = ANCHOR_R,
     private val cullY: Float = CULL_Y,
+    /**
+     * The game's rule: a stroke end hooks only where its ink touches a surface (half its
+     * thickness plus [CONTACT]). Off, ends hook anywhere within [anchorR] of one, like the POC.
+     */
+    private val contactAnchors: Boolean = false,
 ) : Disposable {
     val world = World(Vector2(0f, GRAVITY), true)
     val ground: Body = world.createBody(BodyDef())
@@ -122,8 +127,11 @@ class InkPhysics(
         r.spikes = null
     }
 
-    /** Would a stroke end at (px, py) be pinned to the ground or a ceiling? */
-    fun anchorable(px: Float, py: Float): Boolean = distToRects(px, py) <= anchorR
+    /** Would the end of a stroke [t] thick at (px, py) be pinned to the ground or a ceiling? */
+    fun anchorable(px: Float, py: Float, t: Float): Boolean = distToRects(px, py) <= reach(t)
+
+    /** How far from a surface a stroke end [t] thick still hooks onto it. */
+    fun reach(t: Float): Float = if (contactAnchors) t / 2f + CONTACT else anchorR
 
     fun distToRects(px: Float, py: Float): Float {
         var best = Float.POSITIVE_INFINITY
@@ -267,7 +275,7 @@ class InkPhysics(
     }
 
     private fun anchorEnd(stroke: Stroke, g: InkGroup, sg: Segment, x: Float, y: Float) {
-        if (distToRects(x, y) > anchorR) return
+        if (distToRects(x, y) > reach(sg.t)) return
         val kind = if (sg.kind == Ink.ROPE) JointKind.ROPE else JointKind.ANCHOR
         val j = makeJoint(ground, g.body!!, x, y, kind, K_ANCHOR * sg.t, sg.t, stroke)
         stroke.joints += j
@@ -515,6 +523,8 @@ class InkPhysics(
         const val DENS_INK = 1.5f
         /** Stroke ends this close to static geometry are pinned (the game's value; InkCore defaults to 0.3). */
         const val ANCHOR_R = 0.45f
+        /** Contact anchors: the gap between the ink's edge and a surface that still counts as touching. */
+        const val CONTACT = 0.12f
         /** Joints can't break in their first 0.3 s. */
         const val GRACE = 0.3f
         /** Stroke cost = INK_K × Σ L t². */

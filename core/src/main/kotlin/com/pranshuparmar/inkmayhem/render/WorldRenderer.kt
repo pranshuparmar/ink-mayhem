@@ -128,16 +128,27 @@ class WorldRenderer(
         val noteSize = max(15f, scale * 0.6f)
         val noteFont = fonts.get(Face.HAND, noteSize)
         val maxW = min(wDp * 0.62f, 340f)
+        noteFont.data.setLineHeight(noteSize * 1.15f * density)
+        val rx = sim.runner.body.position.x
         for (ni in sim.notes.indices) {
             val n = sim.notes[ni]
-            if (n.x > vx1 || n.x + 12f < vx0) continue
-            val sx = (n.x - viewX) * scale
-            val sy = (n.y - viewY) * scale
+            if (n.x > vx1 + NOTE_EARLY) continue
+            val wrap = min(maxW, n.maxW * scale)
+            text.layout.setText(noteFont, n.text, 0, n.text.length, pal[Tok.GRAPHITE], wrap, Align.left, true, null)
+            val tw = text.layout.width
+            val th = text.layout.height
+            // A note stays whole on screen while the runner heads for what it describes: it comes
+            // in at the right edge, rides the page, waits at the left edge until the runner has
+            // passed its end, then fades. A narrow (portrait) view would otherwise cut it off.
+            val past = rx - (n.x + tw / scale + NOTE_STAY)
+            val alpha = 1f - (past / NOTE_FADE).coerceIn(0f, 1f)
+            if (alpha <= 0f) continue
+            val sx = ((n.x - viewX) * scale).coerceIn(NOTE_MARGIN, max(NOTE_MARGIN, wDp - tw - NOTE_MARGIN))
+            val sy = ((n.y - viewY) * scale).coerceIn(NOTE_TOP + noteFont.capHeight, max(NOTE_TOP + noteFont.capHeight, hDp - th - NOTE_MARGIN))
             noteMatrix.idt().translate(sx, sy, 0f).rotateRad(0f, 0f, 1f, -0.03f)
             text.batch.transformMatrix = noteMatrix
             // baseline at the note origin, wrapped like wrapText() with 1.15 line height
-            noteFont.data.setLineHeight(noteSize * 1.15f * density)
-            text.draw(noteFont, n.text, 0f, -noteFont.capHeight, pal[Tok.GRAPHITE], wrapWidth = min(maxW, n.maxW * scale))
+            text.draw(noteFont, n.text, 0f, -noteFont.capHeight, pal[Tok.GRAPHITE], alpha, wrapWidth = wrap)
         }
         text.batch.transformMatrix = identity
         text.batch.end()
@@ -154,7 +165,7 @@ class WorldRenderer(
         drawFlags(sim, pal, px, behind = false)
         drawDrops(sim, pal, vx0, vx1, px)
         drawStrokes(sim, pal, tint, vx0, vx1, px)
-        drawLiveStroke(sim, pal, tint)
+        drawLiveStroke(sim, pal, tint, px)
         drawBoulders(sim, pal, px)
         drawRunner(sim, pal, px)
         fx.particles.fastEach { q ->
@@ -540,7 +551,7 @@ class WorldRenderer(
         }
     }
 
-    private fun drawLiveStroke(sim: GameSim, pal: Palette, tint: Boolean) {
+    private fun drawLiveStroke(sim: GameSim, pal: Palette, tint: Boolean, px: Float) {
         val d = sim.drawing ?: return
         val n = d.size
         val alpha = if (d.dry) 0.5f else 1f
@@ -551,6 +562,15 @@ class WorldRenderer(
             val p = Ink.clampTo((d.ps[i] + d.ps[i - 1]) / 2f, kind)
             shapes.capsule(d.xs[i - 1], d.ys[i - 1], d.xs[i], d.ys[i], Ink.thickness(p))
         }
+        // hooks: where the stroke is held, and whether the pen's end would hook if lifted now
+        if (n > 0 && d.startAnchored) hookRing(pal, d.xs[0], d.ys[0], px, 1f)
+        if (n > 1 && sim.tipHooks) hookRing(pal, d.xs[n - 1], d.ys[n - 1], px, 0.6f + 0.4f * sin(sim.realTime.toFloat() * 10f))
+    }
+
+    /** A hook: the same ring a finished stroke's anchor shows. */
+    private fun hookRing(pal: Palette, x: Float, y: Float, px: Float, alpha: Float) {
+        shapes.color(pal[Tok.GRAPHITE], alpha).circle(x, y, 4f * px + 0.75f * px)
+        shapes.color(pal[Tok.PAPER], alpha).circle(x, y, 4f * px - 0.75f * px)
     }
 
     private fun drawBoulders(sim: GameSim, pal: Palette, px: Float) {
@@ -620,6 +640,13 @@ class WorldRenderer(
 
     companion object {
         private const val HATCH = 0.35f
+        /** Notes: how far past the right edge one may come in early (m), how long it waits at the
+         *  left edge after the runner passes its end (m) and fades over (m), and its screen margins (dp). */
+        private const val NOTE_EARLY = 4f
+        private const val NOTE_STAY = 2f
+        private const val NOTE_FADE = 2f
+        private const val NOTE_MARGIN = 12f
+        private const val NOTE_TOP = 96f
         private val CRACK = floatArrayOf(-0.3f, -0.2f, 0.1f, 0.25f, 0.4f, 0.05f)
 
         /** Unit teardrop from the POC's two cubic Béziers, tessellated once. */
