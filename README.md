@@ -58,10 +58,12 @@ first, which clears its best score, calibration and tutorial progress.
 The game opens **straight into play**: 1-1 is already running when it starts (later launches
 pick up at the first stage not yet cleared). A short handwritten note introduces each new thing
 just before it. The first three obstacles each ask for one ink with a dotted guide and a word:
-a rope gap, a spring wall and a beam chasm. Until the pen has been tuned, the runner stops at
-each of them and waits for a stroke, notes past the next one stay hidden, a stroke drawn there
-is that ink whatever the pressure, and the pressures of those three strokes **tune the pen**
-(if they rise from rope to beam). Each stroke becomes
+a rope gap, a spring wall and a beam chasm. On a first run (until 1-1 has been cleared once)
+the runner stops before each new thing, those three, the first Blot and the doodle box, and
+waits until a stroke that will work is there; a miss is wiped, with a tip. Notes past the next
+stop stay hidden, so one thing comes at a time. Until the pen has been tuned, a stroke drawn at
+one of the three is that ink whatever the pressure, and the pressures of those three strokes
+**tune the pen** (if they rise from rope to beam). Each stroke becomes
 one ink, from the pressure it settles at once the pen has landed. The ⋯ menu has **Tune your
 pen** (draw a rope, a spring and a beam line along a guide, then try a few strokes), **How to
 play** (four short lessons on rope, spring, beam and erasing), **Music**, the **Stage list**,

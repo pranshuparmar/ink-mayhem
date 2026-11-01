@@ -18,7 +18,7 @@ class StageTest {
             println("STAGE $id: ${p.summary} drops ${p.sim.stageRun?.drops} lowest ${p.lowestY} highest ${p.highestY}")
             assertEquals(GameState.CLEAR, st, p.summary)
             assertTrue(p.sim.stageRun!!.allLight, "heavy judgements: ${p.events.pops}")
-            assertEquals(1, p.events.checkpoints, "checkpoint")
+            assertEquals(Stages.byId(id)!!.layout.checkpoints.size, p.events.checkpoints, "checkpoints")
             assertEquals(1, p.events.clears)
             val hearts = Stages.byId(id)!!.layout.items.count { it.kind == ItemKind.HEART }
             assertEquals(hearts, p.events.hearts, "the solution takes the high road to every heart")

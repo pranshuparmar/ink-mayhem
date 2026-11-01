@@ -593,6 +593,8 @@ class InkMayhemGame(
             }
             hit === clearCard.next -> if (clearCard.hasNext && ses.next()) audio.play(Sfx.STAGE_START) else endStage()
         }
+        // a retry after the first clear is no longer a first run
+        session?.let { if (screen == Screen.STAGE) it.sim.learning = firstRun(it.stage) }
     }
 
     // ------------------------------------------------------------------------------ silent tuning
@@ -617,7 +619,7 @@ class InkMayhemGame(
             settings.calibration = PenCalibration.fromLines(r, sp, b)
             session?.sim?.gateTuning = false
             log { "pen tuned from the gates: ${settings.calibration}" }
-            toast.show("Pen tuned to your touch.", clock, force = true)
+            toast.show("Got it: the game knows your light, normal and hard touch now.", clock, force = true)
         } else {
             gateRaw.fill(Float.NaN)
             toast.show(TUNE_LATER, clock, force = true)
@@ -637,6 +639,7 @@ class InkMayhemGame(
         ss.scale = scale
         ss.tint = settings.tint
         ss.gateTuning = !settings.penTuned
+        ss.learning = firstRun(def)
         val ses = StageSession(ss, settings)
         session = ses
         ses.start(def, quick = quick)
@@ -651,6 +654,9 @@ class InkMayhemGame(
     }
 
     private fun newBot(s: GameSim) = StageBot(s) { dev.wrongInk[it] ?: it }
+
+    /** The first page until it has been cleared once: the runner waits before each new thing. */
+    private fun firstRun(def: StageDef) = def === Stages.FIRST_PAGE && settings.stars(def.id) == 0
 
     private fun openSelect() {
         selectCard.refresh()

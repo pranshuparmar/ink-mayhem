@@ -481,16 +481,17 @@ class WorldRenderer(
     }
 
     /**
-     * The checkpoint bookmark and the finish flag (with a little doodled castle past it). Poles
+     * The checkpoint bookmarks and the finish flag (with a little doodled castle past it). Poles
      * draw [behind] the ground; flags in front.
      */
     private fun drawFlags(sim: GameSim, pal: Palette, px: Float, behind: Boolean) {
         val l = sim.stage?.layout ?: return
         val lw = 1.6f * px
-        if (!l.checkpointX.isNaN()) {
-            val x = l.checkpointX
-            val y = l.checkpointLevel
-            val reached = sim.stageRun?.checkpoint == true
+        val passed = sim.stageRun?.reached ?: -1
+        for (ci in l.checkpoints.indices) {
+            val x = l.checkpoints[ci].x
+            val y = l.checkpoints[ci].level
+            val reached = ci <= passed
             if (behind) {
                 shapes.color(pal[Tok.GRAPHITE]).line(x, y, x, y - 2.4f, lw * 1.4f)
             } else {

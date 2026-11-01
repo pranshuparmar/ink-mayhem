@@ -123,9 +123,10 @@ class Hud {
         shapes.color(pal[Tok.RULE]).roundRect(x0, y, x1 - x0, 4f, 2f)
         val rx = at(sim.runner.body.position.x)
         shapes.color(pal[Tok.ACCENT]).roundRect(x0, y, rx - x0, 4f, 2f)
-        if (!l.checkpointX.isNaN()) {
-            val cx = at(l.checkpointX)
-            shapes.color(if (sim.stageRun?.checkpoint == true) pal[Tok.ROPE] else pal[Tok.GRAPHITE]).rect(cx - 1f, y - 4f, 2f, 12f)
+        val reached = sim.stageRun?.reached ?: -1
+        for (i in l.checkpoints.indices) {
+            val cx = at(l.checkpoints[i].x)
+            shapes.color(if (i <= reached) pal[Tok.ROPE] else pal[Tok.GRAPHITE]).rect(cx - 1f, y - 4f, 2f, 12f)
         }
         shapes.color(pal[Tok.GRAPHITE]).rect(x1 - 1f, y - 10f, 2f, 14f)
         shapes.color(pal[Tok.BEAM]).triangle(x1 + 1f, y - 10f, x1 + 11f, y - 6.5f, x1 + 1f, y - 3f)

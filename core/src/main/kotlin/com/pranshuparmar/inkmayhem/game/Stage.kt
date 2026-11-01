@@ -59,7 +59,7 @@ class StageLayout {
 
     class GateSpec(
         val ink: Ink, val x0: Float, val x1: Float, val gx0: Float, val gy0: Float, val gx1: Float, val gy1: Float,
-        val label: String, val tunes: Boolean, val waitX: Float,
+        val label: String, val tunes: Boolean, val waitX: Float, val slack: Float,
     )
 
     /** One stroke of the scripted solution, drawn once the runner reaches [atX]. */
@@ -79,12 +79,17 @@ class StageLayout {
     val gates = ArrayList<GateSpec>()
     val solution = ArrayList<Stroke>()
 
+    /** A bookmark: once passed, a retry starts 1 m past it. */
+    class Checkpoint(val x: Float, val level: Float)
+
     var startX = 0f
-    var checkpointX = Float.NaN
+    /** In order along the stage. */
+    val checkpoints = ArrayList<Checkpoint>()
+    /** The last checkpoint (the midway one), or NaN without any. */
+    val checkpointX: Float get() = checkpoints.lastOrNull()?.x ?: Float.NaN
     var finishX = Float.NaN
     /** The finish flag stands on this level. */
     var finishLevel = 0f
-    var checkpointLevel = 0f
 
     /** Top of the highest solid surface under [x] (blocks only), or NaN over a gap. */
     fun groundAt(x: Float): Float {
@@ -346,8 +351,11 @@ class StageBuilder(private val l: StageLayout) {
      * labelled with the ink's name. A [tunes] gate also tunes an untuned pen, and the runner
      * waits at [waitX] until a stroke is drawn there (see [Gate]).
      */
-    fun hint(ink: Ink, x0: Float, x1: Float, gx0: Float, gy0: Float, gx1: Float, gy1: Float, tunes: Boolean = false, waitX: Float = Float.NaN) {
-        l.gates += StageLayout.GateSpec(ink, x0, x1, gx0, gy0, gx1, gy1, ink.label, tunes, waitX)
+    fun hint(
+        ink: Ink, x0: Float, x1: Float, gx0: Float, gy0: Float, gx1: Float, gy1: Float,
+        tunes: Boolean = false, waitX: Float = Float.NaN, slack: Float = 0.8f,
+    ) {
+        l.gates += StageLayout.GateSpec(ink, x0, x1, gx0, gy0, gx1, gy1, ink.label, tunes, waitX, slack)
     }
 
     fun note(text: String, dx: Float = 0.6f, up: Float = 3.4f, maxW: Float = Float.POSITIVE_INFINITY) {
@@ -361,10 +369,9 @@ class StageBuilder(private val l: StageLayout) {
         return flat(len)
     }
 
-    /** The midway bookmark: retries start here once it's passed. Put it where flat ground follows. */
+    /** A bookmark: retries start here once it's passed. Put it where flat ground follows. */
     fun checkpoint(): StageBuilder {
-        l.checkpointX = x
-        l.checkpointLevel = level
+        l.checkpoints += StageLayout.Checkpoint(x, level)
         return this
     }
 

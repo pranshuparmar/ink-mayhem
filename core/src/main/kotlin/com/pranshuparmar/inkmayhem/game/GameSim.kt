@@ -148,9 +148,14 @@ class GameSim(
     /** The tuning gate the last finished stroke was drawn at, or null. */
     var lastGate: Gate? = null
         private set
-    /** The tuning gate the runner is stopping or stopped at, waiting for a stroke, or null. */
+    /** The gate the runner is stopping or stopped at, waiting for a stroke, or null. */
     var waitingAt: Gate? = null
         private set
+    /**
+     * The first page's first run: the runner waits before each new thing (the hints with a wait
+     * point) until a stroke that does the job is there; misses are wiped with a tip.
+     */
+    var learning = false
 
     /** Tutorial: the runner stands still (no drive, no stuck rules) until released. */
     var runnerHeld = false
@@ -174,9 +179,11 @@ class GameSim(
         private set
     private var runnerOnLift = 0
 
-    /** A stage attempt: its checkpoint and what the player had when they passed it. */
+    /** A stage attempt: its last checkpoint passed and what the player had when they passed it. */
     class StageRun(val def: StageDef, hazardCount: Int) {
-        var checkpoint = false
+        /** Index of the last checkpoint passed, −1 for none. */
+        var reached = -1
+        val checkpoint: Boolean get() = reached >= 0
         var cpScore = 0.0
         var cpCombo = 1
         var cpInk = INK_START
@@ -186,8 +193,8 @@ class GameSim(
         private val cpJudged = IntArray(hazardCount)
         var drops = 0
 
-        internal fun save(sim: GameSim) {
-            checkpoint = true
+        internal fun save(sim: GameSim, index: Int) {
+            reached = index
             cpScore = sim.score; cpCombo = sim.combo; cpInk = sim.inkLeft; cpDrops = drops
             judged.copyInto(cpJudged)
         }
@@ -263,6 +270,8 @@ class GameSim(
         var tooLong = false
         /** Drawn at this tuning gate while the pen is untuned: its ink is the gate's. */
         var forced: Gate? = null
+        /** Begun at this gate while learning (or tuning): finished, it is checked against the job. */
+        var gate: Gate? = null
     }
 
     val difficulty: Float get() = (dist / 600f).coerceIn(0f, 1f)
@@ -398,11 +407,11 @@ class GameSim(
             val tag = FixtureTag(com.pranshuparmar.inkmayhem.physics.FixtureKind.BOX)
             boxes += DoodleBox(ink.addRect(k.x, k.top, k.size, k.size, tag = tag), k.holds, tag)
         }
-        for (k in l.gates) gates += Gate(k.ink, k.x0, k.x1, k.gx0, k.gy0, k.gx1, k.gy1, k.label, k.tunes, k.waitX)
+        for (k in l.gates) gates += Gate(k.ink, k.x0, k.x1, k.gx0, k.gy0, k.gx1, k.gy1, k.label, k.tunes, k.waitX, k.slack)
         for (k in l.notes) notes += Note(k.x, k.y, k.text).also { it.maxW = k.maxW }
         for ((i, k) in l.hazards.withIndex()) hazards += Hazard(k.type, k.x0, k.x1, k.par).also { it.index = i }
         for (k in l.runways) blocks.firstOrNull { it.x == k.x }?.boulderTrigger = k.triggerX
-        val sx = if (keep != null) l.checkpointX + 1f else l.startX
+        val sx = if (keep != null) l.checkpoints[keep.reached].x + 1f else l.startX
         level = l.groundAt(sx)
         spawnRunner(sx)
         dist = sx
@@ -714,7 +723,10 @@ class GameSim(
             events.toast(OUT_OF_INK)
             return
         }
-        drawing = Drawing(pointer).also { it.forced = if (gateTuning) tuningGateAt(x) else null }
+        drawing = Drawing(pointer).also { d ->
+            d.gate = if (learning || gateTuning) gateAt(x) else null
+            d.forced = d.gate?.takeIf { gateTuning && it.tunes }
+        }
         steady.reset()
         addPoint(x, y, n, t)
     }
@@ -831,8 +843,6 @@ class GameSim(
         for (i in 0 until n) ps[i] = Ink.clampTo(ps[i], kind)
         val s = ink.buildStroke(d.xs.items, d.ys.items, ps.items, n) ?: return
         lastStrokeInk = kind
-        lastGate = d.forced
-        d.forced?.drawn = true
         if (!unlimitedInk) inkLeft = max(0f, inkLeft - s.cost)
         // footprint + heaviest ink, for scoring against each hazard's par
         var x0 = Float.POSITIVE_INFINITY
@@ -840,6 +850,21 @@ class GameSim(
         for (i in 0 until n) { x0 = min(x0, d.xs[i]); x1 = max(x1, d.xs[i]) }
         s.x0 = x0; s.x1 = x1
         s.heaviest = s.segs.maxOf { it.kind.weight }
+        // learning: a stroke for the obstacle the runner waits at has to do the job, or it's wiped
+        val g = d.gate ?: waitingAt?.takeIf { x1 >= it.x0 - GATE_SLACK && x0 <= it.x1 + GATE_SLACK }
+        if (g != null && learning && !g.waitX.isNaN() && !g.done) {
+            val tip = missTip(g, s, kind)
+            if (tip != null) {
+                ink.removeStroke(s)
+                if (!unlimitedInk) inkLeft = min(INK_MAX, inkLeft + s.cost)
+                events.burst((x0 + x1) / 2f, (d.ys[0] + d.ys[n - 1]) / 2f, 10, 2f, Tok.MUTED)
+                events.sound(Sfx.ERASE)
+                events.toast(tip, force = true)
+                return
+            }
+            g.done = true
+        }
+        lastGate = d.forced
         for (a in s.anchors) events.burst(a.x, a.y, 5, 1.2f, Tok.GRAPHITE)
         if (s.anchors.isNotEmpty()) events.sound(Sfx.ANCHOR)
         weakenLongRope(s)
@@ -904,6 +929,14 @@ class GameSim(
                 val wt = min(runSpeed, vDes) / runner.r
                 rb.applyTorque((3f * (wt - rb.angularVelocity)).coerceIn(-7f, 7f), true)
                 runner.stuck = 0f
+                // stood there a while with nothing drawn: say what to do
+                if (kotlin.math.abs(rb.linearVelocity.x) < 0.2f && drawing == null) {
+                    wg.waitT += sdt
+                    if (wg.waitT > NUDGE_S && !wg.nudged) {
+                        wg.nudged = true
+                        events.toast(TIP_IDLE, force = true)
+                    }
+                }
             } else if (state == GameState.RUN && !runnerHeld) {
                 val w = rb.angularVelocity
                 val wt = runSpeed / runner.r
@@ -1113,9 +1146,23 @@ class GameSim(
         events.sound(Sfx.SHRINK)
         events.shake(0.2f)
         events.haptic(Haptic.SNAP)
-        // knocked clear: up off floor spikes and Blots, down from a spiked ceiling
+        // knocked clear: up off floor spikes and Blots, down from spikes overhead
         val v = rb.linearVelocity
-        rb.setLinearVelocity(max(v.x, runSpeed * 0.9f), if (kind == DeathKind.SPIKED && v.y < -0.5f) 2f else -7.5f)
+        rb.setLinearVelocity(max(v.x, runSpeed * 0.9f), if (kind == DeathKind.SPIKED && spikesAbove(p.x, p.y)) 2f else -7.5f)
+    }
+
+    /** Whether the nearest spikes to ([px], [py]) hang above it (a spiked ceiling or a ledge's underside). */
+    private fun spikesAbove(px: Float, py: Float): Boolean {
+        var best = Float.POSITIVE_INFINITY
+        var above = false
+        fun consider(r: com.pranshuparmar.inkmayhem.physics.GroundRect, spikeY: Float, up: Boolean) {
+            val dx = max(0f, max(r.x - px, px - r.right))
+            val d = hypot(dx, spikeY - py)
+            if (d < best) { best = d; above = !up }
+        }
+        spikeStrips.fastEach { consider(it, if (it.spikesUp) it.y else it.bottom, it.spikesUp) }
+        ceilings.fastEach { if (it.kind == FixtureKind.CEILING) consider(it, it.bottom, false) }
+        return above
     }
 
     /** The marker cap on or off: Bold is a bigger runner of the same weight. */
@@ -1218,9 +1265,18 @@ class GameSim(
     private fun hitBox() {
         val tag = pendingBox ?: return
         val box = boxes.firstOrNull { it.tag === tag } ?: return
-        val p = runner.body.position
+        val rb = runner.body
+        val p = rb.position
         val r = box.rect
-        if (box.used || p.y < r.bottom || kotlin.math.abs(p.x - (r.x + r.w / 2f)) > r.w / 2f + runner.r * 0.7f) return
+        if (p.y < r.bottom - 0.1f) return // landed on top or met its side
+        val off = kotlin.math.abs(p.x - (r.x + r.w / 2f))
+        if (off > r.w / 2f) {
+            // met an underside corner: carried on forwards, or it would drop back onto the spring
+            // under it and bounce into the corner for ever
+            val v = rb.linearVelocity
+            rb.setLinearVelocity(max(v.x, runSpeed * 0.95f), max(v.y, 1f))
+        }
+        if (box.used || off > r.w / 2f + runner.r) return
         box.used = true
         box.hitAt = simT
         val cx = r.x + r.w / 2f
@@ -1260,10 +1316,13 @@ class GameSim(
                 return@fastEach
             }
             val v = body.linearVelocity
-            // it hops out of the box first; once down it slides
+            // it hops out of the box first; once down it slides, and hurries after a runner that
+            // got ahead of it (the runner can't turn back)
             if (v.y >= 0f && kotlin.math.abs(v.y) < 0.5f) {
-                if (kotlin.math.abs(v.x) < CAP_SPEED * 0.3f) c.dir = -c.dir
-                body.setLinearVelocity(c.dir * CAP_SPEED, v.y)
+                val behind = q.x < px - 0.3f
+                if (behind) c.dir = 1
+                else if (kotlin.math.abs(v.x) < CAP_SPEED * 0.3f) c.dir = -c.dir
+                body.setLinearVelocity(c.dir * if (behind) runSpeed + CAP_CATCH_UP else CAP_SPEED, v.y)
             }
             if (hypot(q.x - px, q.y - py) > runner.r + CAP_R + 0.1f || state != GameState.RUN) return@fastEach
             c.taken = true
@@ -1279,22 +1338,52 @@ class GameSim(
     }
 
     /**
-     * While the pen is untuned, the next tuning gate the runner will wait at (however far ahead):
-     * what lies past it isn't introduced yet.
+     * Learning: the next gate the runner will wait at (however far ahead). What lies past it
+     * isn't introduced yet.
      */
     val pendingGate: Gate?
-        get() = if (!gateTuning) null else gates.firstOrNull { it.tunes && !it.waitX.isNaN() && !it.drawn && !it.passed }
+        get() = if (!learning) null else gates.firstOrNull { !it.waitX.isNaN() && !it.done && !it.passed }
 
-    /** While the pen is untuned: the tuning gate ahead that the runner has to wait at, if any. */
+    /** Learning: the gate ahead that the runner has to stop and wait at, if any. */
     private fun gateToWaitAt(rx: Float): Gate? {
-        if (!gateTuning) return null
-        return gates.firstOrNull { it.tunes && !it.waitX.isNaN() && !it.drawn && !it.passed && rx < it.x1 && rx > it.waitX - WAIT_FROM }
+        if (!learning) return null
+        return gates.firstOrNull { !it.waitX.isNaN() && !it.done && !it.passed && rx < it.x1 && rx > it.waitX - WAIT_FROM }
     }
 
-    /** The first tuning gate a stroke begun at [x] belongs to, if the runner hasn't passed it. */
-    private fun tuningGateAt(x: Float): Gate? {
+    /**
+     * The gate a stroke begun at [x] is for, if the runner hasn't passed it: a tuning gate (any
+     * time the pen is untuned), or one the runner will wait at (while learning).
+     */
+    private fun gateAt(x: Float): Gate? {
         val rx = runner.body.position.x
-        return gates.firstOrNull { it.tunes && !it.passed && rx < it.x1 && x >= it.x0 - GATE_SLACK && x <= it.x1 + GATE_SLACK }
+        return gates.firstOrNull {
+            (it.tunes || (learning && !it.waitX.isNaN() && !it.done)) &&
+                !it.passed && rx < it.x1 && x >= it.x0 - GATE_SLACK && x <= it.x1 + GATE_SLACK
+        }
+    }
+
+    /**
+     * Null if stroke [s] of [kind] does [g]'s job, or a tip for the player if not. A spring hint
+     * wants a spring lying on the ground along the guide; the others a bridge hooked on both
+     * sides of the gap (a beam hint, a beam: rope and springs don't reach that far).
+     */
+    private fun missTip(g: Gate, s: Stroke, kind: Ink): String? {
+        if (g.ink == Ink.SPRING) {
+            val ground = max(g.gy0, g.gy1) + 0.1f
+            var top = Float.POSITIVE_INFINITY
+            var low = Float.NEGATIVE_INFINITY
+            s.segs.fastEach { top = min(top, min(it.ay, it.by)); low = max(low, max(it.ay, it.by)) }
+            val onGround = s.anchors.isNotEmpty() && low > ground - 0.6f && top > ground - 1.2f
+            val along = s.x1 >= g.gx0 - g.slack && s.x0 <= g.gx1 + g.slack / 2f
+            if (!onGround || !along) return TIP_PAD
+            if (kind != Ink.SPRING) return "That was ${kind.label}. For a spring, write normally: not too light, not too hard."
+            return null
+        }
+        val left = s.anchors.any { it.x <= g.gx0 + EDGE_REACH }
+        val right = s.anchors.any { it.x >= g.gx1 - EDGE_REACH }
+        if (!left || !right) return TIP_BRIDGE
+        if (g.ink == Ink.BEAM && kind != Ink.BEAM) return "That was ${kind.label}: it can't hold over a gap that long. Press hard for a beam."
+        return null
     }
 
     /**
@@ -1340,8 +1429,9 @@ class GameSim(
         val l = run.def.layout
         // saved once the hazard just before it has been judged (judging lags 0.6 m), still
         // short of the respawn point 1 m past it
-        if (!run.checkpoint && !l.checkpointX.isNaN() && px > l.checkpointX + 0.6f) {
-            run.save(this)
+        val next = run.reached + 1
+        if (next < l.checkpoints.size && px > l.checkpoints[next].x + 0.6f) {
+            run.save(this, next)
             events.checkpoint()
         }
         if (state == GameState.RUN && px > l.finishX) {
@@ -1489,6 +1579,8 @@ class GameSim(
         const val CAP_R = 0.24f
         const val CAP_SPEED = 2.2f
         const val CAP_HOP = -4f
+        /** Behind the runner, a cap slides this much faster than it (m/s). */
+        const val CAP_CATCH_UP = 1.5f
         const val CAP_POINTS = 500
         const val BOLD_R = 0.52f
         const val SAFE_S = 1.5f
@@ -1498,9 +1590,16 @@ class GameSim(
         const val HAPPY_S = 1.2f
         /** A stroke begun this far either side of a tuning gate still belongs to it. */
         const val GATE_SLACK = 1.5f
-        /** An untuned pen's runner brakes at this rate (m/s²) from this far (m) before a tuning gate's wait. */
+        /** A learning runner brakes at this rate (m/s²) from this far (m) before a gate's wait point. */
         const val WAIT_DECEL = 3f
         const val WAIT_FROM = 8f
+        /** After this long waiting with nothing drawn, a nudge. */
+        const val NUDGE_S = 7f
+        /** A bridge's hook counts for a side if it is within this of that side's end of the guide. */
+        const val EDGE_REACH = 0.9f
+        const val TIP_IDLE = "Draw along the dotted line with the S Pen."
+        const val TIP_BRIDGE = "That one fell. Start on the ground on this side and end on the ground on the far side."
+        const val TIP_PAD = "Lay the spring flat on the ground, along the dotted line."
         const val OUT_OF_INK = "Out of ink. Grab the blue drops."
         const val TOO_LONG_FOR_ROPE = "Too long for rope. Press harder."
 

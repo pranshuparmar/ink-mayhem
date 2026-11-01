@@ -168,34 +168,71 @@ class Slice1Test {
         assertEquals(GameState.DEAD, p.play(20f), p.summary)
     }
 
+    /** A stroke at constant pressure along a straight line, through the real pen path. */
+    private fun line(p: StagePlay, x0: Float, y0: Float, x1: Float, y1: Float, pressure: Float) {
+        val n = maxOf(2, (kotlin.math.hypot(x1 - x0, y1 - y0) / 0.05f).toInt())
+        for (i in 0..n) {
+            tPen += 1.0 / 240
+            val x = x0 + (x1 - x0) * i / n
+            val y = y0 + (y1 - y0) * i / n
+            if (i == 0) p.sim.penDown(3, x, y, pressure, erase = false, t = tPen) else p.sim.penMove(3, x, y, pressure, tPen)
+        }
+        p.sim.penUp(3)
+    }
+
+    private var tPen = 100.0
+
     @Test
-    fun `while the pen is untuned the runner waits at each first-page gate until a stroke is drawn there`() = playing(StagePlay(Stages.FIRST_PAGE, solve = false)) { p ->
+    fun `on the first run the runner waits at each new thing until a stroke that works is drawn`() = playing(StagePlay(Stages.FIRST_PAGE, solve = false)) { p ->
+        p.sim.learning = true
         p.sim.gateTuning = true
-        val gates = p.sim.gates.filter { it.tunes }
-        assertEquals(3, gates.size)
-        val rope = gates[0]
+        val waits = p.sim.gates.filter { !it.waitX.isNaN() }
+        assertEquals(5, waits.size, "rope gap, spring wall, beam chasm, Blot, box")
+        val rope = waits[0]
         p.play(20f)
         assertEquals(GameState.RUN, p.sim.state, p.summary)
         assertEquals(rope, p.sim.waitingAt)
         assertTrue(kotlin.math.abs(p.x - rope.waitX) < 0.6f && p.x < rope.x0 + 1f, "stopped before the gap at ${p.x}, wait ${rope.waitX}")
-        // a light stroke across the gap releases it; the next gate (the spring wall) stops it again
-        var t = 100.0
-        val n = 70
-        for (i in 0..n) {
-            t += 1.0 / 240
-            val x = rope.gx0 + (rope.gx1 - rope.gx0) * i / n
-            if (i == 0) p.sim.penDown(3, x, rope.gy0, 0.2f, erase = false, t = t) else p.sim.penMove(3, x, rope.gy0, 0.2f, t)
-        }
-        p.sim.penUp(3)
-        assertTrue(rope.drawn)
+        assertTrue(GameSim.TIP_IDLE in p.events.toasts, "nudged after waiting: ${p.events.toasts}")
+        // a line drawn in the air over the gap would fall: it's wiped with a tip, ink back, and the runner keeps waiting
+        val ink = p.sim.inkLeft
+        line(p, rope.gx0, rope.gy0 - 1.5f, rope.gx1, rope.gy1 - 1.5f, 0.2f)
+        assertEquals(GameSim.TIP_BRIDGE, p.events.toasts.last())
+        assertEquals(ink, p.sim.inkLeft, 0.01f)
+        assertTrue(p.sim.ink.strokes.isEmpty())
+        p.play(3f)
+        assertEquals(rope, p.sim.waitingAt)
+        // edge to edge on the ground releases it; the spring wall stops it again
+        line(p, rope.gx0, rope.gy0, rope.gx1, rope.gy1, 0.2f)
+        assertTrue(rope.done)
         p.play(20f)
         assertEquals(GameState.RUN, p.sim.state, p.summary)
-        assertEquals(gates[1], p.sim.waitingAt, p.summary)
-        assertTrue(p.x > rope.x1 && p.x < gates[1].waitX + 0.6f, "at the spring wall: ${p.x}")
+        assertEquals(waits[1], p.sim.waitingAt, p.summary)
+        assertTrue(p.x > rope.x1 && p.x < waits[1].waitX + 0.6f, "at the spring wall: ${p.x}")
+        // a spring drawn up the wall's face is wiped; one on the dotted line works
+        val wall = waits[1]
+        line(p, wall.x1 - 1.1f, wall.gy0, wall.x1 - 1.1f, wall.gy0 - 2f, 0.47f)
+        assertEquals(GameSim.TIP_PAD, p.events.toasts.last())
+        line(p, wall.gx0, wall.gy0, wall.gx1, wall.gy1, 0.47f)
+        assertTrue(wall.done)
+        p.play(20f)
+        assertEquals(waits[2], p.sim.waitingAt, p.summary)
     }
 
     @Test
-    fun `a tuned pen's runner doesn't wait`() = playing(StagePlay(Stages.FIRST_PAGE, solve = false)) { p ->
+    fun `a first run played by the bot clears the page, waiting at each new thing`() = playing(StagePlay(Stages.FIRST_PAGE)) { p ->
+        p.sim.learning = true
+        p.sim.gateTuning = true
+        val waited = HashSet<Gate>()
+        assertEquals(GameState.CLEAR, p.play(300f) { p.sim.waitingAt?.let { waited += it } }, p.summary)
+        assertEquals(5, waited.size)
+        assertEquals(2, p.sim.squashed, p.summary)
+        assertEquals(Stages.FIRST_PAGE.layout.checkpoints.size, p.events.checkpoints)
+    }
+
+    @Test
+    fun `once the page has been cleared the runner doesn't wait`() = playing(StagePlay(Stages.FIRST_PAGE, solve = false)) { p ->
+        p.sim.gateTuning = true
         assertEquals(GameState.DEAD, p.play(20f), p.summary)
         assertEquals(DeathKind.FELL, p.sim.death?.kind)
     }

@@ -98,19 +98,26 @@ class Cap(val body: Body) {
 /**
  * A doodled hint over x0..x1: a dotted guide from (gx0, gy0) to (gx1, gy1) in [ink]'s colour with
  * a one-word [label]. A tuning gate ([tunes], the first page's first three obstacles) also tunes
- * the pen: while it is untuned, a stroke drawn there is that ink, and its pressure is learnt; and
- * the runner stops at [waitX] until one has been drawn (NaN: it never waits).
+ * the pen: while it is untuned, a stroke drawn there is that ink, and its pressure is learnt. On
+ * the first page's first run the runner stops at [waitX] (NaN: never) until a stroke that does
+ * the job is there: a spring hint wants a spring lying on the ground along the guide, any other a
+ * bridge hooked on both sides (a beam hint, a beam).
  */
 class Gate(
     val ink: Ink, val x0: Float, val x1: Float,
     val gx0: Float, val gy0: Float, val gx1: Float, val gy1: Float,
     val label: String, val tunes: Boolean, val waitX: Float = Float.NaN,
+    /** How far before the guide's start a spring may reach and still count (half that past its end). */
+    val slack: Float = 0.8f,
 ) {
     /** The runner is past it: the guide fades out. */
     var passed = false
     var passedAt = 0f
-    /** A stroke has been drawn at it while the pen was untuned. */
-    var drawn = false
+    /** A stroke that does the job is in place: a waiting runner goes on. */
+    var done = false
+    /** Seconds the runner has stood waiting here, and whether it has nudged the player yet. */
+    var waitT = 0f
+    var nudged = false
 }
 
 /** How the runner's face looks this frame. */

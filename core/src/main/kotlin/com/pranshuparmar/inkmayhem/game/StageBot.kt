@@ -27,7 +27,8 @@ class StageBot(private val sim: GameSim, private val inkFor: (Ink) -> Ink = { it
         val l = sim.stage?.layout ?: return
         if (sim.state != GameState.RUN || sim.drawing != null || sim.runnerHeld) return
         if (builtFor !== sim.ink) reset() // the stage was rebuilt (a retry)
-        val rx = sim.runner.body.position.x
+        // a runner waiting at a gate (the first page's first run) is as good as there
+        val rx = sim.waitingAt?.let { maxOf(sim.runner.body.position.x, it.x1) } ?: sim.runner.body.position.x
         for (i in l.solution.indices) {
             val s = l.solution[i]
             if (drawn[i] || rx < s.atX) continue
