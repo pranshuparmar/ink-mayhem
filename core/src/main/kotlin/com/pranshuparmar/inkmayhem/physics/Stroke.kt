@@ -7,7 +7,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** What a fixture is, for contact handling and rendering. Stored as Fixture user data. */
-enum class FixtureKind { GROUND, CEILING, ROPE, SPRING, BEAM, RUNNER, BOULDER, CRATE, LIFT, BLOT, BOX, CAP, BOSS, ERASER, BEETLE, PLANE }
+enum class FixtureKind { GROUND, CEILING, ROPE, SPRING, BEAM, RUNNER, BOULDER, CRATE, LIFT, BLOT, BOX, CAP, BOSS, ERASER, BEETLE, PLANE, CRUMBLE }
 
 class FixtureTag(val kind: FixtureKind, val stroke: Stroke? = null) {
     companion object {
@@ -23,6 +23,7 @@ class FixtureTag(val kind: FixtureKind, val stroke: Stroke? = null) {
         val ERASER = FixtureTag(FixtureKind.ERASER)
         val BEETLE = FixtureTag(FixtureKind.BEETLE)
         val PLANE = FixtureTag(FixtureKind.PLANE)
+        val CRUMBLE = FixtureTag(FixtureKind.CRUMBLE)
 
         private val WET_ROPE = FixtureTag(FixtureKind.ROPE)
         private val WET_SPRING = FixtureTag(FixtureKind.SPRING)

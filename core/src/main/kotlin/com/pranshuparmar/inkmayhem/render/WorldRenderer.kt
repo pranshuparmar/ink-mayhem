@@ -180,6 +180,7 @@ class WorldRenderer(
         sim.ceilings.fastEach { c -> drawCeiling(c, pal, vx0, vx1, sim.cam.y - 2f, px, brick) }
         sim.spikeStrips.fastEach { k -> drawSpikes(k, pal, vx0, vx1) }
         drawBoxes(sim, pal, vx0, vx1, px)
+        drawCrumbles(sim, pal, vx0, vx1, px)
         drawWarps(sim, pal, vx0, vx1, px)
         drawGates(sim, pal, px)
         if (guideOn) drawGuide(sim, pal, px)
@@ -1174,6 +1175,25 @@ class WorldRenderer(
         shapes.color(pal[Tok.PAPER]).circle(x + look * r * 1.25f, y - r * 0.1f, r * 0.14f)
         val jaw = if (eating) 0.12f + 0.1f * kotlin.math.abs(sin(walk * 2f)) else 0.08f
         shapes.color(pal[Tok.INK]).line(x + look * r * 1.5f, y + r * 0.1f, x + look * r * (1.75f + jaw), y + r * 0.35f, 1.6f * px)
+    }
+
+    /** Crumbling bricks: cracked bricks that shake once touched, then drop. */
+    private fun drawCrumbles(sim: GameSim, pal: Palette, vx0: Float, vx1: Float, px: Float) {
+        sim.crumbles.fastEach { c ->
+            if (c.gone || c.x > vx1 || c.x + c.w < vx0) return@fastEach
+            val cx = c.prev.lerpX(alpha)
+            val cy = c.prev.lerpY(alpha)
+            val shake = if (!c.touchedAt.isNaN() && !c.falling) sin(sim.simT * 60f) * 0.04f else 0f
+            val x = cx - c.w / 2f + shake
+            val y = cy - c.h / 2f
+            shapes.color(pal[Tok.ROCK]).rect(x, y, c.w, c.h)
+            shapes.color(pal[Tok.GRAPHITE]).roundRectOutline(x, y, c.w, c.h, 0.04f, 1.4f * px)
+            // the cracks
+            shapes.color(pal[Tok.GRAPHITE], 0.7f)
+            shapes.line(x + c.w * 0.3f, y, x + c.w * 0.42f, y + c.h * 0.55f, px)
+            shapes.line(x + c.w * 0.42f, y + c.h * 0.55f, x + c.w * 0.35f, y + c.h, px)
+            shapes.line(x + c.w * 0.72f, y + c.h, x + c.w * 0.64f, y + c.h * 0.4f, px)
+        }
     }
 
     /** Highlighter swipes: a wide translucent yellow band that fades. */

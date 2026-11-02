@@ -170,6 +170,9 @@ class GameSim(
     /** Beetles touching rope or springs: the beetle's body and the stroke it is chewing. */
     private val beetleOn = ArrayList<Body>(4)
     private val beetleOnStroke = ArrayList<Stroke>(4)
+    /** Crumbling bricks, and the ones the runner touched this step. */
+    val crumbles = ArrayList<Crumble>()
+    private val crumbleTouched = ArrayList<Body>(2)
     /** Paper planes in the air, flights still to come, and planes that touched ink this step. */
     val planes = ArrayList<Plane>()
     private val flights = ArrayList<StageLayout.Flight>()
@@ -357,6 +360,7 @@ class GameSim(
         swipes.clear(); warps.clear(); hiddenBlocks.clear(); hiddenBoxes.clear(); inBonus = false
         crumbling.clear(); crumbleAt.clear()
         planes.clear(); flights.clear(); planeHits.clear()
+        crumbles.clear(); crumbleTouched.clear()
         beetleOn.clear(); beetleOnStroke.clear()
         starsTaken = 0; squashed = 0; starStep = -1; lastStarT = -10f
         mood = Mood.CALM; bounceAt = -10f; happyUntil = -10f; ouchAt = -10f; lastGate = null
@@ -390,6 +394,7 @@ class GameSim(
         blots.fastEach { if (!it.dead) it.prev.snapshot() }
         boss?.let { if (!it.down) it.prev.snapshot() }
         planes.fastEach { if (!it.down) it.prev.snapshot() }
+        crumbles.fastEach { if (!it.gone) it.prev.snapshot() }
         caps.fastEach { if (!it.taken) it.prev.snapshot() }
         ink.strokes.fastEach { s -> s.groups.fastEach { it.snapshot() } }
     }
@@ -464,6 +469,11 @@ class GameSim(
             if (k.hidden) hiddenBoxes += k else addBox(k)
         }
         flights += l.flights
+        for (row in l.crumbles) for (i in 0 until row.n) {
+            val bx = row.x + i * row.w
+            val body = ink.addLift(bx + 0.02f, row.y, row.w - 0.04f, CRUMBLE_H, FixtureTag.CRUMBLE)
+            crumbles += Crumble(body, bx, row.y, row.w, CRUMBLE_H)
+        }
         for (k in l.warps) {
             val ty = if (k.toY.isNaN()) l.groundAt(k.toX).let { if (it.isNaN()) k.y else it } else k.toY
             warps += Warp(k.x, k.y, k.toX, ty, k.hidden, k.exit)
@@ -478,7 +488,7 @@ class GameSim(
             else ink.addWalker(bx, k.level - k.kind.r - 0.02f, k.kind.r, BOSS_DENSITY, FixtureTag.BOSS)
             boss = Boss(k.kind, body, a)
         }
-        for (k in l.gates) gates += Gate(k.ink, k.x0, k.x1, k.gx0, k.gy0, k.gx1, k.gy1, k.label, k.tunes, k.waitX, k.slack, k.forbid, k.crush)
+        for (k in l.gates) gates += Gate(k.ink, k.x0, k.x1, k.gx0, k.gy0, k.gx1, k.gy1, k.label, k.tunes, k.waitX, k.slack, k.forbid, k.crush, k.needs)
         for (k in l.notes) notes += Note(k.x, k.y, k.text).also { it.maxW = k.maxW }
         for ((i, k) in l.hazards.withIndex()) hazards += Hazard(k.type, k.x0, k.x1, k.par).also { it.index = i }
         for (k in l.runways) blocks.firstOrNull { it.x == k.x }?.boulderTrigger = k.triggerX
@@ -737,6 +747,7 @@ class GameSim(
             val other = if (ua?.kind == FixtureKind.RUNNER) ub else if (ub?.kind == FixtureKind.RUNNER) ua else null
             if (other?.kind == FixtureKind.SPRING) pendingBounce = true
             if (other?.kind == FixtureKind.BOX) pendingBox = other
+            if (other?.kind == FixtureKind.CRUMBLE) crumbleTouched += if (ua?.kind == FixtureKind.CRUMBLE) fa.body else fb.body
             // a beam dropped on a Blot (or a boss, an Eraser, a beetle), or a boulder rolling into one, squashes it
             val blotA = ua?.kind.let { it == FixtureKind.BLOT || it == FixtureKind.BOSS || it == FixtureKind.ERASER || it == FixtureKind.BEETLE }
             val blotB = ub?.kind.let { it == FixtureKind.BLOT || it == FixtureKind.BOSS || it == FixtureKind.ERASER || it == FixtureKind.BEETLE }
@@ -1250,6 +1261,9 @@ class GameSim(
             toErase.fastEach { st -> if (st in ink.strokes) eraseStroke(st) }
             planeHits.fastEach { pb -> planes.firstOrNull { !it.down && it.body === pb }?.let { crumplePlane(it, null) } }
             planeHits.clear()
+            crumbleTouched.fastEach { cb -> crumbles.firstOrNull { !it.gone && it.body === cb && it.touchedAt.isNaN() }?.touchedAt = simT }
+            crumbleTouched.clear()
+            updateCrumbles(sdt)
             toErase.clear(); bossOnSpring = false
             blotHits.clear(); blotHitBy.clear(); blotHitVy.clear(); pendingBox = null
             while (ink.events.isNotEmpty()) {
@@ -1511,11 +1525,12 @@ class GameSim(
             }
             BossKind.BIG_SMUDGE, BossKind.BEETLE_QUEEN -> {
                 if (blots.count { !it.dead } >= 2) return
-                // a Blot out of its mouth, towards the runner
+                // a Blot out of the Smudge's mouth (a beetle from the Queen), towards the runner
+                val kind = if (b.kind == BossKind.BEETLE_QUEEN) Creature.BEETLE else Creature.BLOT
                 val dir = if (px < q.x) -1f else 1f
-                val body = ink.addWalker(q.x + dir * (b.r + BLOT_R + 0.1f), q.y - 0.3f, BLOT_R, 1f, FixtureTag.BLOT)
+                val body = ink.addWalker(q.x + dir * (b.r + kind.r + 0.1f), q.y - 0.3f, kind.r, 1f, creatureTag(kind))
                 body.setLinearVelocity(dir * 3f, -4f)
-                blots += Blot(body, b.arena.x0 + 0.5f, b.arena.x1 - 0.5f).also { it.awake = true; it.dir = dir.toInt() }
+                blots += Blot(body, b.arena.x0 + 0.5f, b.arena.x1 - 0.5f, kind).also { it.awake = true; it.dir = dir.toInt() }
                 events.sound(Sfx.POP)
             }
             else -> Unit
@@ -1774,10 +1789,10 @@ class GameSim(
         }
     }
 
-    /** The beam [body] belongs to crumbles away [CRUMBLE_S] from now. */
+    /** The beam [body] belongs crumbles away [CRUMBLE_S] from now, if it was dropped (a bridge hooked at an end stays). */
     private fun crumble(body: Body) {
         val st = (body.fixtureList.firstOrNull()?.userData as? FixtureTag)?.stroke ?: return
-        if (st in crumbling) return
+        if (st in crumbling || st.anchors.isNotEmpty()) return
         crumbling += st
         crumbleAt.add(simT + CRUMBLE_S)
     }
@@ -1791,20 +1806,65 @@ class GameSim(
         }
     }
 
-    /** A beetle on rope or a spring eats it, [BITE_S] in. */
+    /**
+     * An ink beetle goes for rope and springs: one over it within [BEETLE_REACH] up, it hops up to;
+     * once it's on one, it eats it in [BITE_S]. Beams and Gold nib ink it leaves alone.
+     */
     private fun chew(b: Blot) {
+        if (!b.awake) return
+        val q = b.body.position
         var food: Stroke? = null
-        for (i in beetleOn.indices) if (beetleOn[i] === b.body && beetleOnStroke[i] in ink.strokes) { food = beetleOnStroke[i]; break }
-        if (food == null) {
+        var foodY = 0f
+        var foodX = 0f
+        ink.strokes.fastEach { s ->
+            if (food != null || s.gold || s.x1.isNaN()) return@fastEach
+            val kind = s.segs.firstOrNull()?.kind ?: return@fastEach
+            if (kind == Ink.BEAM || q.x < s.x0 - 3f || q.x > s.x1 + 3f) return@fastEach
+            // the stroke's height near the beetle
+            var best = Float.POSITIVE_INFINITY
+            var y = 0f
+            s.groups.fastEach { g -> g.body?.position?.let { p -> val dd = kotlin.math.abs(p.x - q.x); if (dd < best) { best = dd; y = p.y } } }
+            if (best > 3f || q.y - y > BEETLE_REACH || y - q.y > 1.2f) return@fastEach
+            food = s
+            foodY = y
+            // (a stroke shorter than 0.8 m: its middle)
+            foodX = if (s.x1 - s.x0 > 0.8f) q.x.coerceIn(s.x0 + 0.4f, s.x1 - 0.4f) else (s.x0 + s.x1) / 2f
+        }
+        val s = food
+        if (s == null) {
+            b.biteT = 0f
+            return
+        }
+        val v = b.body.linearVelocity
+        if (q.y - foodY > 0.9f) {
+            // below it: hop up (once on the ground again)
+            if (kotlin.math.abs(v.y) < 0.2f) b.body.setLinearVelocity((foodX - q.x).coerceIn(-2f, 2f), -kotlin.math.sqrt(2f * InkPhysics.GRAVITY * (q.y - foodY + 0.8f)))
             b.biteT = 0f
             return
         }
         b.biteT += 1f / 60f
         if (b.biteT < BITE_S) return
         b.biteT = 0f
-        for (i in beetleOn.indices.reversed()) if (beetleOnStroke[i] === food) { beetleOn.removeAt(i); beetleOnStroke.removeAt(i) }
-        eraseStroke(food)
+        eraseStroke(s)
         events.toast("A beetle ate it!", force = true)
+    }
+
+    /** Touched crumbling bricks drop away a moment later, faster and faster. */
+    private fun updateCrumbles(dt: Float) {
+        crumbles.fastEach { c ->
+            if (c.gone) return@fastEach
+            if (!c.falling) {
+                if (c.touchedAt.isNaN() || simT - c.touchedAt < CRUMBLE_DELAY) return@fastEach
+                c.falling = true
+                events.burst(c.x + c.w / 2f, c.y + c.h, 6, 1.2f, Tok.GRAPHITE)
+            }
+            val v = c.body.linearVelocity
+            c.body.setLinearVelocity(0f, v.y + InkPhysics.GRAVITY * dt)
+            if (c.body.position.y > c.y + 30f) {
+                c.gone = true
+                ink.destroyBody(c.body)
+            }
+        }
     }
 
     /** Beams that fell on a Blot (rather than one it walked into) and boulders squash it. */
@@ -1961,6 +2021,13 @@ class GameSim(
         if (g.forbid != null && kind == g.forbid) {
             return if (kind == Ink.SPRING) "Not a spring here: it bounces you into the spikes. A light touch makes rope."
             else "Not ${kind.label} here. Try a lighter touch."
+        }
+        if (g.needs != null && kind != g.needs) {
+            return when (g.needs) {
+                Ink.ROPE -> "That was ${kind.label}: only rope lets the boulder drop. A light touch."
+                Ink.BEAM -> "That was ${kind.label}: beetles eat rope and springs. Press hard for a beam."
+                else -> "That was ${kind.label}. Write normally for a spring."
+            }
         }
         // a crush gate is done when the creature under it is squashed, whatever the stroke looked like
         if (g.crush) return null
@@ -2214,6 +2281,11 @@ class GameSim(
         const val PLANE_DIVE = 4.5f
         const val PLANE_START = 16f
         const val PLANE_POINTS = 50
+        /** Crumbling bricks: thickness and how long after a touch they fall. */
+        const val CRUMBLE_H = 0.5f
+        const val CRUMBLE_DELAY = 0.45f
+        /** A beetle hops up to rope or a spring this far above it. */
+        const val BEETLE_REACH = 7f
         /** A beam that crushed something crumbles this long after. */
         const val CRUMBLE_S = 0.8f
         /** A beetle eats the rope or spring under it in this long. */

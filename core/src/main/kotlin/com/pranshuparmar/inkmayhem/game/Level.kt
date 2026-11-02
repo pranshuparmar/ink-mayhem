@@ -131,6 +131,8 @@ class Gate(
     val forbid: Ink? = null,
     /** The job is a creature under the guide squashed (a beam dropped on an Eraser), not a stroke's shape. */
     val crush: Boolean = false,
+    /** The only ink that will do (rope to drop a boulder, a beam a beetle can't bite), or null. */
+    val needs: Ink? = null,
 ) {
     /** The runner is past it: the guide fades out. */
     var passed = false
@@ -244,6 +246,15 @@ class Plane(val body: Body, val vx: Float, val vy: Float) {
     var cx = 0f
     var cy = 0f
     val down: Boolean get() = !crumpledAt.isNaN()
+}
+
+/** A crumbling brick, [w] × [h] with its top-left at ([x], [y]): it falls [GameSim.CRUMBLE_DELAY] after the runner touches it. */
+class Crumble(val body: Body, val x: Float, val y: Float, val w: Float, val h: Float) {
+    val prev = Pose(body)
+    /** simT the runner touched it (NaN: not yet), and whether it has started falling. */
+    var touchedAt = Float.NaN
+    var falling = false
+    var gone = false
 }
 
 /** A highlighter swipe: where it went (and what it revealed), fading from [at]. */

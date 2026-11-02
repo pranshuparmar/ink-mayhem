@@ -158,7 +158,7 @@ class InkPhysics(
     // ---- moving platforms ----
 
     /** A kinematic box (a lift) with its top-left at ([x], [y]); the caller moves it. */
-    fun addLift(x: Float, y: Float, w: Float, h: Float): Body {
+    fun addLift(x: Float, y: Float, w: Float, h: Float, tag: FixtureTag = FixtureTag.LIFT): Body {
         bd.type = BodyDef.BodyType.KinematicBody
         bd.position.set(x + w / 2f, y + h / 2f)
         bd.angle = 0f
@@ -167,7 +167,7 @@ class InkPhysics(
         fd.reset()
         fd.shape = box
         fd.friction = 0.9f
-        b.createFixture(fd).userData = FixtureTag.LIFT
+        b.createFixture(fd).userData = tag
         return b
     }
 

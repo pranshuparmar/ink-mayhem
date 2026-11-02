@@ -76,8 +76,11 @@ class StageLayout {
     class GateSpec(
         val ink: Ink, val x0: Float, val x1: Float, val gx0: Float, val gy0: Float, val gx1: Float, val gy1: Float,
         val label: String, val tunes: Boolean, val waitX: Float, val slack: Float,
-        val forbid: Ink? = null, val crush: Boolean = false,
+        val forbid: Ink? = null, val crush: Boolean = false, val needs: Ink? = null,
     )
+
+    /** A row of crumbling bricks, each [w] wide, their tops at [y]. */
+    class CrumbleRow(val x: Float, val y: Float, val n: Int, val w: Float)
 
     /** One stroke of the scripted solution, drawn once the runner reaches [atX]. */
     class Stroke(val atX: Float, val xs: FloatArray, val ys: FloatArray, val ink: Ink)
@@ -97,6 +100,7 @@ class StageLayout {
     val arenas = ArrayList<ArenaSpec>()
     val warps = ArrayList<WarpSpec>()
     val flights = ArrayList<Flight>()
+    val crumbles = ArrayList<CrumbleRow>()
     val solution = ArrayList<Stroke>()
 
     /** A bookmark: once passed, a retry starts 1 m past it. */
@@ -437,9 +441,35 @@ class StageBuilder(private val l: StageLayout) {
     fun hint(
         ink: Ink, x0: Float, x1: Float, gx0: Float, gy0: Float, gx1: Float, gy1: Float,
         tunes: Boolean = false, waitX: Float = Float.NaN, slack: Float = 0.8f,
-        forbid: Ink? = null, crush: Boolean = false, label: String = ink.label,
+        forbid: Ink? = null, crush: Boolean = false, label: String = ink.label, needs: Ink? = null,
     ) {
-        l.gates += StageLayout.GateSpec(ink, x0, x1, gx0, gy0, gx1, gy1, label, tunes, waitX, slack, forbid, crush)
+        l.gates += StageLayout.GateSpec(ink, x0, x1, gx0, gy0, gx1, gy1, label, tunes, waitX, slack, forbid, crush, needs)
+    }
+
+    /**
+     * A bridge of crumbling bricks across a [len]-metre gap over spikes [deep] below: each brick
+     * falls a moment after the runner rolls on, so keep rolling.
+     */
+    fun crumbleBridge(len: Float, deep: Float = 3f, brick: Float = 1.2f): StageBuilder {
+        ledge(x, level + deep, len, DEPTH)
+        spikes(x, level + deep, len)
+        val n = maxOf(1, kotlin.math.round(len / brick).toInt())
+        l.crumbles += StageLayout.CrumbleRow(x, level, n, len / n)
+        x += len
+        return this
+    }
+
+    /**
+     * A beetle pit: a [len]-metre gap [deep] down with [beetles] ink beetles on its floor. They hop
+     * up onto rope or spring bridges over it and eat them; beams they can't bite.
+     */
+    fun beetlePit(len: Float, beetles: Int = 1, deep: Float = 5f, solve: Ink? = Ink.BEAM, lead: Float = 8f): StageBuilder {
+        val x0 = x
+        ledge(x0, level + deep, len, DEPTH)
+        for (i in 0 until beetles) l.blots += StageLayout.BlotSpec(x0 + len * (i + 1) / (beetles + 1), level + deep, x0 + 0.4f, x0 + len - 0.4f, Creature.BEETLE)
+        openGap(len, HazardType.GAP_M, par = Ink.BEAM)
+        if (solve != null) bridge(x0, level, x0 + len, level, solve, lead)
+        return this
     }
 
     fun note(text: String, dx: Float = 0.6f, up: Float = 3.4f, maxW: Float = Float.POSITIVE_INFINITY) {
