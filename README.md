@@ -114,7 +114,9 @@ the pause screen, or ⋯ on the stage list) has volume sliders for **Sound effec
 beam line along a guide, then try a few strokes), **How to play** (four short lessons on rope,
 spring, beam and erasing), and the **Pen readout** (tool type, raw and normalized
 pressure, buttons, tilt, hover and event rates) for checking the S Pen. The **stage list** is a
-notebook with a tab per world.
+notebook with a tab per world: every world's tab opens, even a locked one (a padlock marks it),
+so you can read its stage names before you get there, though only open stages play. Behind
+the list, the world on the tab scrolls slowly past on its own page, to its own tune.
 
 ### Sending a recording
 

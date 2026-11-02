@@ -138,7 +138,16 @@ class InkMayhemGame(
     private var fadeAt = -10.0
     private var lastPhase: StageSession.Phase? = null
     private var starsSounded = 0
-    private val active: GameSim get() = tutorial?.sim ?: session?.sim ?: sim
+    private val active: GameSim get() = tutorial?.sim ?: session?.sim ?: preview.takeIf { screen == Screen.SELECT } ?: sim
+
+    /**
+     * Behind the stage list, a peek at the world on its tab: its finale stage, built but never
+     * stepped, slowly panned across on the world's own page (and to the world's tune).
+     */
+    private var preview: GameSim? = null
+    private var previewWorld = -1
+    private var previewT = 0f
+    private var previewCamY = Float.NaN
     private val uiCam = OrthographicCamera()
     private var pal = Palette.LIGHT
     private val fx = Fx()
@@ -355,6 +364,10 @@ class InkMayhemGame(
             it.scale = scale
             it.setViewport(wDp / scale, hDp / scale)
         }
+        preview?.let {
+            it.scale = scale
+            it.setViewport(wDp / scale, hDp / scale)
+        }
         if (!sized && sim.state == GameState.TITLE) sim.newRun() // frame the start with the real viewport
         sized = true
         warmFonts()
@@ -409,6 +422,7 @@ class InkMayhemGame(
         // World 5 is a midnight page whatever the system's theme
         pal = when {
             screen == Screen.STAGE && session?.stage?.theme == com.pranshuparmar.inkmayhem.game.Theme.MIDNIGHT -> Palette.MIDNIGHT
+            screen == Screen.SELECT && tutorial == null && Stages.WORLDS.firstOrNull { it.number == selectCard.world }?.theme == com.pranshuparmar.inkmayhem.game.Theme.MIDNIGHT -> Palette.MIDNIGHT
             frames.dark -> Palette.DARK
             else -> Palette.LIGHT
         }
@@ -466,7 +480,7 @@ class InkMayhemGame(
                 n++
             }
             if (n == maxTicks) acc = 0f
-            active.cull(dt)
+            if (active !== preview) active.cull(dt)
             if (tut != null && tut.phase == Tutorial.Phase.FINISHED) endTutorial(finished = true)
             if (tut == null && ses != null) {
                 ses.update(dt * dev.speed)
@@ -482,14 +496,17 @@ class InkMayhemGame(
         gauge.update(dt, active.drawing != null, reduced)
         // load the tunes this screen may need before it needs them (a boss's during the stage's intro)
         val tuneStage = session?.stage
-        if (!tunesReady || tuneStage !== tunesFor) {
+        val tuneWorld = if (screen == Screen.SELECT) selectCard.world else 0
+        if (!tunesReady || tuneStage !== tunesFor || tuneWorld != tunesWorld) {
             tunesReady = true
             tunesFor = tuneStage
+            tunesWorld = tuneWorld
             audio.prepare(
-                if (tuneStage == null) listOf(Stages.WORLDS[0].music)
+                if (tuneStage == null) listOf(menuTune())
                 else listOfNotNull(Stages.worldOf(tuneStage).music, BOSS_MUSIC.takeIf { tuneStage.layout.arenas.isNotEmpty() }),
             )
         }
+        if (screen == Screen.SELECT && tutorial == null) updatePreview(dt) else dropPreview()
         audio.music(musicWanted(), musicTheme())
         audio.update(dt)
 
@@ -739,8 +756,9 @@ class InkMayhemGame(
     /** The first stage (or the list) has been opened. */
     private var launched = false
     private var devToastShown = false
-    /** The stage whose tunes are loaded (null: the menus'). */
+    /** The stage whose tunes are loaded (null: the menus'), and the stage list's world. */
     private var tunesFor: StageDef? = null
+    private var tunesWorld = 0
     private var tunesReady = false
     private var devPaused = false
 
@@ -841,27 +859,74 @@ class InkMayhemGame(
     /** A world's first stage until it has been cleared once: the runner waits before each new thing. */
     private fun firstRun(def: StageDef) = def.number == 1 && settings.stars(def.id) == 0
 
-    private fun openSelect() {
+    /** The stage list, on the world of [played] (the stage just left), or where play picks up. */
+    private fun openSelect(played: StageDef? = session?.stage) {
         fadeAt = clock
         pauseCard.hide()
         countdown.cancel()
         selectCard.refresh()
-        // on the world just played, or where play picks up
-        val at = session?.stage ?: nextStage() ?: Stages.ALL.last()
+        val at = played ?: nextStage() ?: Stages.ALL.last()
         selectCard.show(Stages.worldOf(at).number)
         screen = Screen.SELECT
+    }
+
+    /** Builds the peek for the stage list's world when the tab changes, and pans it. */
+    private fun updatePreview(dt: Float) {
+        val n = selectCard.world
+        if (preview == null || previewWorld != n) {
+            preview?.dispose()
+            val w = Stages.WORLDS.first { it.number == n }
+            val ps = GameSim(seed = 1, events = GameEvents.None, vwMetres = wDp / scale, vhMetres = hDp / scale)
+            ps.scale = scale
+            ps.tint = settings.tint
+            ps.loadStage(w.stages.last(), fromCheckpoint = false)
+            // no notes or runner in a peek: just the world
+            ps.notes.clear()
+            ps.runner.body.setTransform(-500f, -500f, 0f)
+            preview = ps
+            previewWorld = n
+            previewT = 0f
+            previewCamY = Float.NaN
+            fadeAt = clock
+        }
+        val ps = preview ?: return
+        val l = ps.stage?.layout ?: return
+        val span = l.finishX + 6f - l.startX
+        val before = previewT * PREVIEW_SPEED
+        previewT += if (frames.reduced) 0f else dt
+        val along = previewT * PREVIEW_SPEED
+        // back to the start once it has been all the way along, with a fade
+        if (kotlin.math.floor(along / span) != kotlin.math.floor(before / span)) fadeAt = clock
+        val x = l.startX - 4f + along % span
+        val g = l.groundAt(x + ps.vw * 0.45f)
+        // the ground low on a tall screen, so the scenery shows under the card
+        val ty = if (g.isNaN()) previewCamY else g - ps.vh * if (ps.vh > ps.vw) 0.84f else 0.7f
+        previewCamY = when {
+            previewCamY.isNaN() || ty.isNaN() -> ty
+            else -> previewCamY + (ty - previewCamY) * min(1f, dt * 1.5f)
+        }
+        ps.camPrev.set(ps.cam)
+        ps.cam.set(x, if (previewCamY.isNaN()) ps.cam.y else previewCamY)
+        ps.camPrev.set(ps.cam)
+    }
+
+    private fun dropPreview() {
+        preview?.dispose()
+        preview = null
+        previewWorld = -1
     }
 
     /** Where play picks up: the first stage not yet cleared, or null once all are. */
     private fun nextStage(): StageDef? =
         Stages.ALL.firstOrNull { settings.stars(it.id) == 0 && StageSession.unlocked(it, settings) }
 
-    /** Leaves stage play for the stage list. */
+    /** Leaves stage play for the stage list (on the world just played). */
     private fun endStage() {
+        val played = session?.stage
         session?.sim?.dispose()
         session = null
         stageBot = null
-        openSelect()
+        openSelect(played)
         fx.clear()
         toast.clear()
         audio.scratch(0f, 0.5f)
@@ -883,8 +948,13 @@ class InkMayhemGame(
     }
 
     /** The world's own tune; a boss fight has its own. */
+    /** The menus' tune: the stage list plays the tune of the world on its tab, the rest Ink Rush. */
+    private fun menuTune(): String =
+        if (screen == Screen.SELECT) Stages.WORLDS.firstOrNull { it.number == selectCard.world }?.music ?: Stages.WORLDS[0].music
+        else Stages.WORLDS[0].music
+
     private fun musicTheme(): String {
-        val ses = session ?: return Stages.WORLDS[0].music
+        val ses = session ?: return menuTune()
         return if (ses.sim.bossFight) BOSS_MUSIC else Stages.worldOf(ses.stage).music
     }
 
@@ -1061,10 +1131,10 @@ class InkMayhemGame(
             world.guideTok = when (tut.guideInk) { Ink.ROPE -> Tok.ROPE; Ink.SPRING -> Tok.SPRING; Ink.BEAM -> Tok.BEAM }
         }
         // the tutorial always colours ink by type: that's what it teaches
-        val menu = tut == null && screen != Screen.STAGE
+        val menu = tut == null && screen != Screen.STAGE && !(screen == Screen.SELECT && preview != null)
         world.render(
             active, fx, pal, settings.tint || tut != null, uiCam, wDp, hDp, scale, density, (acc / STEP).coerceIn(0f, 1f),
-            pageOnly = menu, dt = frames.dt, remarks = settings.remarks && tut == null,
+            pageOnly = menu, dt = frames.dt, remarks = settings.remarks && tut == null && screen == Screen.STAGE,
         )
 
         updateFrame()
@@ -1365,6 +1435,7 @@ class InkMayhemGame(
         recorder?.close()
         tutorial?.sim?.dispose()
         session?.sim?.dispose()
+        preview?.dispose()
         sim.dispose()
         audio.dispose()
         shapes.dispose()
@@ -1377,6 +1448,8 @@ class InkMayhemGame(
         const val FINGER_TOAST = "Use the S Pen. Fingers don’t leave ink."
         const val TUNE_LATER = "For the best feel, tune your pen in settings."
         const val BOSS_MUSIC = "boss"
+        /** The stage list's peek pans across its world at this many metres a second. */
+        private const val PREVIEW_SPEED = 2.6f
         /** A new screen fades in from the paper over this long. */
         private const val SCREEN_FADE_S = 0.3
         const val FIRST_STAR = "Stars! Every ${GameSim.STARS_PER_LIFE} is an extra life."

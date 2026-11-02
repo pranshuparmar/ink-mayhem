@@ -480,8 +480,9 @@ ends it, back to the title or the stage list, wherever it was opened from.
 | | |
 |---|---|
 | Title | what the game opens on: the name (64 dp, smaller if it and the runner beside it don't fit), "Draw the way ahead with your S Pen.", the three inks drawn with their pressures, then **Start** (nothing cleared yet) or **Play**, naming the first stage not yet cleared (with every stage cleared it opens the list), and **Stages**, **How to play**, **Settings**. Fades in over 0.5 s; Android back leaves the app |
-| Stage list | a **Menu** button at the top left goes back to the title, as does Android back |
-| Menus | only the ruled paper behind them; Ink Rush plays (the Music setting turns it off) |
+| Stage list | a **Menu** button at the top left goes back to the title, as does Android back. Every world's tab opens, locked or not (a padlock marks a locked world), to show its stage names; only open stages play. Opened from a stage it shows that stage's world |
+| World peek | behind the stage list, the tab's world: its finale stage, built but never stepped, without notes or the runner, panned at 2.6 m/s from start to flag and round again (a fade at the turn), its ground 84 % down a tall screen (under the card) or 70 % down a wide one; the page and palette are the world's (Midnight Ink's dark page), the veil over it 30 %, and the world's tune plays. Still with reduced motion |
+| Menus | the title screen and the ending show only the ruled paper; Ink Rush plays (the Music slider turns it down or off) |
 | Pause | the top-right button in a stage (two bars; ⋯ on the stage list), Android back, or leaving the app, during a stage's intro, play or a lost life's moment. A stroke being drawn is let go. The page dims; the card has the stage, **Resume**, **Restart** (the stage from the start, keeping the lives), **Settings** and **Stage list**. Android back on it resumes |
 | Countdown | Resume mid-play counts 3, 2, 1, 0.5 s each, with a rising chime; the stage, its music and the pen stay held until it ends. Resuming during an intro skips it |
 | Screen changes | the new screen fades in from the paper over 0.3 s (not with reduced motion) |

@@ -41,8 +41,9 @@ internal fun drawGoldMarks(shapes: Shapes, pal: Palette, x: Float, cy: Float, r:
 
 /**
  * The stage list: a notebook with a tab per world. Each of the world's stages is a row with its
- * stars, gold stars and best; a stage is locked until the one before it is cleared, and a world
- * until its first stage is open.
+ * stars, gold stars and best; a stage is locked until the one before it is cleared. Every world's
+ * tab opens, locked or not, so its stages can be looked over (a padlock marks a locked world);
+ * only open stages play.
  */
 class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
     val box = Box()
@@ -115,7 +116,7 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
     /** The stage under (x, y) if it can be played, a world tab, or [play]. */
     fun targetAt(x: Float, y: Float): Any? {
         if (play.contains(x, y)) return play
-        for (t in tabBoxes.indices) if (tabBoxes[t].contains(x, y) && worldOpen[t]) return tabs[t]
+        for (t in tabBoxes.indices) if (tabBoxes[t].contains(x, y)) return tabs[t]
         val list = shown
         for (i in list.indices) {
             val k = all.indexOf(list[i])
@@ -125,7 +126,8 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
     }
 
     fun drawShapes(shapes: Shapes, pal: Palette, f: Frame) {
-        shapes.color(pal[Tok.PAPER], 0.55f).rect(0f, 0f, f.wDp, f.hDp)
+        // a light veil: the world's own page shows round the card
+        shapes.color(pal[Tok.PAPER], 0.3f).rect(0f, 0f, f.wDp, f.hDp)
         Widgets.card(shapes, pal, box)
         val list = shown
         val big = rowH >= 50f
@@ -141,7 +143,8 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
         for (t in tabBoxes.indices) {
             val b = tabBoxes[t]
             val sel = tabs[t].number == world
-            Widgets.button(shapes, pal, b, primary = sel, enabled = worldOpen[t], pressed = press.isPressed(tabs[t]))
+            Widgets.button(shapes, pal, b, primary = sel, enabled = true, pressed = press.isPressed(tabs[t]))
+            if (!worldOpen[t]) padlock(shapes, if (sel) pal[Tok.ACCENT_FG] else pal[Tok.MUTED], b.right - 7f, b.y + 7f)
         }
         Widgets.button(shapes, pal, play, primary = true, enabled = true, pressed = press.isPressed(play))
     }
@@ -167,12 +170,20 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
         val tabFont = fonts.get(Face.MONO_BOLD, 14f)
         for (t in tabBoxes.indices) {
             val sel = tabs[t].number == world
-            Widgets.buttonLabel(text, tabFont, pal, tabBoxes[t], tabs[t].number.toString(), primary = sel, enabled = worldOpen[t])
+            Widgets.buttonLabel(text, tabFont, pal, tabBoxes[t], tabs[t].number.toString(), primary = sel, enabled = true)
         }
         Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 14f), pal, play, "Play", primary = true, enabled = true)
     }
 
+    /** A small padlock centred on ([x], [y]). */
+    private fun padlock(shapes: Shapes, c: com.badlogic.gdx.graphics.Color, x: Float, y: Float) {
+        shapes.color(c)
+        shapes.arc(x, y - 1f, 2.4f, 1.2f, PI_F, 2f * PI_F)
+        shapes.roundRect(x - 3.2f, y - 1f, 6.4f, 4.8f, 1f)
+    }
+
     companion object {
+        private const val PI_F = kotlin.math.PI.toFloat()
         private const val ROW_H = 54f
         private const val MIN_ROW_H = 40f
         private const val ROW_GAP = 6f
