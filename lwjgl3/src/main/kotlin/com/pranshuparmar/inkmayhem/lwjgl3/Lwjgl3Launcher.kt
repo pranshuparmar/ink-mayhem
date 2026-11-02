@@ -32,7 +32,8 @@ import java.util.zip.Deflater
  * Options: --landscape, --size WxH (dp), --density D, --dark, --reduced-motion,
  *          --autoplay (the correct-ink bot plays), --wrong-ink TUNNEL=SPRING, --seed N, --settings,
  *          --calibration, --skip-calibration, --tutorial LESSON (1-based), --skip-tutorial,
- *          --stage 1-2 (with --autoplay its solution plays), --select, --pause-at seconds, --speed N,
+ *          --stage 1-2 (with --autoplay its solution plays), --select, --pause-at seconds, --ending,
+ *          --credits, --faces (the runner's expressions), --speed N,
  *          --rotate-after seconds, --demo-draw, --demo-tune LINES (with --calibration),
  *          --screenshot out.png --after seconds,
  *          --record out.txt (an input recording, as debug builds make on Android),
@@ -68,6 +69,12 @@ private fun devOptions(opts: Options, seed: Long?) = DevOptions(
     wrongInk = opts.wrongInk,
     toast = opts.toast,
     pauseAt = opts.pauseAt,
+    faces = opts.faces,
+    ending = when {
+        opts.ending -> "finale"
+        opts.credits -> "credits"
+        else -> null
+    },
 )
 
 private class Options(args: Array<String>) {
@@ -90,6 +97,9 @@ private class Options(args: Array<String>) {
     val speed = value("--speed")?.toFloat() ?: 1f
     val toast = value("--toast")
     val pauseAt = value("--pause-at")?.toFloat()
+    val ending = "--ending" in list
+    val credits = "--credits" in list
+    val faces = "--faces" in list
     /** e.g. --wrong-ink ROPE=SPRING */
     val wrongInk = value("--wrong-ink")?.split(',')?.associate {
         val (a, b) = it.split('=')

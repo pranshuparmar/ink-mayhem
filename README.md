@@ -3,6 +3,11 @@
 An S Pen-only Android game in the Mayhem series. A blot of ink rolls across a ruled page and
 you draw the way ahead. How hard you press decides what the ink becomes:
 
+> **S Pen only.** Everything is drawn with a pressure-sensitive pen: a Galaxy phone or tablet
+> with an S Pen. Fingers can tap buttons, but they never draw. Ink Mayhem is open source and isn't
+> on Google Play: get the APK from this repository's [Releases](../../releases), or build it
+> yourself.
+
 | Pressure | Ink | |
 |---|---|---|
 | Light touch | **Rope** | Nearly free. Holds the runner, drops boulders, snaps over long gaps. |
@@ -41,8 +46,14 @@ The page fights back and pays out:
 - **Ink pools** swallow anything that touches them, ink included, so a bridge has to stay
   above them. The **ink tide** rises behind you and chases you: keep rolling and it hangs back,
   stall and it catches you.
-- The runner has a **face**: wide-eyed at an edge, a grin on a combo, dizzy after a bounce,
-  sweating when a boulder is behind it.
+- The runner is a **character**: a blot of ink with googly eyes, eyebrows floating over them
+  and a face for every moment. It grins off a spring, wobbles on rope, struts on a beam, smirks
+  and winks after a stomp, sweats with a boulder or the tide behind, watches your pen while you
+  draw, and dozes off if you keep it waiting. Now and then it says something in a speech bubble
+  (Settings → **Runner's remarks** turns that off). It greets you on the title screen with tips,
+  peeks over the pause screen, and is there at the end.
+- **The end**: beat the Big Smudge and the page comes clean, your notebook is tallied (stages,
+  stars, gold stars, scores) and the credits roll. **Credits** is also on the title screen.
 - **Music**: an original chiptune theme for each world and one for the boss fights; the
   jingles come from Ink Rush, the first world's.
 
@@ -57,6 +68,8 @@ number and every change from the POC, and [`docs/decisions.md`](docs/decisions.m
 design notes.
 
 ## Install a build
+
+Ink Mayhem isn't on Google Play: install it from an APK.
 
 **Debug builds**: every push to `main` replaces the APK on the
 [`latest-debug`](../../releases/tag/latest-debug) prerelease (`ink-mayhem-debug-<sha>.apk`).
@@ -80,7 +93,8 @@ first, which clears its best score, calibration and tutorial progress.
 
 The game opens on its **title screen**: the name, a reminder of the three inks, and **Start**
 (**Play** once something is cleared, naming the stage it picks up at: the first not yet
-cleared), **Stages**, **How to play** and **Settings**. The stage list has a **Menu** button
+cleared), **Stages**, **How to play**, **Settings** and **Credits**, with a reminder that it's S Pen
+only. The stage list has a **Menu** button
 back to it. In a stage the button at the top right **pauses**: Resume (the runner is counted
 back in, 3‑2‑1), Restart, Settings or Stage list. Android back pauses too (and on the pause
 screen resumes), and so does leaving the app. The title and the stage list play Ink Rush.
@@ -95,9 +109,10 @@ that world's new things on its first run (the ink tide holds still while the run
 one of the three is that ink whatever the pressure, and the pressures of those three strokes
 **tune the pen** (if they rise from rope to beam). Each stroke becomes
 one ink, from the pressure it settles at once the pen has landed. **Settings** (on the title,
-the pause screen, or ⋯ on the stage list) has **Tune your pen** (draw a rope, a spring and a
+the pause screen, or ⋯ on the stage list) has volume sliders for **Sound effects** and
+**Music**, **Runner's remarks**, **Tune your pen** (draw a rope, a spring and a
 beam line along a guide, then try a few strokes), **How to play** (four short lessons on rope,
-spring, beam and erasing), **Music**, and the **Pen readout** (tool type, raw and normalized
+spring, beam and erasing), and the **Pen readout** (tool type, raw and normalized
 pressure, buttons, tilt, hover and event rates) for checking the S Pen. The **stage list** is a
 notebook with a tab per world.
 
@@ -150,6 +165,8 @@ For fast iteration with a mouse (`lwjgl3` module):
 | `--tutorial N` | Open the tutorial at lesson N (1–4). |
 | `--stage 1-2`, `--select` | Start straight into a stage (with `--autoplay`, its scripted solution plays it), or open the stage list, instead of the title screen. |
 | `--pause-at S` | Pause the stage S seconds in (screenshots of the pause screen). |
+| `--ending`, `--credits` | Open the ending (with your totals) or just the credits. |
+| `--faces` | A gallery of the runner's expressions, for tuning its face. |
 | `--speed N` | Run the game N times faster (to screenshot late moments). |
 | `--rotate-after S` | Swap width and height after S seconds, like rotating the phone mid-run. |
 | `--screenshot out.png --after S` | Save a screenshot after S seconds and quit. |

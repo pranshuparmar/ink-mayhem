@@ -32,6 +32,10 @@ class WorldRenderer(
     private val identity = Matrix4()
     private val dropPoly = FloatArray(DROP_SHAPE.size)
     private val markerLabel = StringBuilder()
+    /** The runner as a character: its drawer, its personality and its speech bubble. */
+    private val buddy = BuddyDrawer(shapes)
+    private val persona = Persona()
+    private val bubble = BubbleLayout()
 
     private var alpha = 1f
 
@@ -63,10 +67,14 @@ class WorldRenderer(
      * [alpha] (0..1) is how far the frame sits between the previous and the latest sim tick: moving
      * bodies and the camera are interpolated so 120 Hz displays scroll smoothly over a 60 Hz sim.
      */
-    /** [pageOnly]: just the paper (behind the title screen and the stage list). */
+    /**
+     * [pageOnly]: just the paper (behind the title screen and the stage list). [dt]: the frame's
+     * time, for the runner's face; [remarks]: its speech bubbles are on.
+     */
     fun render(
         sim: GameSim, fx: Fx, pal: Palette, tint: Boolean, uiCam: OrthographicCamera,
         wDp: Float, hDp: Float, scale: Float, density: Float, alpha: Float, pageOnly: Boolean = false,
+        dt: Float = 1f / 60f, remarks: Boolean = true,
     ) {
         this.alpha = alpha
         val px = 1f / scale // one dp in metres
@@ -124,6 +132,7 @@ class WorldRenderer(
         // (the POC's fixed red margin line is left out: it read as a line chasing the runner)
         shapes.end()
         if (pageOnly) return
+        persona.update(sim, dt, remarks, fx.reducedMotion)
 
         // notes in the margin hand
         text.batch.projectionMatrix = uiCam.combined
@@ -227,6 +236,24 @@ class WorldRenderer(
             text.draw(labelFont, g.label, sx, sy - labelFont.capHeight, pal[inkTok(g.ink)], a, Align.center)
         }
         text.batch.end()
+
+        // the runner's remark, in a speech bubble over its head (leaning back from where it's going)
+        val ba = persona.state.bubbleAlpha
+        val line = persona.state.bubble
+        if (ba > 0f && line != null) {
+            val run = sim.runner
+            val hx = (run.prev.lerpX(alpha) - viewX) * scale
+            val hy = (run.prev.lerpY(alpha) - run.r * 1.5f - viewY) * scale
+            val font = fonts.get(Face.HAND_BOLD, 16f)
+            bubble.place(text, font, line, hx, hy, run.dir.toFloat(), 8f, wDp - 8f, BUBBLE_TOP, persona.state.bubbleScale)
+            shapes.begin(uiCam.combined, density)
+            buddy.bubbleShapes(pal, bubble, ba)
+            shapes.end()
+            text.batch.projectionMatrix = uiCam.combined
+            text.batch.begin()
+            bubble.drawText(text, font, pal, ba)
+            text.batch.end()
+        }
 
         // off-screen boulder warning on the left edge
         shapes.begin(worldCam.combined, density * scale)
@@ -767,15 +794,12 @@ class WorldRenderer(
         val cx = pose.lerpX(alpha)
         val cy = pose.lerpY(alpha)
         val sq = run.squash
-        val sx = 1f + sq * 0.2f
         val sy = 1f - sq * 0.2f
         val r = run.r
         // just lost Bold: it blinks while nothing can hurt it
         val a = if (sim.simT < run.safeUntil && sin(sim.simT * 30f) > 0f) 0.35f else 1f
-        if (run.bold) shapes.color(pal[Tok.ACCENT], a).ellipse(cx, cy, r * sx + 2.4f * px, r * sy + 2.4f * px)
-        shapes.color(pal[Tok.INK], a).ellipse(cx, cy, r * sx, r * sy)
-        shapes.color(pal[Tok.PAPER], 0.35f * a).arcScaled(cx, cy, r * 0.62f, 2f * px, 0.3f, 1.4f, pose.lerpA(alpha), sx, sy)
-        drawFace(sim, pal, cx, cy, r, sx, sy, px, a)
+        // the character: upright whatever way the ball rolls, its face set by what's going on
+        buddy.draw(pal, persona.state, cx, cy, r, run.dir.toFloat(), px, a, extraSquash = sq * 0.5f, stretch = persona.stretch, bold = run.bold)
         // a timed power: a ring in its colour, the arc left showing the time left
         val pw = run.power
         if (pw != null) {
@@ -806,80 +830,6 @@ class WorldRenderer(
         }
     }
 
-    /** The runner's face, looking the way it rolls, by [GameSim.mood]. */
-    private fun drawFace(sim: GameSim, pal: Palette, cx: Float, cy: Float, r: Float, sx: Float, sy: Float, px: Float, a: Float) {
-        val paper = pal[Tok.PAPER]
-        // it looks the way it rolls (left only in a boss arena)
-        val d = sim.runner.dir.toFloat()
-        faceDir = d
-        val lx = cx + d * r * 0.2f * sx
-        val rx = cx + d * r * 0.58f * sx
-        val ey = cy - r * 0.25f * sy
-        val mx = cx + d * r * 0.4f * sx
-        val my = cy + r * 0.12f * sy
-        val lw = max(1.4f * px, r * 0.07f)
-        when (if (sim.state == GameState.DEAD) Mood.OUCH else sim.mood) {
-            Mood.CALM -> {
-                eyes(pal, lx, rx, ey, r * 0.15f, r * 0.07f, r * 0.04f, 0f, sx, sy, a)
-                shapes.color(paper, a).arc(mx, my - r * 0.1f, r * 0.2f, lw, 0.5f, (PI_F - 0.5f))
-            }
-            Mood.HAPPY -> {
-                // ^ ^ and a grin
-                shapes.color(paper, a)
-                shapes.arc(lx, ey + r * 0.07f, r * 0.12f, lw, PI_F + 0.3f, 2f * PI_F - 0.3f)
-                shapes.arc(rx, ey + r * 0.07f, r * 0.12f, lw, PI_F + 0.3f, 2f * PI_F - 0.3f)
-                shapes.pie(mx, my - r * 0.04f, r * 0.24f, 0f, 180f)
-            }
-            Mood.WORRIED -> {
-                // wide eyes looking down at the edge, a little "o"
-                eyes(pal, lx, rx, ey, r * 0.2f, r * 0.08f, r * 0.06f, r * 0.07f, sx, sy, a)
-                shapes.color(paper, a).ring(mx, my + r * 0.06f, r * 0.08f, lw)
-            }
-            Mood.DIZZY -> {
-                val t = sim.simT * 9f
-                shapes.color(paper, a)
-                shapes.arc(lx, ey, r * 0.13f, lw, t, t + 4.6f)
-                shapes.arc(lx, ey, r * 0.05f, lw, t + 2f, t + 6f)
-                shapes.arc(rx, ey, r * 0.13f, lw, t, t + 4.6f)
-                shapes.arc(rx, ey, r * 0.05f, lw, t + 2f, t + 6f)
-                shapes.zigzag(mx - r * 0.18f, my + r * 0.06f, mx + r * 0.18f, my + r * 0.06f, 4, r * 0.04f, lw)
-            }
-            Mood.SCARED -> {
-                // eyes on the boulder behind, a wobbly mouth and a bead of sweat
-                eyes(pal, lx, rx, ey, r * 0.2f, r * 0.08f, -r * 0.08f, 0f, sx, sy, a)
-                shapes.color(paper, a).zigzag(mx - r * 0.16f, my + r * 0.06f, mx + r * 0.16f, my + r * 0.06f, 4, r * 0.035f, lw)
-                val s = r * 0.13f
-                val dx = cx - d * r * 0.62f
-                val dy = cy - r * 0.62f + (sim.simT * 1.6f % 1f) * r * 0.3f
-                for (i in DROP_SHAPE.indices step 2) {
-                    dropPoly[i] = dx + DROP_SHAPE[i] * s
-                    dropPoly[i + 1] = dy + DROP_SHAPE[i + 1] * s
-                }
-                shapes.color(pal[Tok.DROP], a).fan(dropPoly, DROP_SHAPE.size / 2)
-            }
-            Mood.OUCH -> {
-                val e = r * 0.11f
-                shapes.color(paper, a)
-                shapes.line(lx - e, ey - e, lx + e, ey + e, lw)
-                shapes.line(lx - e, ey + e, lx + e, ey - e, lw)
-                shapes.line(rx - e, ey - e, rx + e, ey + e, lw)
-                shapes.line(rx - e, ey + e, rx + e, ey - e, lw)
-                shapes.ellipse(mx, my + r * 0.06f, r * 0.1f, r * 0.13f)
-            }
-        }
-    }
-
-    /** Two eyes of radius [er] with pupils [pr] looking ([lookX], [lookY]). */
-    private fun eyes(pal: Palette, lx: Float, rx: Float, ey: Float, er: Float, pr: Float, lookX: Float, lookY: Float, sx: Float, sy: Float, a: Float) {
-        shapes.color(pal[Tok.PAPER], a)
-        shapes.ellipse(lx, ey, er * sx, er * sy)
-        shapes.ellipse(rx, ey, er * sx, er * sy)
-        shapes.color(pal[Tok.INK], a)
-        shapes.circle(lx + lookX * faceDir, ey + lookY, pr)
-        shapes.circle(rx + lookX * faceDir, ey + lookY, pr)
-    }
-
-    private var faceDir = 1f
 
     private fun inkTok(k: Ink) = when (k) {
         Ink.ROPE -> Tok.ROPE
@@ -1253,11 +1203,14 @@ class WorldRenderer(
             if (fx < left) return@fastEach
             val t = sim.simT
             val step = 0.12f
+            // thinner behind the HUD, so the score and lives stay readable over it
+            val hudBottom = viewY + HUD_BAND * px
             var y = top
             while (y < bottom) {
                 val off = 0.35f * sin(y * 1.6f + t * 4.2f) + 0.12f * sin(y * 3.3f - t * 6f)
                 val ex = fx + off
-                shapes.color(pal[Tok.TIDE], 0.94f * a).rect(left, y, ex - left, step)
+                val k = if (y < hudBottom) 0.3f + 0.7f * ((y - hudBottom + HUD_FADE * px) / (HUD_FADE * px)).coerceIn(0f, 1f) else 1f
+                shapes.color(pal[Tok.TIDE], 0.94f * a * k).rect(left, y, ex - left, step)
                 shapes.color(pal[Tok.BLOT], 0.8f * a).rect(ex - 2.2f * px, y, 2.2f * px, step)
                 y += step
             }
@@ -1300,6 +1253,11 @@ class WorldRenderer(
         private const val PI_F = kotlin.math.PI.toFloat()
         /** A broken tide fades out over this long. */
         private const val TIDE_DRAIN_S = 1.5f
+        /** Speech bubbles stay below the HUD. */
+        private const val BUBBLE_TOP = 92f
+        /** The HUD's depth from the top of the screen (dp), and how far above its bottom the tide thins. */
+        private const val HUD_BAND = 96f
+        private const val HUD_FADE = 24f
         /** A hint shows once the runner is this close (m) to its start, fading in over 3 m. */
         private const val GATE_SHOW = 9f
         /** Above the guide and any stars over it. */

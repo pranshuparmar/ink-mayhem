@@ -484,6 +484,29 @@ ends it, back to the title or the stage list, wherever it was opened from.
 | Menus | only the ruled paper behind them; Ink Rush plays (the Music setting turns it off) |
 | Pause | the top-right button in a stage (two bars; ⋯ on the stage list), Android back, or leaving the app, during a stage's intro, play or a lost life's moment. A stroke being drawn is let go. The page dims; the card has the stage, **Resume**, **Restart** (the stage from the start, keeping the lives), **Settings** and **Stage list**. Android back on it resumes |
 | Countdown | Resume mid-play counts 3, 2, 1, 0.5 s each, with a rising chime; the stage, its music and the pen stay held until it ends. Resuming during an intro skips it |
+| Screen changes | the new screen fades in from the paper over 0.3 s (not with reduced motion) |
+| Ending | after 5-5 the clear card's button reads **The end**: the page clean, the runner rolling along a line that draws itself (5.5 s held), then the player's notebook (stages cleared, stars, gold stars, best scores added up) and the credits roll up at 42 dp/s to "Thanks for playing!". **Skip** jumps to the end; then **Back to the title**. **Credits** on the title screen rolls the credits alone |
+| Volumes | Sound effects and Music sliders, 0 to 100 % in steps of 5 (snapping to off near the left); the music plays at 0.42 × its slider, effects at their slider. The old on/off switches carry over as 100 % or off |
+| Saves | stamped with a version (`saveVersion`, now 1). An unversioned save with no gold-star keys is from before the five worlds: its 1-2 to 1-4 results (then Cellar, Up High and Castle) are dropped |
+| Tunes | a stage's own tune and, if it has a boss, the boss's are loaded during its intro card, so the boss music starts the moment the arena closes; the menus keep Ink Rush loaded |
+
+## The runner's character
+
+`render/Buddy.kt` (the face and its drawer), `render/Persona.kt` (what drives it in a stage).
+Looks only: it reads the sim and never changes it.
+
+| | |
+|---|---|
+| Face | upright whatever way the ball rolls. Googly eyes 0.37 r across, centred 0.5 r up and 0.39 r apart, nudged 0.14 r the way it faces; pupils 0.46 r of an eye; eyebrows 0.36 r long floating 0.16 r over the body; a mouth 1.35 × the face's scale. Eyes are white with black pupils on every page, rimmed in the page's colour; the mouth is the page's colour |
+| Body | squashes up to 0.28 on a landing (falls faster than 4 m/s) or a bounce, stretches up to 0.22 rising faster than 2.5 m/s; it keeps its base on the ground |
+| Pupils | a spring to where it looks (stiffness 140, damping 9), kicked by the body's acceleration, so they wobble like googly eyes; still with reduced motion |
+| Blinks | every 2.2 to 5.4 s, 0.16 s long |
+| Faces | hurt or dead: crossed-out eyes; scared (a boulder, or the tide within 6 m): wide eyes, sweat; 0.9 s after a squash: proud, with a wink; off a spring, rising: whee; dizzy after a bounce; waiting at a gate: curious, dozing (z's) after 7 s; while the pen draws: curious; in a boss fight: determined; at an edge: worried; on rope: wobbly; on a beam: proud; happy on a combo or with the Star nib; otherwise calm |
+| Looks at | the pen's tip while it draws, the gate's guide while it waits, the boss in a fight, back at a boulder or the tide, else the nearest awake creature (up to 8 m ahead) or gold star (5 m), else ahead |
+| Remarks | a speech bubble over its head, leaning away from where it's going and below the HUD, for 1.5 s + 0.04 s a letter; at most one every 4.5 s unless it matters (death, clear, gold star, a power-up, a boss starting or beaten, the tide). On a stage's start (80 %), a stomp (70 %), a bounce (35 %), a snap (60 %), a checkpoint (60 %), a hit on a boss (60 %), onto rope or a beam (20 %), an edge (20 %), and once at each gate it waits at. Off with "Runner's remarks"; never in the tutorial |
+| Title | sat at the end of the name (it rolls in), looking about, at the pen when it hovers, pleased while a button is held; "Hi! Grab your S Pen." after 1.1 s, then a tip every 8.5 s; dozes after 30 s alone |
+| Pause | peeks over the top of the pause card with a line ("Take your time."), dozes after 6 s |
+| Ending | rolls along the line wide-mouthed, then "We did it!" and a wink |
 
 
 ## Where the brief and the POC differ

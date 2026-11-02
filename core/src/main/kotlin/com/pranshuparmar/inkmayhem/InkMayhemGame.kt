@@ -44,6 +44,7 @@ import com.pranshuparmar.inkmayhem.render.WorldRenderer
 import com.pranshuparmar.inkmayhem.ui.CalibrationOverlay
 import com.pranshuparmar.inkmayhem.ui.ClearCard
 import com.pranshuparmar.inkmayhem.ui.Countdown
+import com.pranshuparmar.inkmayhem.ui.EndingCard
 import com.pranshuparmar.inkmayhem.ui.PauseCard
 import com.pranshuparmar.inkmayhem.ui.TitleCard
 import com.pranshuparmar.inkmayhem.ui.GameOverCard
@@ -82,6 +83,10 @@ class DevOptions(
     val toast: String? = null,
     /** Pause the stage this many seconds into it (screenshots of the pause screen). */
     val pauseAt: Float? = null,
+    /** Open the ending on start: "finale" (with the player's totals) or "credits". */
+    val ending: String? = null,
+    /** Show a gallery of the runner's expressions instead of the game (for tuning its face). */
+    val faces: Boolean = false,
 )
 
 /**
@@ -112,7 +117,7 @@ class InkMayhemGame(
      * Which part of the game is on screen; the tutorial overlays any of them. The game opens on
      * the title screen; there is no Endless.
      */
-    private enum class Screen { TITLE, SELECT, STAGE }
+    private enum class Screen { TITLE, SELECT, STAGE, ENDING }
     private var screen = Screen.TITLE
     /** Where the tutorial goes back to when it ends. */
     private var afterTutorial = Screen.TITLE
@@ -127,6 +132,10 @@ class InkMayhemGame(
     /** A stage on hold, and the 3-2-1 back in after Resume. */
     private lateinit var pauseCard: PauseCard
     private lateinit var countdown: Countdown
+    /** After the Big Smudge: the finale and the credits (or the credits alone, from the title). */
+    private lateinit var endingCard: EndingCard
+    /** When the screen last changed: the new one fades in from the paper. */
+    private var fadeAt = -10.0
     private var lastPhase: StageSession.Phase? = null
     private var starsSounded = 0
     private val active: GameSim get() = tutorial?.sim ?: session?.sim ?: sim
@@ -183,12 +192,14 @@ class InkMayhemGame(
         titleCard = TitleCard(fonts)
         pauseCard = PauseCard(fonts)
         countdown = Countdown(fonts)
+        endingCard = EndingCard(fonts)
         sheet = SettingsSheet(
             fonts, settings, platform.isDebugBuild,
             onRecalibrate = { calibration.show() },
             onHowToPlay = { startTutorial(0) },
             onChanged = ::onSettingsChanged,
             onShareRecording = if (recorder != null) ::shareRecording else null,
+            onSoundSet = { audio.play(Sfx.POP) },
         )
         calibration = CalibrationOverlay(
             fonts,
@@ -210,6 +221,7 @@ class InkMayhemGame(
         showTitle()
 
         if (dev.openSelect) openSelect()
+        dev.ending?.let { showEnding(finale = it == "finale") }
         // Android back closes an overlay first, pauses a stage, steps back a screen, and on the
         // title leaves the game as usual.
         Gdx.input.setCatchKey(Input.Keys.BACK, true)
@@ -235,7 +247,7 @@ class InkMayhemGame(
             sheet.open -> sheet.hide()
             tutorial != null -> endTutorial(finished = false)
             screen == Screen.TITLE -> Gdx.app.exit()
-            screen == Screen.SELECT -> showTitle()
+            screen == Screen.SELECT || screen == Screen.ENDING -> showTitle()
             pauseCard.open -> resumeStage()
             ses != null && pausable(ses) -> pauseStage()
             else -> endStage()
@@ -468,6 +480,16 @@ class InkMayhemGame(
         val ses = session
         if (tutorial == null) hud.update(dt, ses?.sim ?: sim, settings.best, reduced, ses?.lives ?: -1, ses?.stars ?: 0, goldEver)
         gauge.update(dt, active.drawing != null, reduced)
+        // load the tunes this screen may need before it needs them (a boss's during the stage's intro)
+        val tuneStage = session?.stage
+        if (!tunesReady || tuneStage !== tunesFor) {
+            tunesReady = true
+            tunesFor = tuneStage
+            audio.prepare(
+                if (tuneStage == null) listOf(Stages.WORLDS[0].music)
+                else listOfNotNull(Stages.worldOf(tuneStage).music, BOSS_MUSIC.takeIf { tuneStage.layout.arenas.isNotEmpty() }),
+            )
+        }
         audio.music(musicWanted(), musicTheme())
         audio.update(dt)
 
@@ -592,6 +614,7 @@ class InkMayhemGame(
         val card = when {
             screen == Screen.TITLE -> 0
             screen == Screen.SELECT -> 1
+            screen == Screen.ENDING -> 5
             pauseCard.open -> 4
             ses != null && ses.phase == StageSession.Phase.GAME_OVER -> 2
             ses != null && ses.phase == StageSession.Phase.CLEARED -> 3
@@ -602,12 +625,13 @@ class InkMayhemGame(
             1 -> selectCard.press
             2 -> gameOverCard.press
             3 -> clearCard.press
+            5 -> endingCard.press
             else -> pauseCard.press
         }
         when (s.phase) {
             PenPhase.DOWN -> {
                 // the settings button (and the stage list's way back) stay reachable
-                if (card != 0 && card != 4 && hud.rightArea.contains(x, y)) return false
+                if (card != 0 && card != 4 && card != 5 && hud.rightArea.contains(x, y)) return false
                 if (card == 1 && hud.backButton.contains(x, y)) return false
                 press.down(s.pointerId, cardTarget(card, x, y))
                 return true
@@ -632,6 +656,7 @@ class InkMayhemGame(
         1 -> selectCard.targetAt(x, y)
         2 -> gameOverCard.targetAt(x, y)
         3 -> clearCard.targetAt(x, y)
+        5 -> endingCard.targetAt(x, y)
         else -> pauseCard.targetAt(x, y)
     }
 
@@ -642,6 +667,8 @@ class InkMayhemGame(
             hit === titleCard.stages -> openSelect()
             hit === titleCard.howTo -> startTutorial(0)
             hit === titleCard.settings -> sheet.show()
+            hit === titleCard.credits -> showEnding(finale = false)
+            hit === endingCard.button -> if (endingCard.finished(clock)) showTitle() else endingCard.skip(clock)
             hit === selectCard.play -> (nextStage() ?: Stages.ALL.first()).let(::startStage)
             hit is StageSelectCard.WorldTab -> selectCard.show(hit.number)
             hit is StageDef -> startStage(hit)
@@ -665,7 +692,14 @@ class InkMayhemGame(
                 ses.start(ses.stage, freshLives = false)
                 audio.play(Sfx.STAGE_START)
             }
-            hit === clearCard.next -> if (clearCard.hasNext && ses.next()) audio.play(Sfx.STAGE_START) else endStage()
+            hit === clearCard.next -> when {
+                clearCard.hasNext && ses.next() -> {
+                    audio.play(Sfx.STAGE_START)
+                    fadeAt = clock
+                }
+                clearCard.hasNext -> endStage()
+                else -> showEnding(finale = true)
+            }
         }
         // a retry after the first clear is no longer a first run
         session?.let { if (screen == Screen.STAGE) it.sim.learning = firstRun(it.stage) }
@@ -705,6 +739,9 @@ class InkMayhemGame(
     /** The first stage (or the list) has been opened. */
     private var launched = false
     private var devToastShown = false
+    /** The stage whose tunes are loaded (null: the menus'). */
+    private var tunesFor: StageDef? = null
+    private var tunesReady = false
     private var devPaused = false
 
     /** Gold stars found in the stage being played on earlier clears (read once per start). */
@@ -723,6 +760,7 @@ class InkMayhemGame(
         ses.start(def)
         stageBot = if (dev.autoplay) newBot(ss) else null
         screen = Screen.STAGE
+        fadeAt = clock
         pauseCard.hide()
         countdown.cancel()
         lastPhase = null
@@ -765,11 +803,37 @@ class InkMayhemGame(
             stageBot = null
         }
         screen = Screen.TITLE
+        fadeAt = clock
         pauseCard.hide()
         countdown.cancel()
         titleCard.show(nextStage(), fresh = Stages.ALL.none { settings.stars(it.id) > 0 }, clock)
         fx.clear()
         toast.clear()
+    }
+
+    /** The finale after the last stage, with the player's totals ([finale]), or just the credits. */
+    private fun showEnding(finale: Boolean) {
+        if (screen == Screen.STAGE) {
+            session?.sim?.dispose()
+            session = null
+            stageBot = null
+        }
+        val totals = if (!finale) null else EndingCard.Totals(
+            cleared = Stages.ALL.count { settings.stars(it.id) > 0 },
+            stages = Stages.ALL.size,
+            stars = Stages.ALL.sumOf { settings.stars(it.id) },
+            gold = Stages.ALL.sumOf { Integer.bitCount(settings.gold(it.id)) },
+            score = Stages.ALL.sumOf { settings.best(it.id) },
+        )
+        endingCard.start(clock, totals)
+        screen = Screen.ENDING
+        fadeAt = clock
+        pauseCard.hide()
+        countdown.cancel()
+        fx.clear()
+        toast.clear()
+        audio.scratch(0f, 0.5f)
+        log { "ending ${if (finale) "finale" else "credits"}" }
     }
 
     private fun newBot(s: GameSim) = StageBot(s, inkFor = { dev.wrongInk[it] ?: it })
@@ -778,6 +842,7 @@ class InkMayhemGame(
     private fun firstRun(def: StageDef) = def.number == 1 && settings.stars(def.id) == 0
 
     private fun openSelect() {
+        fadeAt = clock
         pauseCard.hide()
         countdown.cancel()
         selectCard.refresh()
@@ -810,7 +875,7 @@ class InkMayhemGame(
     private fun musicWanted(): Audio.Music {
         val ses = session
         if (tutorial != null) return Audio.Music.STOPPED
-        if (screen == Screen.TITLE || screen == Screen.SELECT) return if (paused) Audio.Music.PAUSED else Audio.Music.PLAYING
+        if (screen == Screen.TITLE || screen == Screen.SELECT || screen == Screen.ENDING) return if (paused) Audio.Music.PAUSED else Audio.Music.PLAYING
         if (ses == null) return Audio.Music.STOPPED
         if (ses.phase != StageSession.Phase.INTRO && ses.phase != StageSession.Phase.PLAY) return Audio.Music.STOPPED
         val held = sheet.open || calibration.open || paused || pauseCard.open || countdown.running
@@ -848,6 +913,7 @@ class InkMayhemGame(
         // the tutorial replaces whatever was being played
         if (screen == Screen.STAGE) endStage()
         afterTutorial = if (screen == Screen.TITLE) Screen.TITLE else Screen.SELECT
+        fadeAt = clock
         val ts = GameSim(seed = 1, events = Events(saveBest = false), vwMetres = wDp / scale, vhMetres = hDp / scale)
         ts.scale = scale
         ts.tint = true
@@ -995,8 +1061,11 @@ class InkMayhemGame(
             world.guideTok = when (tut.guideInk) { Ink.ROPE -> Tok.ROPE; Ink.SPRING -> Tok.SPRING; Ink.BEAM -> Tok.BEAM }
         }
         // the tutorial always colours ink by type: that's what it teaches
-        val menu = tut == null && (screen == Screen.TITLE || screen == Screen.SELECT)
-        world.render(active, fx, pal, settings.tint || tut != null, uiCam, wDp, hDp, scale, density, (acc / STEP).coerceIn(0f, 1f), pageOnly = menu)
+        val menu = tut == null && screen != Screen.STAGE
+        world.render(
+            active, fx, pal, settings.tint || tut != null, uiCam, wDp, hDp, scale, density, (acc / STEP).coerceIn(0f, 1f),
+            pageOnly = menu, dt = frames.dt, remarks = settings.remarks && tut == null,
+        )
 
         updateFrame()
         val safeL = frame.safeL
@@ -1034,7 +1103,7 @@ class InkMayhemGame(
         shapes.begin(uiCam.combined, density)
         if (tut != null) {
             tutorialCard.drawShapes(shapes, pal, tut)
-        } else if (screen != Screen.TITLE) {
+        } else if (screen != Screen.TITLE && screen != Screen.ENDING) {
             hud.drawShapes(
                 shapes, pal, wDp, ink, hudSim.combo, hudPress.isPressed(hud.settingsButton), full = ses != null,
                 pause = ses != null && pausable(ses), back = screen == Screen.SELECT, pressedBack = hudPress.isPressed(hud.backButton),
@@ -1054,7 +1123,7 @@ class InkMayhemGame(
         batch.begin()
         if (tut != null) {
             tutorialCard.drawText(text, pal, tut)
-        } else if (screen != Screen.TITLE) {
+        } else if (screen != Screen.TITLE && screen != Screen.ENDING) {
             hud.drawText(text, fonts, pal, wDp, hudSim.combo, full = ses != null)
             if (screen == Screen.SELECT) hud.drawBackText(text, fonts, pal)
         }
@@ -1076,8 +1145,15 @@ class InkMayhemGame(
         // Cards: the title, the stage list, or the stage's own cards (and the pause screen over
         // them). During the tutorial its card is the only one.
         if (tut == null && screen == Screen.TITLE) {
+            titleCard.hoverOn = world.hoverOn
+            titleCard.hoverX = world.hoverX
+            titleCard.hoverY = world.hoverY
             titleCard.layout(text, frame)
             pass({ titleCard.drawShapes(shapes, pal, text, now, reduced) }, { titleCard.drawText(text, pal, now, reduced) })
+        } else if (tut == null && screen == Screen.ENDING) {
+            endingCard.layout(frame)
+            endingCard.layoutBubble(text, frame)
+            pass({ endingCard.drawShapes(shapes, pal, frame, now, reduced) }, { endingCard.drawText(text, pal, frame, now) })
         } else if (tut == null && screen == Screen.SELECT) {
             selectCard.layout(text, frame)
             pass({ selectCard.drawShapes(shapes, pal, frame) }, { selectCard.drawText(text, pal) })
@@ -1085,7 +1161,8 @@ class InkMayhemGame(
             drawStageCards(ses)
             if (pauseCard.open) {
                 pauseCard.layout(frame)
-                pass({ pauseCard.drawShapes(shapes, pal, frame) }, { pauseCard.drawText(text, pal, ses.stage) })
+                pauseCard.remarks = settings.remarks
+                pass({ pauseCard.drawShapes(shapes, pal, frame, text, now, reduced) }, { pauseCard.drawText(text, pal, ses.stage) })
             } else if (countdown.running) {
                 pass({ countdown.drawShapes(shapes, pal, frame, reduced) }, { countdown.drawText(text, pal, frame) })
             }
@@ -1098,11 +1175,51 @@ class InkMayhemGame(
             calibration.layout(text, frame)
             pass({ calibration.drawShapes(shapes, pal, frame) }, { calibration.drawText(text, pal) })
         }
+        if (dev.faces) drawFaceGallery(now)
+        // a new screen fades in from the paper
+        val fade = if (reduced) 0f else 1f - ((now - fadeAt) / SCREEN_FADE_S).toFloat().coerceIn(0f, 1f)
+        if (fade > 0f) {
+            shapes.begin(uiCam.combined, density)
+            shapes.color(pal[Tok.PAPER], fade).rect(0f, 0f, wDp, hDp)
+            shapes.end()
+        }
     }
 
 
     private var tagX = 0f
     private var tagY = 0f
+
+    private val galleryFaces by lazy { com.pranshuparmar.inkmayhem.render.Expr.entries.map { e -> com.pranshuparmar.inkmayhem.render.BuddyState().also { it.set(e) } } }
+    private val galleryDrawer by lazy { com.pranshuparmar.inkmayhem.render.BuddyDrawer(shapes) }
+    private var galleryAt = Double.NaN
+
+    /** Desktop --faces: every expression, large, on a plain page. */
+    private fun drawFaceGallery(now: Double) {
+        val dt = if (galleryAt.isNaN()) 0f else (now - galleryAt).toFloat()
+        galleryAt = now
+        val cols = 4
+        val cw = wDp / cols
+        val rows = (galleryFaces.size + cols - 1) / cols
+        val ch = (hDp - 40f) / rows
+        val r = min(cw, ch) * 0.2f
+        shapes.begin(uiCam.combined, density)
+        shapes.color(pal[Tok.PAPER]).rect(0f, 0f, wDp, hDp)
+        galleryFaces.forEachIndexed { i, s ->
+            s.update(dt)
+            val cx = cw * (i % cols + 0.5f)
+            val cy = 40f + ch * (i / cols + 0.5f)
+            galleryDrawer.draw(pal, s, cx, cy, r, 1f, 1f)
+        }
+        shapes.end()
+        batch.projectionMatrix = uiCam.combined
+        batch.begin()
+        galleryFaces.forEachIndexed { i, s ->
+            val cx = cw * (i % cols + 0.5f)
+            val cy = 40f + ch * (i / cols + 0.5f)
+            text.line(fonts.get(Face.MONO_MEDIUM, 11f), s.expr.name, cx, cy + r * 1.5f, 16f, pal[Tok.MUTED], 1f, Align.center)
+        }
+        batch.end()
+    }
 
     /**
      * Tutorial and stages: the ink under the pen, named right next to it while drawing (the gauge
@@ -1260,6 +1377,8 @@ class InkMayhemGame(
         const val FINGER_TOAST = "Use the S Pen. Fingers don’t leave ink."
         const val TUNE_LATER = "For the best feel, tune your pen in settings."
         const val BOSS_MUSIC = "boss"
+        /** A new screen fades in from the paper over this long. */
+        private const val SCREEN_FADE_S = 0.3
         const val FIRST_STAR = "Stars! Every ${GameSim.STARS_PER_LIFE} is an extra life."
         const val READY_TOAST = "You’re ready. The lightest ink that works grows your combo."
         const val SNAP_BUZZ_MS = 12

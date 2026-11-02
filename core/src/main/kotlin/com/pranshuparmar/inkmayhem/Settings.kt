@@ -9,12 +9,27 @@ import com.pranshuparmar.inkmayhem.input.PenCalibration
  * cached in memory because the game reads several of them every frame; writes go straight through.
  */
 class Settings(private val prefs: Preferences) : StageStore {
-    var sound: Boolean = prefs.getBoolean("sound", true)
-        set(v) { field = v; put { putBoolean("sound", v) } }
+    init {
+        migrate()
+    }
 
-    /** Ink Rush plays during stages. */
-    var music: Boolean = prefs.getBoolean("music", true)
-        set(v) { field = v; put { putBoolean("music", v) } }
+    /**
+     * Sound effects' and music's volume, 0 (off) to 1. Older installs had on/off switches
+     * ("sound", "music"), which carry over as full or off.
+     */
+    var soundVolume: Float = volume("soundVolume", "sound")
+        set(v) { field = v.coerceIn(0f, 1f); put { putFloat("soundVolume", field) } }
+
+    var musicVolume: Float = volume("musicVolume", "music")
+        set(v) { field = v.coerceIn(0f, 1f); put { putFloat("musicVolume", field) } }
+
+    val sound: Boolean get() = soundVolume > 0f
+    val music: Boolean get() = musicVolume > 0f
+
+    private fun volume(key: String, oldSwitch: String): Float = when {
+        prefs.contains(key) -> prefs.getFloat(key, 1f).coerceIn(0f, 1f)
+        else -> if (prefs.getBoolean(oldSwitch, true)) 1f else 0f
+    }
 
     /** "Colour ink by type": rope green, spring amber, beam red. On by default (the POC's was off). */
     var tint: Boolean = prefs.getBoolean("tint", true)
@@ -30,6 +45,10 @@ class Settings(private val prefs: Preferences) : StageStore {
 
     var haptics: Boolean = prefs.getBoolean("haptics", true)
         set(v) { field = v; put { putBoolean("haptics", v) } }
+
+    /** The runner's remarks: little speech bubbles now and then. */
+    var remarks: Boolean = prefs.getBoolean("remarks", true)
+        set(v) { field = v; put { putBoolean("remarks", v) } }
 
     /** Debug builds only: record each session's input for replays. On by default; read at launch. */
     var recordInput: Boolean = prefs.getBoolean(RECORD_INPUT, true)
@@ -90,7 +109,32 @@ class Settings(private val prefs: Preferences) : StageStore {
         prefs.flush()
     }
 
+    /**
+     * Brings a save up to [SAVE_VERSION] once, then stamps it. Version 0 is any save from before
+     * saves were versioned: one from before the five worlds, when 1-2 to 1-4 were three other
+     * stages (Cellar, Up High, Castle), has no gold-star keys (every clear since writes one), and
+     * its results for those three are dropped so they don't show on the stages there now.
+     */
+    private fun migrate() {
+        val from = prefs.getInteger(SAVE_VERSION_KEY, 0)
+        if (from >= SAVE_VERSION) return
+        put {
+            if (from < 1 && prefs.get().keys.none { it.startsWith("gold.") }) {
+                for (id in OLD_WORLD_1) {
+                    remove("stars.$id")
+                    remove("best.$id")
+                }
+            }
+            putInteger(SAVE_VERSION_KEY, SAVE_VERSION)
+        }
+    }
+
     companion object {
         const val RECORD_INPUT = "recordInput"
+        /** The save's format: bump it (and teach [migrate] the step) whenever saved data changes meaning. */
+        const val SAVE_VERSION = 1
+        const val SAVE_VERSION_KEY = "saveVersion"
+        /** Stage ids that held other stages before the five worlds. */
+        private val OLD_WORLD_1 = listOf("1-2", "1-3", "1-4")
     }
 }

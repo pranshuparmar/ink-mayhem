@@ -139,10 +139,25 @@ class GameSim(
     /** How the runner's face looks (see [updateMood]). */
     var mood = Mood.CALM
         private set
-    private var bounceAt = -10f
-    private var happyUntil = -10f
+    /** simT of the last spring bounce, and until when the runner looks pleased (read by its face). */
+    var bounceAt = -10f
+        private set
+    var happyUntil = -10f
+        private set
     /** simT the runner last lost Bold or squashed something (the face reacts). */
-    private var ouchAt = -10f
+    var ouchAt = -10f
+        private set
+    /** How many rope, spring and beam fixtures the runner is touching (by ink weight). */
+    private val runnerInk = IntArray(3)
+
+    /** The ink the runner is rolling on (a beam over a spring over rope), or null. Its face reads it. */
+    val runnerOnInk: Ink?
+        get() = when {
+            runnerInk[Ink.BEAM.weight] > 0 -> Ink.BEAM
+            runnerInk[Ink.SPRING.weight] > 0 -> Ink.SPRING
+            runnerInk[Ink.ROPE.weight] > 0 -> Ink.ROPE
+            else -> null
+        }
 
     /**
      * The pen hasn't been tuned: a stroke drawn at a tuning gate is the gate's ink whatever the
@@ -367,7 +382,7 @@ class GameSim(
         planes.clear(); flights.clear(); planeHits.clear()
         crumbles.clear(); crumbleTouched.clear()
         pools.clear(); tides.clear(); sinking.clear(); sinkAt.clear()
-        beetleOn.clear(); beetleOnStroke.clear()
+        beetleOn.clear(); beetleOnStroke.clear(); runnerInk.fill(0)
         starsTaken = 0; squashed = 0; starStep = -1; lastStarT = -10f
         mood = Mood.CALM; bounceAt = -10f; happyUntil = -10f; ouchAt = -10f; lastGate = null
         stage = null; runnerOnLift = 0
@@ -757,6 +772,7 @@ class GameSim(
             val ub = fb.userData as? FixtureTag
             val other = if (ua?.kind == FixtureKind.RUNNER) ub else if (ub?.kind == FixtureKind.RUNNER) ua else null
             if (other?.kind == FixtureKind.SPRING) pendingBounce = true
+            inkOf(other)?.let { runnerInk[it]++ }
             if (other?.kind == FixtureKind.BOX) pendingBox = other
             if (other?.kind == FixtureKind.CRUMBLE) crumbleTouched += if (ua?.kind == FixtureKind.CRUMBLE) fa.body else fb.body
             // a beam dropped on a Blot (or a boss, an Eraser, a beetle), or a boulder rolling into one, squashes it
@@ -814,6 +830,8 @@ class GameSim(
         override fun endContact(c: Contact) {
             val ua = c.fixtureA.userData as? FixtureTag
             val ub = c.fixtureB.userData as? FixtureTag
+            val other = if (ua?.kind == FixtureKind.RUNNER) ub else if (ub?.kind == FixtureKind.RUNNER) ua else null
+            inkOf(other)?.let { runnerInk[it] = max(0, runnerInk[it] - 1) }
             if (ua?.kind == FixtureKind.BEETLE || ub?.kind == FixtureKind.BEETLE) {
                 val body = if (ua?.kind == FixtureKind.BEETLE) c.fixtureA.body else c.fixtureB.body
                 val st = (if (ua?.kind == FixtureKind.BEETLE) ub else ua)?.stroke
@@ -826,6 +844,13 @@ class GameSim(
                 runnerOnLift = max(0, runnerOnLift - 1)
             }
         }
+        private fun inkOf(t: FixtureTag?): Int? = when (t?.kind) {
+            FixtureKind.ROPE -> Ink.ROPE.weight
+            FixtureKind.SPRING -> Ink.SPRING.weight
+            FixtureKind.BEAM -> Ink.BEAM.weight
+            else -> null
+        }
+
         override fun preSolve(c: Contact, m: Manifold) = Unit
         override fun postSolve(c: Contact, i: ContactImpulse) = Unit
     }

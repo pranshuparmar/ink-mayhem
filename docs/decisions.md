@@ -413,3 +413,30 @@ screen.
   resumes, on the stage list it goes to the title, and only the title leaves the app.
 - **Recordings** now start on the title screen, so ones made before this don't replay
   identically (they began in a stage).
+
+
+## 28. An ending, versioned saves, and a runner with a personality
+
+Before playtesting, the owner asked for what would keep the game from feeling unfinished: it
+stays S Pen only (said on the title screen and in the README), it gets an ending, a polish pass,
+a save version and a smooth boss fight, and the runner becomes a character "like the old
+Office paperclip: pure fun". It will be open source on GitHub, not on Google Play.
+
+- **The ending is earned and skippable.** It follows the last clear card rather than replacing
+  it, so the tally still shows; it holds on the clean page and the runner first, then rolls the
+  player's totals and the credits. The credits alone are on the title screen.
+- **Saves carry a version.** The five worlds reused stage ids 1-2 to 1-4 for new stages. A
+  save without a version and without gold-star keys (every clear since the worlds writes one)
+  is from before them; only those three stages' results are dropped. Future changes to what a
+  saved value means bump the version and add a step.
+- **Tunes are loaded before they're needed.** Android's SoundPool loads in the background, so
+  a tune loaded when the boss arena closed started late; on desktop the load stalled a frame. A
+  stage's tunes now load during its intro card.
+- **The runner is a character, not a ball with a face.** The old face was small and the shine
+  on the ball turned with the roll. The character is original (an ink blot with googly eyes and
+  floating eyebrows, the paperclip's best trick), upright whatever way the ball rolls, and drawn
+  by one drawer everywhere it appears. What it feels and says is read from the sim each frame
+  and never written back, so recordings still replay exactly. Its remarks are rationed (a
+  cooldown, and chance on common events) because the paperclip's real lesson is that a
+  helper who talks too much gets turned off; there's a setting for that anyway.
+- **Volume, not just on and off.** Sound and music became sliders; the old switches carry over.

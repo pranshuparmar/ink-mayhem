@@ -278,7 +278,7 @@ class GameOverCard(private val fonts: Fonts) {
 
 /**
  * The stage-clear tally: stars pop in one by one, the score counts up, then the ink bonus and the
- * total. Next (or Stages after the last stage), Retry, Stages.
+ * total. Next (or The end after the last stage), Retry, Stages.
  */
 class ClearCard(private val fonts: Fonts) {
     val box = Box()
@@ -302,7 +302,7 @@ class ClearCard(private val fonts: Fonts) {
         val y = box.bottom - 20f - 42f
         val sw = text.width(font, "Stages") + 32f
         val rw = text.width(font, "Retry") + 32f
-        val nw = text.width(font, "Next") + 32f
+        val nw = text.width(font, if (hasNext) "Next" else LAST) + 32f
         stages.set(box.right - 20f - sw, y, sw, 42f)
         retry.set(stages.x - 8f - rw, y, rw, 42f)
         next.set(retry.x - 8f - nw, y, nw, 42f)
@@ -398,7 +398,7 @@ class ClearCard(private val fonts: Fonts) {
         y += 22f
         text.line(mono, GOLD, x, y, 22f, pal[Tok.MUTED])
         val font = fonts.get(Face.UI_BOLD, 14f)
-        Widgets.buttonLabel(text, font, pal, next, if (hasNext) "Next" else "Stages", primary = true, enabled = true)
+        Widgets.buttonLabel(text, font, pal, next, if (hasNext) "Next" else LAST, primary = true, enabled = true)
         Widgets.buttonLabel(text, font, pal, retry, "Retry", primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, stages, "Stages", primary = false, enabled = true)
     }
@@ -413,5 +413,7 @@ class ClearCard(private val fonts: Fonts) {
         private const val TOTAL = "TOTAL"
         private const val TOTAL_BEST = "TOTAL · NEW BEST"
         private const val GOLD = "GOLD STARS"
+        /** After the last stage the way on is the ending. */
+        private const val LAST = "The end"
     }
 }
