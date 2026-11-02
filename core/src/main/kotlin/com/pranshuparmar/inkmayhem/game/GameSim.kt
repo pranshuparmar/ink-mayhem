@@ -19,6 +19,7 @@ import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.random.Random
 
 enum class GameState { TITLE, RUN, DEAD, CLEAR }
@@ -83,6 +84,8 @@ class GameSim(
     /** Blots hit by a beam or a boulder this step, with what hit them. */
     private val blotHits = ArrayList<Body>(4)
     private val blotHitBy = ArrayList<Body>(4)
+    /** The hitter's downward speed as it touched (after the step, a heavy target has stopped it). */
+    private val blotHitVy = com.badlogic.gdx.utils.FloatArray(4)
 
     private var genX = 0f
     private var level = 20f
@@ -152,6 +155,13 @@ class GameSim(
     /** A boss arena has closed behind the runner and its boss is still up (the boss tune plays). */
     var bossFight = false
         private set
+    val arenas = ArrayList<Arena>()
+    /** The stage's boss, waiting in its arena, or null. */
+    var boss: Boss? = null
+        private set
+    /** Strokes an eraser rubbed against this step (removed after the step), and a spring a boss touched. */
+    private val toErase = ArrayList<Stroke>(4)
+    private var bossOnSpring = false
     /** The gate the runner is stopping or stopped at, waiting for a stroke, or null. */
     var waitingAt: Gate? = null
         private set
@@ -320,7 +330,8 @@ class GameSim(
         blocks.clear(); drops.clear(); notes.clear(); boulders.clear()
         ceilings.clear(); hazards.clear(); spikeStrips.clear(); lifts.clear(); seesaws.clear()
         stars.clear(); golds.clear(); blots.clear(); boxes.clear(); caps.clear(); gates.clear()
-        blotHits.clear(); blotHitBy.clear(); pendingBox = null
+        blotHits.clear(); blotHitBy.clear(); blotHitVy.clear(); pendingBox = null
+        arenas.clear(); boss = null; bossFight = false; toErase.clear(); bossOnSpring = false
         starsTaken = 0; squashed = 0; starStep = -1; lastStarT = -10f
         mood = Mood.CALM; bounceAt = -10f; happyUntil = -10f; ouchAt = -10f; lastGate = null
         stage = null; runnerOnLift = 0
@@ -351,6 +362,7 @@ class GameSim(
         lifts.fastEach { it.prev.snapshot() }
         seesaws.fastEach { it.prev.snapshot() }
         blots.fastEach { if (!it.dead) it.prev.snapshot() }
+        boss?.let { if (!it.down) it.prev.snapshot() }
         caps.fastEach { if (!it.taken) it.prev.snapshot() }
         ink.strokes.fastEach { s -> s.groups.fastEach { it.snapshot() } }
     }
@@ -417,6 +429,16 @@ class GameSim(
         for (k in l.boxes) {
             val tag = FixtureTag(com.pranshuparmar.inkmayhem.physics.FixtureKind.BOX)
             boxes += DoodleBox(ink.addRect(k.x, k.top, k.size, k.size, tag = tag), k.holds, tag)
+        }
+        for (k in l.arenas) {
+            val a = Arena(k.x0, k.x1, k.level, k.kind, k.ceiling)
+            // the far wall stands from the start; the near one closes behind the runner
+            a.right = ink.addRect(k.x1, k.level - ARENA_WALL, ARENA_WALL_W, ARENA_WALL + 40f).also { it.level = k.level; blocks += it }
+            arenas += a
+            val bx = k.x1 - 3f
+            val body = if (k.kind == BossKind.AIRLINER) ink.addFlyer(k.x0 + 4f, k.level - AIRLINER_UP, k.kind.r, FixtureTag.BOSS)
+            else ink.addWalker(bx, k.level - k.kind.r - 0.02f, k.kind.r, BOSS_DENSITY, FixtureTag.BOSS)
+            boss = Boss(k.kind, body, a)
         }
         for (k in l.gates) gates += Gate(k.ink, k.x0, k.x1, k.gx0, k.gy0, k.gx1, k.gy1, k.label, k.tunes, k.waitX, k.slack)
         for (k in l.notes) notes += Note(k.x, k.y, k.text).also { it.maxW = k.maxW }
@@ -676,14 +698,25 @@ class GameSim(
             val other = if (ua?.kind == FixtureKind.RUNNER) ub else if (ub?.kind == FixtureKind.RUNNER) ua else null
             if (other?.kind == FixtureKind.SPRING) pendingBounce = true
             if (other?.kind == FixtureKind.BOX) pendingBox = other
-            // a beam dropped on a Blot, or a boulder rolling into one, squashes it
-            val blotA = ua?.kind == FixtureKind.BLOT
-            val blotB = ub?.kind == FixtureKind.BLOT
+            // a beam dropped on a Blot (or a boss, an Eraser, a beetle), or a boulder rolling into one, squashes it
+            val blotA = ua?.kind.let { it == FixtureKind.BLOT || it == FixtureKind.BOSS || it == FixtureKind.ERASER || it == FixtureKind.BEETLE }
+            val blotB = ub?.kind.let { it == FixtureKind.BLOT || it == FixtureKind.BOSS || it == FixtureKind.ERASER || it == FixtureKind.BEETLE }
+            // an Eraser (or the Giant Eraser) rubs out rope and springs it touches
+            val eraserA = ua?.kind == FixtureKind.ERASER || (ua?.kind == FixtureKind.BOSS && boss?.kind == BossKind.GIANT_ERASER)
+            val eraserB = ub?.kind == FixtureKind.ERASER || (ub?.kind == FixtureKind.BOSS && boss?.kind == BossKind.GIANT_ERASER)
+            if (eraserA || eraserB) {
+                val other2 = if (eraserA) ub else ua
+                val st = other2?.stroke
+                if (st != null && (other2.kind == FixtureKind.ROPE || other2.kind == FixtureKind.SPRING) && st !in toErase) toErase += st
+            }
+            // the Big Smudge stepping onto a spring is launched
+            if ((ua?.kind == FixtureKind.BOSS && ub?.kind == FixtureKind.SPRING) || (ub?.kind == FixtureKind.BOSS && ua?.kind == FixtureKind.SPRING)) bossOnSpring = true
             if (blotA != blotB) {
                 val hitter = if (blotA) ub else ua
                 if (hitter?.kind == FixtureKind.BEAM || hitter?.kind == FixtureKind.BOULDER) {
                     blotHits += if (blotA) fa.body else fb.body
                     blotHitBy += if (blotA) fb.body else fa.body
+                    blotHitVy.add((if (blotA) fb.body else fa.body).linearVelocity.y)
                 }
             }
             if (other?.kind == FixtureKind.CEILING) pendingDeath = "Spiked"
@@ -952,15 +985,17 @@ class GameSim(
                 }
             } else if (state == GameState.RUN && !runnerHeld) {
                 val w = rb.angularVelocity
-                val wt = runSpeed / runner.r
-                // stages let a downhill roll build speed: the drive barely brakes there
-                rb.applyTorque((3f * (wt - w)).coerceIn(if (stage != null) -STAGE_BRAKE else -7f, 7f), true)
+                val wt = runner.dir * runSpeed / runner.r
+                // stages let a downhill roll build speed: the drive barely brakes there (but turns
+                // round in a boss arena)
+                val brake = if (stage != null && !bossFight) -STAGE_BRAKE else -7f
+                rb.applyTorque((3f * (wt - w)).coerceIn(if (runner.dir > 0) brake else -7f, if (runner.dir > 0) 7f else -brake), true)
                 val v = rb.linearVelocity
                 if (kotlin.math.abs(v.x) < 0.4f && kotlin.math.abs(v.y) < 0.6f) {
                     runner.stuck += sdt
                     if (runner.stuck > 0.45f) {
                         val m = rb.mass
-                        rb.applyLinearImpulse(1.6f * m, -4.6f * m, rb.worldCenter.x, rb.worldCenter.y, true)
+                        rb.applyLinearImpulse(runner.dir * 1.6f * m, -4.6f * m, rb.worldCenter.x, rb.worldCenter.y, true)
                         runner.stuck = 0f
                         events.sound(Sfx.HOP)
                     }
@@ -980,7 +1015,7 @@ class GameSim(
             runner.bounceCd -= sdt
             if (pendingBounce && runner.bounceCd <= 0f && state == GameState.RUN && !runnerHeld) {
                 val v = rb.linearVelocity
-                rb.setLinearVelocity(max(v.x, runSpeed * 0.95f), -9.6f)
+                rb.setLinearVelocity(if (runner.dir > 0) max(v.x, runSpeed * 0.95f) else min(v.x, -runSpeed * 0.95f), -9.6f)
                 runner.bounceCd = 0.3f
                 bounces++
                 runner.squash = 1f
@@ -1008,8 +1043,11 @@ class GameSim(
             if (state == GameState.RUN) {
                 crushBlots()
                 hitBox()
+                bossSpring()
             }
-            blotHits.clear(); blotHitBy.clear(); pendingBox = null
+            toErase.fastEach { st -> if (st in ink.strokes) eraseStroke(st) }
+            toErase.clear(); bossOnSpring = false
+            blotHits.clear(); blotHitBy.clear(); blotHitVy.clear(); pendingBox = null
             while (ink.events.isNotEmpty()) {
                 val ev = ink.events.removeFirst()
                 snaps++
@@ -1061,6 +1099,7 @@ class GameSim(
                 }
             }
             takeStars(px, py)
+            updateArena(px, py)
             updateBlots(px, py)
             updateCaps(px, py)
             gates.fastEach { if (!it.passed && px > it.x1 + 0.6f) { it.passed = true; it.passedAt = simT } }
@@ -1073,7 +1112,7 @@ class GameSim(
             stageProgress(px)
             if (py > levelNear(px) + 4f) die("Fell in", DeathKind.FELL)
             // riding a lift isn't being stuck
-            if (px > runner.bestX + 0.5f || runnerHeld || waitingAt != null || (runnerOnLift > 0 && liftMoving())) {
+            if (px > runner.bestX + 0.5f || runnerHeld || waitingAt != null || bossFight || (runnerOnLift > 0 && liftMoving())) {
                 runner.bestX = px
                 runner.bestT = simT
             } else if (simT - runner.bestT > 5f) {
@@ -1138,6 +1177,193 @@ class GameSim(
     }
 
     // ---------------------------------------------------------------- slice 1: stars, Blots, boxes, Bold
+
+    // ---------------------------------------------------------------- bosses
+
+    /**
+     * A boss arena: once the runner is in, a wall closes behind it, the camera holds the arena
+     * and the runner rolls back and forth between the walls until the boss is beaten.
+     */
+    private fun updateArena(px: Float, py: Float) {
+        val a = arenas.firstOrNull { !it.won } ?: return
+        if (!a.closed) {
+            if (px < a.x0 + ARENA_ENTER) return
+            a.closed = true
+            a.left = ink.addRect(a.x0 - ARENA_WALL_W, a.level - ARENA_WALL, ARENA_WALL_W, ARENA_WALL + 40f).also { it.level = a.level; blocks += it }
+            bossFight = true
+            camFocusX = a.mid
+            events.toast(a.kind.title + "!", force = true)
+            events.sound(Sfx.RUMBLE)
+            events.shake(0.25f)
+            events.burst(a.x0, a.level - 2f, 14, 3f, Tok.GRAPHITE)
+            return
+        }
+        if (runner.dir > 0 && px > a.x1 - runner.r - TURN_GAP) runner.dir = -1
+        if (runner.dir < 0 && px < a.x0 + runner.r + TURN_GAP) runner.dir = 1
+        boss?.let { if (!it.down) updateBoss(it, px, py) }
+    }
+
+    private fun bossSpeed(b: Boss): Float {
+        val base = when (b.kind) {
+            BossKind.BIG_BLOT -> 1.4f
+            BossKind.GIANT_ERASER -> 1.0f
+            BossKind.AIRLINER -> 2.6f
+            BossKind.BEETLE_QUEEN -> 1.0f
+            BossKind.BIG_SMUDGE -> 1.2f
+        }
+        // angrier with every hit
+        return base * (1f + 0.2f * (b.kind.hp - b.hp))
+    }
+
+    private fun updateBoss(b: Boss, px: Float, py: Float) {
+        val body = b.body
+        val q = body.position
+        val a = b.arena
+        val v = body.linearVelocity
+        if (b.kind == BossKind.AIRLINER) {
+            // back and forth across the top of the arena, bobbing
+            if (b.dir > 0 && q.x > a.x1 - 1.5f) b.dir = -1
+            if (b.dir < 0 && q.x < a.x0 + 1.5f) b.dir = 1
+            val ty = a.level - AIRLINER_UP + 0.3f * sin(simT * 2f)
+            body.setLinearVelocity(b.dir * bossSpeed(b), (ty - q.y) * 3f)
+        } else if (simT >= b.hurtUntil && kotlin.math.abs(v.y) < 0.6f && !b.launched) {
+            // walks at the runner
+            b.dir = if (px < q.x) -1 else 1
+            body.setLinearVelocity(b.dir * bossSpeed(b), v.y)
+        }
+        if (b.launched && v.y >= 0f && q.y > a.level - b.r - 0.3f) b.launched = false
+        // the Big Smudge, sprung into its spiked roof
+        if (b.kind == BossKind.BIG_SMUDGE && b.launched && !a.ceiling.isNaN() && q.y - b.r < a.ceiling + SPIKE_DEPTH + 0.1f && simT >= b.hurtUntil) {
+            hitBoss(b, "Spiked!")
+            if (!b.down) body.setLinearVelocity(v.x, 3f)
+        }
+        if (b.down) return
+        // its moves: the Big Smudge spits Blots, the Queen lays beetles, the Airliner drops planes
+        b.actT -= 1f / 60f
+        if (b.actT <= 0f) {
+            b.actT = BOSS_ACT_S
+            bossAct(b, px)
+        }
+        // touching the runner
+        val rb = runner.body
+        val rv = rb.linearVelocity
+        val d = hypot(q.x - px, q.y - py)
+        val stomp = (rv.y > 0.5f && py < q.y - 0.3f) || simT - bounceAt < BOUNCE_STOMP_S
+        if (d > runner.r + b.r + if (stomp) STOMP_SLACK else 0.04f) return
+        when (b.kind) {
+            BossKind.AIRLINER -> if (rv.y < 0f && py > q.y && simT >= b.hurtUntil) {
+                // bounced up into it
+                hitBoss(b, "Hit!")
+                rb.setLinearVelocity(rv.x, 2f)
+                return
+            }
+            BossKind.BIG_BLOT, BossKind.BEETLE_QUEEN -> if (stomp) {
+                if (simT >= b.hurtUntil) hitBoss(b, "Stomp!")
+                rb.setLinearVelocity(rv.x, STOMP_VY)
+                runner.squash = 1f
+                return
+            }
+            BossKind.GIANT_ERASER, BossKind.BIG_SMUDGE -> if (stomp) {
+                // too big to squash: the runner bounces off its top
+                rb.setLinearVelocity(rv.x, STOMP_VY)
+                runner.squash = 1f
+                return
+            }
+        }
+        if (simT >= b.hurtUntil) hurt(b.kind.title, DeathKind.BOSS)
+    }
+
+    /** A spring under the Big Smudge throws it up at its spiked roof. */
+    private fun bossSpring() {
+        val b = boss ?: return
+        if (!bossOnSpring || b.down || b.kind != BossKind.BIG_SMUDGE || b.launched || !b.arena.closed) return
+        val v = b.body.linearVelocity
+        b.body.setLinearVelocity(v.x, SMUDGE_LAUNCH)
+        b.launched = true
+        val q = b.body.position
+        events.burst(q.x, q.y + b.r, 12, 2.5f, Tok.SPRING, 0f)
+        events.sound(Sfx.BOULDER_BOING)
+    }
+
+    private fun bossAct(b: Boss, px: Float) {
+        val q = b.body.position
+        when (b.kind) {
+            BossKind.BIG_SMUDGE, BossKind.BEETLE_QUEEN -> {
+                if (blots.count { !it.dead } >= 2) return
+                // a Blot out of its mouth, towards the runner
+                val dir = if (px < q.x) -1f else 1f
+                val body = ink.addWalker(q.x + dir * (b.r + BLOT_R + 0.1f), q.y - 0.3f, BLOT_R, 1f, FixtureTag.BLOT)
+                body.setLinearVelocity(dir * 3f, -4f)
+                blots += Blot(body, b.arena.x0 + 0.5f, b.arena.x1 - 0.5f).also { it.awake = true; it.dir = dir.toInt() }
+                events.sound(Sfx.POP)
+            }
+            else -> Unit
+        }
+    }
+
+    private fun hitBoss(b: Boss, label: String) {
+        if (b.down || simT < b.hurtUntil) return
+        b.hp--
+        b.hurtUntil = simT + BOSS_HURT_S
+        val q = b.body.position
+        score += BOSS_HIT_POINTS
+        happyUntil = simT + HAPPY_S
+        events.burst(q.x, q.y, 16, 3f, Tok.INK)
+        events.pop(q.x, q.y - b.r - 0.8f, "$label +$BOSS_HIT_POINTS", Tok.ACCENT)
+        events.sound(Sfx.BOSS_HIT)
+        events.shake(0.2f)
+        if (b.kind != BossKind.AIRLINER) {
+            // knocked back, away from the runner
+            val away = if (runner.body.position.x < q.x) 1f else -1f
+            b.body.setLinearVelocity(away * 4f, -5f)
+        }
+        if (b.hp <= 0) bossDown(b)
+    }
+
+    private fun bossDown(b: Boss) {
+        b.down = true
+        b.downAt = simT
+        val q = b.body.position
+        val qx = q.x
+        val qy = q.y
+        events.burst(qx, qy, 40, 5f, Tok.INK)
+        events.burst(qx, qy, 20, 4f, Tok.STAR)
+        ink.destroyBody(b.body)
+        score += BOSS_POINTS
+        events.pop(qx, qy - 1.5f, "${b.kind.title} beaten! +$BOSS_POINTS", Tok.ACCENT)
+        events.sound(Sfx.BOSS_DOWN)
+        events.shake(0.35f)
+        // its Blots go with it, the fight's ink fades (dropped beams would wall the way out), and the far wall opens
+        blots.fastEach { bl -> if (!bl.dead) squash(bl, "+$BLOT_POINTS") }
+        val a = b.arena
+        drawing = null
+        ink.clearWet()
+        for (s in ArrayList(ink.strokes)) {
+            if (s.x1 >= a.x0 && s.x0 <= a.x1) {
+                val p = s.segs.firstOrNull()?.group?.body?.position
+                if (p != null) events.burst(p.x, p.y, 6, 1.5f, Tok.MUTED)
+                ink.removeStroke(s)
+            }
+        }
+        a.won = true
+        a.right?.let { w ->
+            events.burst(w.x + w.w / 2f, a.level - 2f, 24, 3f, Tok.GRAPHITE)
+            ink.removeRect(w)
+            blocks.remove(w)
+        }
+        a.right = null
+        bossFight = false
+        runner.dir = 1
+        camFocusX = Float.NaN
+    }
+
+    /** An Eraser rubbed out [s] (rope or a spring). */
+    private fun eraseStroke(s: Stroke) {
+        val p = s.segs.firstOrNull()?.group?.body?.position
+        if (p != null) events.burst(p.x, p.y, 10, 2f, Tok.MUTED)
+        events.sound(Sfx.ERASE)
+        ink.removeStroke(s)
+    }
 
     /**
      * A Blot or spikes got the runner. Bold takes the hit: the runner shrinks back and nothing
@@ -1261,10 +1487,18 @@ class GameSim(
     /** Beams that fell on a Blot (rather than one it walked into) and boulders squash it. */
     private fun crushBlots() {
         for (i in blotHits.indices) {
+            val bs = boss
+            if (bs != null && !bs.down && bs.body === blotHits[i]) {
+                // a falling beam (or a boulder) hurts the bosses that a beam can
+                val byB = blotHitBy[i]
+                val boulder = (byB.fixtureList.first().userData as? FixtureTag)?.kind == FixtureKind.BOULDER
+                if ((boulder || blotHitVy[i] > 0.5f) && bs.kind != BossKind.BIG_SMUDGE && bs.kind != BossKind.AIRLINER) hitBoss(bs, "Beam drop!")
+                continue
+            }
             val b = blots.firstOrNull { !it.dead && it.body === blotHits[i] } ?: continue
             val by = blotHitBy[i]
             val boulder = (by.fixtureList.first().userData as? FixtureTag)?.kind == FixtureKind.BOULDER
-            if (boulder || by.linearVelocity.y > 0.5f) squash(b, if (boulder) "Squashed! +$BLOT_POINTS" else "Beam drop! +$BLOT_POINTS")
+            if (boulder || blotHitVy[i] > 0.5f) squash(b, if (boulder) "Squashed! +$BLOT_POINTS" else "Beam drop! +$BLOT_POINTS")
         }
     }
 
@@ -1616,6 +1850,20 @@ class GameSim(
         const val BOX_STARS = 5
         /** How long the face grins after something good. */
         const val HAPPY_S = 1.2f
+        /** Boss arenas: wall height and thickness, how far in the runner is when the near wall closes, where it turns. */
+        const val ARENA_WALL = 12f
+        const val ARENA_WALL_W = 0.8f
+        const val ARENA_ENTER = 1.5f
+        const val TURN_GAP = 0.15f
+        /** Bosses: density, seconds of a hit's flashing, seconds between moves, points per hit and for the win. */
+        const val BOSS_DENSITY = 2f
+        const val BOSS_HURT_S = 1.2f
+        const val BOSS_ACT_S = 3.5f
+        const val BOSS_HIT_POINTS = 200
+        const val BOSS_POINTS = 1000
+        /** The Airliner flies this high; a spring throws the Big Smudge up at this speed (m/s, up). */
+        const val AIRLINER_UP = 4.4f
+        const val SMUDGE_LAUNCH = -15f
         /** A stroke begun this far either side of a tuning gate still belongs to it. */
         const val GATE_SLACK = 1.5f
         /** A learning runner brakes at this rate (m/s²) from this far (m) before a gate's wait point. */
@@ -1668,6 +1916,11 @@ class GameSim(
                 "Bounce on Blots: a spring just before one.",
                 "Drop a beam on a Blot from above.",
             ),
+            DeathKind.BOSS to listOf("Watch what hurts it, and spring clear of it."),
+            DeathKind.ERASER to listOf("A beam wall stops an Eraser. Rope over a gap drops it."),
+            DeathKind.PLANE to listOf("A beam roof stops paper planes. Or spring over them."),
+            DeathKind.BEETLE to listOf("Beetles can't bite beams. Race them, or bounce on them."),
+            DeathKind.TIDE to listOf("Keep moving: the tide never stops."),
         )
     }
 }

@@ -7,6 +7,8 @@ enum class Tok {
     PAPER, RULE, MARGIN, INK, GRAPHITE, ROCK, DROP, UI, UI_FG, MUTED, LINE, ACCENT, ACCENT_FG, ROPE, SPRING, BEAM, SHADOW,
     /** Slice 1: Blots (violet ink, never the runner's) and stars (gold, never a spring's amber). */
     BLOT, STAR,
+    /** Worlds: Erasers' pink rubber, beetles' shells, paper (planes, the Airliner). */
+    ERASER, BEETLE, PAPER_WHITE,
 }
 
 class Palette private constructor(private val colors: Array<Color>) {
@@ -27,6 +29,7 @@ class Palette private constructor(private val colors: Array<Color>) {
             Tok.ROPE to "2A8656", Tok.SPRING to "B97C0C", Tok.BEAM to "C03D37",
             Tok.SHADOW to "1C2B4F29", // rgba(28, 43, 79, 0.16)
             Tok.BLOT to "6A3FB5", Tok.STAR to "E3A500",
+            Tok.ERASER to "E88AA6", Tok.BEETLE to "2E5D52", Tok.PAPER_WHITE to "FFFFFF",
         )
 
         /**
@@ -41,6 +44,7 @@ class Palette private constructor(private val colors: Array<Color>) {
             Tok.ROPE to "6EE0A0", Tok.SPRING to "F5C04F", Tok.BEAM to "FF8078",
             Tok.SHADOW to "00000099",
             Tok.BLOT to "C3A6FF", Tok.STAR to "FFE07A",
+            Tok.ERASER to "F5A8C0", Tok.BEETLE to "76C9B4", Tok.PAPER_WHITE to "E8EEFF",
         )
 
         val DARK = of(
@@ -51,6 +55,7 @@ class Palette private constructor(private val colors: Array<Color>) {
             Tok.ROPE to "5CC98D", Tok.SPRING to "E8B24A", Tok.BEAM to "F07A73",
             Tok.SHADOW to "00000080", // rgba(0, 0, 0, 0.5)
             Tok.BLOT to "B597F5", Tok.STAR to "FFD04D",
+            Tok.ERASER to "F2A3BB", Tok.BEETLE to "6BB8A4", Tok.PAPER_WHITE to "E8EDF8",
         )
     }
 }

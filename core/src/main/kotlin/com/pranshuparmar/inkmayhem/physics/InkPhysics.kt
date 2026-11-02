@@ -492,6 +492,27 @@ class InkPhysics(
         return b
     }
 
+    /**
+     * Something that flies on its own path (the Paper Airliner, paper planes): a kinematic ball
+     * the game moves by velocity. A sensor: it passes through everything, but its contacts with
+     * ink are still reported.
+     */
+    fun addFlyer(x: Float, y: Float, r: Float, tag: FixtureTag): Body {
+        bd.type = BodyDef.BodyType.KinematicBody
+        bd.position.set(x, y)
+        bd.angle = 0f
+        val b = world.createBody(bd)
+        circle.radius = r
+        circle.position = v.set(0f, 0f)
+        fd.reset()
+        fd.shape = circle
+        fd.isSensor = true
+        fd.filter.categoryBits = WALKER_BITS
+        fd.filter.maskBits = 0x0001
+        b.createFixture(fd).userData = tag
+        return b
+    }
+
     /** Resizes a ball made by [addBall] to radius [r], keeping its mass (the runner going Bold). */
     fun resizeBall(b: Body, r: Float) {
         val f = b.fixtureList.first()

@@ -125,6 +125,50 @@ class Gate(
     var nudged = false
 }
 
+/** Each world's boss: its name, hit points and size. How it is hit is in [GameSim]. */
+enum class BossKind(val title: String, val hp: Int, val r: Float) {
+    /** World 1: bounce onto it (springs), like any Blot. */
+    BIG_BLOT("The Big Blot", 3, 1.1f),
+    /** World 2: rubs out rope and springs it touches; only a beam dropped on it hurts it. */
+    GIANT_ERASER("The Giant Eraser", 3, 1.0f),
+    /** World 3: flies overhead dropping paper planes; bounce up into it. */
+    AIRLINER("The Paper Airliner", 3, 0.9f),
+    /** World 4: lays beetles; bounce onto it. */
+    BEETLE_QUEEN("The Beetle Queen", 3, 1.0f),
+    /** World 5: spits Blots; spring it up into its own spiked ceiling. */
+    BIG_SMUDGE("The Big Smudge", 4, 1.2f),
+}
+
+/**
+ * A boss arena from [x0] to [x1] on ground [level]: a wall closes behind the runner as it enters,
+ * the runner rolls back and forth between the walls, and the far wall opens once the boss is
+ * beaten. [ceiling] is a spiked roof's underside (NaN: open).
+ */
+class Arena(val x0: Float, val x1: Float, val level: Float, val kind: BossKind, val ceiling: Float) {
+    var closed = false
+    var won = false
+    var left: com.pranshuparmar.inkmayhem.physics.GroundRect? = null
+    var right: com.pranshuparmar.inkmayhem.physics.GroundRect? = null
+    val mid: Float get() = (x0 + x1) / 2f
+}
+
+/** A boss: walks (or flies) in its arena; [hp] hits to beat. */
+class Boss(val kind: BossKind, val body: Body, val arena: Arena) {
+    val prev = Pose(body)
+    var hp = kind.hp
+    /** −1 left, +1 right. */
+    var dir = -1
+    /** Just hit: it flashes, and neither hurts nor can be hurt, until this simT. */
+    var hurtUntil = -10f
+    var down = false
+    var downAt = 0f
+    /** Seconds to its next move (a spit, a beetle, a plane). */
+    var actT = 2f
+    /** Launched by a spring (the Big Smudge) and not yet back down. */
+    var launched = false
+    val r: Float get() = kind.r
+}
+
 /** How the runner's face looks this frame. */
 enum class Mood { CALM, WORRIED, HAPPY, DIZZY, SCARED, OUCH }
 
@@ -153,6 +197,8 @@ class Pose(private val body: Body) {
 
 class Runner(val body: Body) {
     val prev = Pose(body)
+    /** Which way it rolls: +1 right; −1 only back and forth in a boss arena. */
+    var dir = 1
     /** Its radius: bigger while [bold]. */
     var r = GameSim.RUNNER_R
     var stuck = 0f
@@ -168,7 +214,7 @@ class Runner(val body: Body) {
 }
 
 /** Why a run ended; picks the death-card tips. */
-enum class DeathKind { FELL, BOULDER, SPIKED, STUCK, BLOT }
+enum class DeathKind { FELL, BOULDER, SPIKED, STUCK, BLOT, BOSS, ERASER, PLANE, BEETLE, TIDE }
 
 class Death(
     val reason: String,

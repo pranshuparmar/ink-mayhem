@@ -58,6 +58,8 @@ class StageLayout {
     /** A doodle box with its top-left at ([x], [top]), [size] square, holding [holds]. */
     class Box(val x: Float, val top: Float, val size: Float, val holds: ItemKind)
 
+    class ArenaSpec(val x0: Float, val x1: Float, val level: Float, val kind: BossKind, val ceiling: Float)
+
     class GateSpec(
         val ink: Ink, val x0: Float, val x1: Float, val gx0: Float, val gy0: Float, val gx1: Float, val gy1: Float,
         val label: String, val tunes: Boolean, val waitX: Float, val slack: Float,
@@ -78,6 +80,7 @@ class StageLayout {
     val blots = ArrayList<BlotSpec>()
     val boxes = ArrayList<Box>()
     val gates = ArrayList<GateSpec>()
+    val arenas = ArrayList<ArenaSpec>()
     val solution = ArrayList<Stroke>()
 
     /** A bookmark: once passed, a retry starts 1 m past it. */
@@ -346,6 +349,18 @@ class StageBuilder(private val l: StageLayout) {
         }
     }
 
+    /**
+     * A boss arena [len] metres long from the cursor, with [kind] waiting at its far end: flat
+     * ground, a wall that closes behind the runner, and a far wall that opens once it's beaten.
+     * The Big Smudge's has a spiked roof [ARENA_ROOF] up.
+     */
+    fun arena(kind: BossKind, len: Float = ARENA_LEN): StageBuilder {
+        val roof = if (kind == BossKind.BIG_SMUDGE) level - ARENA_ROOF else Float.NaN
+        if (!roof.isNaN()) l.rocks += StageLayout.Rock(x, len, roof, spiked = true)
+        l.arenas += StageLayout.ArenaSpec(x, x + len, level, kind, roof)
+        return flat(len)
+    }
+
     /** A Blot on the ground at [x0], pacing [patrol] metres either way once it wakes (0: free). */
     fun blot(x0: Float, patrol: Float = 0f) {
         val g = ground(x0)
@@ -424,6 +439,9 @@ class StageBuilder(private val l: StageLayout) {
         const val SEESAW_LIFT = 0.6f
         /** A doodle box's side. */
         const val BOX = 0.9f
+        /** A boss arena's length, and the Big Smudge's spiked roof height. */
+        const val ARENA_LEN = 13f
+        const val ARENA_ROOF = 8.2f
         /** Mid-band pressure for each ink, as the Endless bot uses. */
         val PRESSURE = mapOf(Ink.ROPE to 0.2f, Ink.SPRING to 0.47f, Ink.BEAM to 0.8f)
     }

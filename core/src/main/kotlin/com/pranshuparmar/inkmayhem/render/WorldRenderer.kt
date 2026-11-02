@@ -193,6 +193,7 @@ class WorldRenderer(
         drawBlots(sim, pal, vx0, vx1, px)
         drawCaps(sim, pal, px)
         drawBoulders(sim, pal, px)
+        drawBoss(sim, pal, px)
         drawRunner(sim, pal, px)
         fx.particles.fastEach { q ->
             shapes.color(pal[q.color], min(1f, q.life * 2f)).circle(q.x, q.y, q.r)
@@ -690,21 +691,26 @@ class WorldRenderer(
             // the marker cap, worn like a hat
             val w = r * 0.62f
             val h = r * 0.62f
-            val x0 = cx - w * 0.62f
+            val forward = run.dir > 0
+            val x0 = if (forward) cx - w * 0.62f else cx - w * 0.38f
             val y0 = cy - r * sy - h * 0.72f
             shapes.color(pal[Tok.ACCENT], a).roundRect(x0, y0, w, h, w * 0.3f)
             shapes.color(pal[Tok.INK], 0.35f * a).rect(x0, y0 + h * 0.72f, w, h * 0.16f)
-            shapes.color(pal[Tok.GRAPHITE], a).line(x0 + w + 0.6f * px, y0 + h * 0.15f, x0 + w + 0.6f * px, y0 + h * 0.7f, 2.2f * px)
+            val clipX = if (forward) x0 + w + 0.6f * px else x0 - 0.6f * px
+            shapes.color(pal[Tok.GRAPHITE], a).line(clipX, y0 + h * 0.15f, clipX, y0 + h * 0.7f, 2.2f * px)
         }
     }
 
     /** The runner's face, looking the way it rolls, by [GameSim.mood]. */
     private fun drawFace(sim: GameSim, pal: Palette, cx: Float, cy: Float, r: Float, sx: Float, sy: Float, px: Float, a: Float) {
         val paper = pal[Tok.PAPER]
-        val lx = cx + r * 0.2f * sx
-        val rx = cx + r * 0.58f * sx
+        // it looks the way it rolls (left only in a boss arena)
+        val d = sim.runner.dir.toFloat()
+        faceDir = d
+        val lx = cx + d * r * 0.2f * sx
+        val rx = cx + d * r * 0.58f * sx
         val ey = cy - r * 0.25f * sy
-        val mx = cx + r * 0.4f * sx
+        val mx = cx + d * r * 0.4f * sx
         val my = cy + r * 0.12f * sy
         val lw = max(1.4f * px, r * 0.07f)
         when (if (sim.state == GameState.DEAD) Mood.OUCH else sim.mood) {
@@ -738,7 +744,7 @@ class WorldRenderer(
                 eyes(pal, lx, rx, ey, r * 0.2f, r * 0.08f, -r * 0.08f, 0f, sx, sy, a)
                 shapes.color(paper, a).zigzag(mx - r * 0.16f, my + r * 0.06f, mx + r * 0.16f, my + r * 0.06f, 4, r * 0.035f, lw)
                 val s = r * 0.13f
-                val dx = cx - r * 0.62f
+                val dx = cx - d * r * 0.62f
                 val dy = cy - r * 0.62f + (sim.simT * 1.6f % 1f) * r * 0.3f
                 for (i in DROP_SHAPE.indices step 2) {
                     dropPoly[i] = dx + DROP_SHAPE[i] * s
@@ -764,9 +770,11 @@ class WorldRenderer(
         shapes.ellipse(lx, ey, er * sx, er * sy)
         shapes.ellipse(rx, ey, er * sx, er * sy)
         shapes.color(pal[Tok.INK], a)
-        shapes.circle(lx + lookX, ey + lookY, pr)
-        shapes.circle(rx + lookX, ey + lookY, pr)
+        shapes.circle(lx + lookX * faceDir, ey + lookY, pr)
+        shapes.circle(rx + lookX * faceDir, ey + lookY, pr)
     }
+
+    private var faceDir = 1f
 
     private fun inkTok(k: Ink) = when (k) {
         Ink.ROPE -> Tok.ROPE
@@ -873,6 +881,110 @@ class WorldRenderer(
             val bw = max(1.6f * px, r * 0.09f)
             shapes.line(ex0 - r * 0.22f, ey - r * 0.32f, ex0 + r * 0.16f, ey - r * 0.2f, bw)
             shapes.line(ex1 + r * 0.22f, ey - r * 0.32f, ex1 - r * 0.16f, ey - r * 0.2f, bw)
+        }
+    }
+
+    /** Angry eyes at (x0, ey) and (x1, ey) of radius [er], looking [look] (−1 left, +1 right). */
+    private fun angryEyes(pal: Palette, x0: Float, x1: Float, ey: Float, er: Float, look: Float, px: Float, a: Float) {
+        shapes.color(pal[Tok.PAPER], a)
+        shapes.circle(x0, ey, er)
+        shapes.circle(x1, ey, er)
+        shapes.color(pal[Tok.INK], a)
+        shapes.circle(x0 + look * er * 0.35f, ey + er * 0.15f, er * 0.45f)
+        shapes.circle(x1 + look * er * 0.35f, ey + er * 0.15f, er * 0.45f)
+        val bw = max(1.6f * px, er * 0.4f)
+        shapes.line(x0 - er, ey - er * 1.45f, x0 + er * 0.75f, ey - er * 0.9f, bw)
+        shapes.line(x1 + er, ey - er * 1.45f, x1 - er * 0.75f, ey - er * 0.9f, bw)
+    }
+
+    /** The stage's boss, by kind, with its hit points as pips over it; it flashes while hit. */
+    private fun drawBoss(sim: GameSim, pal: Palette, px: Float) {
+        val b = sim.boss ?: return
+        if (b.down) return
+        val x = b.prev.lerpX(alpha)
+        val y = b.prev.lerpY(alpha)
+        val r = b.r
+        val t = sim.simT
+        val a = if (t < b.hurtUntil && sin(t * 30f) > 0f) 0.35f else 1f
+        val look = b.dir.toFloat()
+        when (b.kind) {
+            com.pranshuparmar.inkmayhem.game.BossKind.BIG_BLOT -> {
+                val c = pal[Tok.BLOT]
+                shapes.color(c, a)
+                shapes.ellipse(x - r * 0.45f, y + r * 0.88f, r * 0.32f, r * 0.18f)
+                shapes.ellipse(x + r * 0.45f, y + r * 0.88f, r * 0.32f, r * 0.18f)
+                shapes.ellipse(x, y, r * (1f + 0.04f * sin(t * 5f)), r * (1f - 0.04f * sin(t * 5f)))
+                for (i in 0 until 7) {
+                    val ang = -PI_F * 0.95f + i * PI_F * 0.32f
+                    shapes.circle(x + kotlin.math.cos(ang) * r * 0.84f, y + sin(ang) * r * 0.84f, r * (0.3f + 0.04f * sin(t * 4f + i)))
+                }
+                angryEyes(pal, x - r * 0.32f, x + r * 0.32f, y - r * 0.1f, r * 0.2f, look, px, a)
+                // a crown of drips
+                shapes.color(c, a)
+                for (i in -1..1) shapes.triangle(x + i * r * 0.35f - r * 0.12f, y - r * 0.92f, x + i * r * 0.35f, y - r * 1.35f, x + i * r * 0.35f + r * 0.12f, y - r * 0.92f)
+            }
+            com.pranshuparmar.inkmayhem.game.BossKind.GIANT_ERASER -> {
+                // a pink rubber block in a blue paper sleeve
+                val w = r * 2f
+                val h = r * 1.7f
+                shapes.color(pal[Tok.ERASER], a).roundRect(x - w / 2f, y - h / 2f, w, h, r * 0.25f)
+                shapes.color(pal[Tok.DROP], a).rect(x - w * 0.18f, y - h / 2f, w * 0.46f, h)
+                shapes.color(pal[Tok.INK], 0.6f * a).roundRectOutline(x - w / 2f, y - h / 2f, w, h, r * 0.25f, 2f * px)
+                angryEyes(pal, x - r * 0.05f, x + r * 0.45f, y - r * 0.15f, r * 0.16f, look, px, a)
+                // crumbs of rubbed-out ink at its foot
+                shapes.color(pal[Tok.MUTED], 0.6f * a)
+                for (i in 0 until 4) shapes.circle(x - look * (r + 0.15f + i * 0.18f), y + h / 2f - 0.06f, 0.05f)
+            }
+            com.pranshuparmar.inkmayhem.game.BossKind.AIRLINER -> {
+                // a big folded paper plane, nose the way it flies
+                val n = look
+                val len = r * 2.6f
+                shapes.color(pal[Tok.PAPER_WHITE], a).triangle(x + n * len / 2f, y, x - n * len / 2f, y - r * 0.9f, x - n * len / 2f, y + r * 0.15f)
+                shapes.color(pal[Tok.RULE], a).triangle(x + n * len / 2f, y, x - n * len / 2f, y + r * 0.15f, x - n * len * 0.3f, y + r * 0.55f)
+                shapes.color(pal[Tok.GRAPHITE], a)
+                shapes.line(x + n * len / 2f, y, x - n * len / 2f, y - r * 0.9f, 1.6f * px)
+                shapes.line(x + n * len / 2f, y, x - n * len / 2f, y + r * 0.15f, 1.6f * px)
+                shapes.line(x + n * len / 2f, y, x - n * len * 0.3f, y + r * 0.55f, 1.6f * px)
+                angryEyes(pal, x + n * r * 0.1f, x + n * r * 0.5f, y - r * 0.2f, r * 0.13f, look, px, a)
+            }
+            com.pranshuparmar.inkmayhem.game.BossKind.BEETLE_QUEEN -> {
+                val c = pal[Tok.BEETLE]
+                shapes.color(pal[Tok.INK], a)
+                for (i in -1..1) {
+                    val lx = x + i * r * 0.55f
+                    val kick = sin(t * 10f + i) * 0.08f
+                    shapes.line(lx, y + r * 0.4f, lx - r * 0.3f + kick, y + r * 0.95f, 2.4f * px)
+                    shapes.line(lx, y + r * 0.4f, lx + r * 0.3f - kick, y + r * 0.95f, 2.4f * px)
+                }
+                shapes.color(c, a).ellipse(x, y, r * 1.15f, r * 0.85f)
+                shapes.color(pal[Tok.INK], 0.35f * a).line(x, y - r * 0.85f, x, y + r * 0.8f, 2f * px)
+                shapes.color(c, a).circle(x + look * r * 1.05f, y - r * 0.05f, r * 0.42f)
+                angryEyes(pal, x + look * r * 0.9f, x + look * r * 1.22f, y - r * 0.12f, r * 0.11f, look, px, a)
+                // her crown
+                shapes.color(pal[Tok.STAR], a)
+                val cxr = x + look * r * 1.05f
+                for (i in -1..1) shapes.triangle(cxr + i * r * 0.18f - r * 0.09f, y - r * 0.42f, cxr + i * r * 0.18f, y - r * 0.75f, cxr + i * r * 0.18f + r * 0.09f, y - r * 0.42f)
+            }
+            com.pranshuparmar.inkmayhem.game.BossKind.BIG_SMUDGE -> {
+                val c = pal[Tok.INK]
+                shapes.color(c, a)
+                shapes.ellipse(x, y, r * (1.05f + 0.05f * sin(t * 4f)), r * (0.95f - 0.05f * sin(t * 4f)))
+                for (i in 0 until 9) {
+                    val ang = -PI_F + i * PI_F * 0.25f
+                    shapes.circle(x + kotlin.math.cos(ang) * r * 0.9f, y + sin(ang) * r * 0.85f, r * (0.28f + 0.05f * sin(t * 3f + i * 1.3f)))
+                }
+                // drips under it
+                for (i in -2..2) shapes.ellipse(x + i * r * 0.35f, y + r * (0.95f + 0.1f * kotlin.math.abs(sin(t * 2f + i))), r * 0.1f, r * 0.2f)
+                angryEyes(pal, x - r * 0.3f, x + r * 0.3f, y - r * 0.15f, r * 0.2f, look, px, a)
+                shapes.color(pal[Tok.BEAM], a).ellipse(x + look * r * 0.1f, y + r * 0.35f, r * 0.3f, r * 0.12f)
+            }
+        }
+        // hit points
+        val top = y - r - (if (b.kind == com.pranshuparmar.inkmayhem.game.BossKind.BIG_BLOT) 0.75f else 0.45f)
+        for (i in 0 until b.kind.hp) {
+            val hx = x + (i - (b.kind.hp - 1) / 2f) * 0.32f
+            if (i < b.hp) shapes.color(pal[Tok.BEAM]).circle(hx, top, 0.1f)
+            else shapes.color(pal[Tok.MUTED], 0.6f).ring(hx, top, 0.1f, 1.2f * px)
         }
     }
 
