@@ -159,6 +159,20 @@ class GameSim(
     /** The stage's boss, waiting in its arena, or null. */
     var boss: Boss? = null
         private set
+    /** Highlighter swipes (fading), inkwells, and what's hidden until a swipe finds it. */
+    val swipes = ArrayList<Swipe>()
+    val warps = ArrayList<Warp>()
+    private val hiddenBlocks = ArrayList<StageLayout.Block>()
+    private val hiddenBoxes = ArrayList<StageLayout.Box>()
+    /** Down on a bonus page (its floor is the ground that counts). */
+    var inBonus = false
+        private set
+    /** Beetles touching rope or springs: the beetle's body and the stroke it is chewing. */
+    private val beetleOn = ArrayList<Body>(4)
+    private val beetleOnStroke = ArrayList<Stroke>(4)
+    /** Beams that crushed something crumble away a moment later (they'd lie about as obstacles): stroke and when. */
+    private val crumbling = ArrayList<Stroke>(2)
+    private val crumbleAt = com.badlogic.gdx.utils.FloatArray(2)
     /** Strokes an eraser rubbed against this step (removed after the step), and a spring a boss touched. */
     private val toErase = ArrayList<Stroke>(4)
     private var bossOnSpring = false
@@ -289,6 +303,10 @@ class GameSim(
         var forced: Gate? = null
         /** Begun at this gate while learning (or tuning): finished, it is checked against the job. */
         var gate: Gate? = null
+        /** Drawn with a power on: a highlighter swipe (no ink at all), Gold nib ink, or Cloud chalk. */
+        var highlight = false
+        var goldNib = false
+        var chalk = false
     }
 
     val difficulty: Float get() = (dist / 600f).coerceIn(0f, 1f)
@@ -332,6 +350,9 @@ class GameSim(
         stars.clear(); golds.clear(); blots.clear(); boxes.clear(); caps.clear(); gates.clear()
         blotHits.clear(); blotHitBy.clear(); blotHitVy.clear(); pendingBox = null
         arenas.clear(); boss = null; bossFight = false; toErase.clear(); bossOnSpring = false
+        swipes.clear(); warps.clear(); hiddenBlocks.clear(); hiddenBoxes.clear(); inBonus = false
+        crumbling.clear(); crumbleAt.clear()
+        beetleOn.clear(); beetleOnStroke.clear()
         starsTaken = 0; squashed = 0; starStep = -1; lastStarT = -10f
         mood = Mood.CALM; bounceAt = -10f; happyUntil = -10f; ouchAt = -10f; lastGate = null
         stage = null; runnerOnLift = 0
@@ -379,9 +400,14 @@ class GameSim(
         generating = false
         stage = def
         for (b in l.blocks) {
+            if (b.hidden) {
+                hiddenBlocks += b
+                continue
+            }
             val r = if (b.topR == b.top) ink.addRect(b.x, b.top, b.w, b.depth)
             else ink.addSlope(b.x, b.top, b.w, b.topR, max(b.top, b.topR) + b.depth)
             r.level = max(b.top, b.topR)
+            r.bonus = b.bonus
             blocks += r
         }
         // touching blocks share an edge: hide the stretch the neighbour covers, not the rest
@@ -423,12 +449,15 @@ class GameSim(
             }
         }
         for (k in l.blots) {
-            val body = ink.addWalker(k.x, k.y - BLOT_R - 0.02f, BLOT_R, 1f, FixtureTag.BLOT)
-            blots += Blot(body, k.x0, k.x1)
+            val body = ink.addWalker(k.x, k.y - k.kind.r - 0.02f, k.kind.r, 1f, creatureTag(k.kind))
+            blots += Blot(body, k.x0, k.x1, k.kind)
         }
         for (k in l.boxes) {
-            val tag = FixtureTag(com.pranshuparmar.inkmayhem.physics.FixtureKind.BOX)
-            boxes += DoodleBox(ink.addRect(k.x, k.top, k.size, k.size, tag = tag), k.holds, tag)
+            if (k.hidden) hiddenBoxes += k else addBox(k)
+        }
+        for (k in l.warps) {
+            val ty = if (k.toY.isNaN()) l.groundAt(k.toX).let { if (it.isNaN()) k.y else it } else k.toY
+            warps += Warp(k.x, k.y, k.toX, ty, k.hidden, k.exit)
         }
         for (k in l.arenas) {
             val a = Arena(k.x0, k.x1, k.level, k.kind, k.ceiling)
@@ -440,7 +469,7 @@ class GameSim(
             else ink.addWalker(bx, k.level - k.kind.r - 0.02f, k.kind.r, BOSS_DENSITY, FixtureTag.BOSS)
             boss = Boss(k.kind, body, a)
         }
-        for (k in l.gates) gates += Gate(k.ink, k.x0, k.x1, k.gx0, k.gy0, k.gx1, k.gy1, k.label, k.tunes, k.waitX, k.slack)
+        for (k in l.gates) gates += Gate(k.ink, k.x0, k.x1, k.gx0, k.gy0, k.gx1, k.gy1, k.label, k.tunes, k.waitX, k.slack, k.forbid, k.crush)
         for (k in l.notes) notes += Note(k.x, k.y, k.text).also { it.maxW = k.maxW }
         for ((i, k) in l.hazards.withIndex()) hazards += Hazard(k.type, k.x0, k.x1, k.par).also { it.index = i }
         for (k in l.runways) blocks.firstOrNull { it.x == k.x }?.boulderTrigger = k.triggerX
@@ -683,7 +712,8 @@ class GameSim(
     /** Deepest ground level within ±10 m of [x]. */
     fun levelNear(x: Float): Float {
         var lv = Float.NEGATIVE_INFINITY
-        blocks.fastEach { b -> if (b.x < x + 10f && b.x + b.w > x - 10f) lv = max(lv, b.level) }
+        // a bonus page far below counts only while the runner is down there
+        blocks.fastEach { b -> if (b.bonus == inBonus && b.x < x + 10f && b.x + b.w > x - 10f) lv = max(lv, b.level) }
         return if (lv == Float.NEGATIVE_INFINITY) level else lv
     }
 
@@ -709,6 +739,17 @@ class GameSim(
                 val st = other2?.stroke
                 if (st != null && (other2.kind == FixtureKind.ROPE || other2.kind == FixtureKind.SPRING) && st !in toErase) toErase += st
             }
+            // a beetle on rope or a spring starts chewing it
+            val beetleA = ua?.kind == FixtureKind.BEETLE
+            val beetleB = ub?.kind == FixtureKind.BEETLE
+            if (beetleA || beetleB) {
+                val food = if (beetleA) ub else ua
+                val st = food?.stroke
+                if (st != null && !st.gold && (food.kind == FixtureKind.ROPE || food.kind == FixtureKind.SPRING)) {
+                    beetleOn += if (beetleA) fa.body else fb.body
+                    beetleOnStroke += st
+                }
+            }
             // the Big Smudge stepping onto a spring is launched
             if ((ua?.kind == FixtureKind.BOSS && ub?.kind == FixtureKind.SPRING) || (ub?.kind == FixtureKind.BOSS && ua?.kind == FixtureKind.SPRING)) bossOnSpring = true
             if (blotA != blotB) {
@@ -733,6 +774,14 @@ class GameSim(
         override fun endContact(c: Contact) {
             val ua = c.fixtureA.userData as? FixtureTag
             val ub = c.fixtureB.userData as? FixtureTag
+            if (ua?.kind == FixtureKind.BEETLE || ub?.kind == FixtureKind.BEETLE) {
+                val body = if (ua?.kind == FixtureKind.BEETLE) c.fixtureA.body else c.fixtureB.body
+                val st = (if (ua?.kind == FixtureKind.BEETLE) ub else ua)?.stroke
+                for (i in beetleOn.indices.reversed()) if (beetleOn[i] === body && beetleOnStroke[i] === st) {
+                    beetleOn.removeAt(i)
+                    beetleOnStroke.removeAt(i)
+                }
+            }
             if ((ua?.kind == FixtureKind.RUNNER && ub?.kind == FixtureKind.LIFT) || (ub?.kind == FixtureKind.RUNNER && ua?.kind == FixtureKind.LIFT)) {
                 runnerOnLift = max(0, runnerOnLift - 1)
             }
@@ -765,11 +814,15 @@ class GameSim(
             eraseAt(x, y)
             return
         }
-        if (inkLeft <= 0.5f) {
+        val highlighting = runner.power == ItemKind.HIGHLIGHTER
+        if (inkLeft <= 0.5f && !highlighting && runner.power != ItemKind.GOLD_NIB) {
             events.toast(OUT_OF_INK)
             return
         }
         drawing = Drawing(pointer).also { d ->
+            d.highlight = highlighting
+            d.goldNib = runner.power == ItemKind.GOLD_NIB
+            d.chalk = runner.power == ItemKind.CHALK
             d.gate = if (learning || gateTuning) gateAt(x) else null
             d.forced = d.gate?.takeIf { gateTuning && it.tunes }
         }
@@ -796,6 +849,14 @@ class GameSim(
         val d = drawing ?: return
         d.smoothed = if (d.smoothed.isNaN()) n else d.smoothed * 0.7f + n * 0.3f
         steady.add(t, n)
+        if (d.highlight) {
+            // a highlighter swipe: only where it went
+            val lst = d.size - 1
+            if (lst >= 0 && hypot(x - d.xs[lst], y - d.ys[lst]) < 0.05f) return
+            d.xs.add(x); d.ys.add(y); d.ps.add(d.smoothed)
+            d.x0 = min(d.x0, x); d.x1 = max(d.x1, x)
+            return
+        }
         val kind = inkOf(d, steady.value(d.smoothed))
         val last = d.size - 1
         if (last >= 0) {
@@ -806,7 +867,7 @@ class GameSim(
             }
             val th = Ink.thickness(Ink.clampTo(d.smoothed, kind))
             val c = len * th * th * InkPhysics.INK_K
-            if (!unlimitedInk && inkLeft - d.cost - c <= 0f) {
+            if (!unlimitedInk && !d.goldNib && inkLeft - d.cost - c <= 0f) {
                 if (!d.dry) {
                     d.dry = true
                     events.toast(OUT_OF_INK)
@@ -839,7 +900,8 @@ class GameSim(
      * and rope past [ROPE_MAX_LEN] isn't, as the finished rope would give way there.
      */
     private fun growWet(d: Drawing, kind: Ink) {
-        if (!d.startAnchored) return
+        // (Cloud chalk floats where it's drawn, hooked or not)
+        if (!d.startAnchored && !d.chalk) return
         if (kind != d.wetInk) {
             // the stroke has settled on another ink: lay what is wet again in it
             if (d.wetInk != null) ink.clearWet()
@@ -874,6 +936,10 @@ class GameSim(
         lastStrokeInk = null
         lastGate = null
         if (d == null || d.size < 2) return
+        if (d.highlight) {
+            highlightSwipe(d)
+            return
+        }
         // one ink for the whole stroke, from the pressure it settled at (or the tuning gate's)
         val kind = d.forced?.ink ?: Ink.of(steady.finish(d.smoothed))
         val n = d.size
@@ -889,7 +955,17 @@ class GameSim(
         for (i in 0 until n) ps[i] = Ink.clampTo(ps[i], kind)
         val s = ink.buildStroke(d.xs.items, d.ys.items, ps.items, n) ?: return
         lastStrokeInk = kind
-        if (!unlimitedInk) inkLeft = max(0f, inkLeft - s.cost)
+        if (!unlimitedInk && !d.goldNib) inkLeft = max(0f, inkLeft - s.cost)
+        if (d.goldNib) {
+            // Gold nib ink never snaps
+            s.gold = true
+            s.joints.fastEach { it.strength = Float.MAX_VALUE }
+        }
+        if (d.chalk) {
+            // Cloud chalk stays where it was drawn
+            s.chalk = true
+            s.groups.fastEach { g -> g.body?.type = com.badlogic.gdx.physics.box2d.BodyDef.BodyType.StaticBody }
+        }
         // footprint + heaviest ink, for scoring against each hazard's par
         var x0 = Float.POSITIVE_INFINITY
         var x1 = Float.NEGATIVE_INFINITY
@@ -908,12 +984,120 @@ class GameSim(
                 events.toast(tip, force = true)
                 return
             }
-            g.done = true
+            if (!g.crush) g.done = true
         }
         lastGate = d.forced
         for (a in s.anchors) events.burst(a.x, a.y, 5, 1.2f, Tok.GRAPHITE)
         if (s.anchors.isNotEmpty()) events.sound(Sfx.ANCHOR)
-        weakenLongRope(s)
+        if (!s.gold && !s.chalk) weakenLongRope(s)
+    }
+
+    // ---------------------------------------------------------------- powers and secrets
+
+    /** A highlighter swipe: it costs nothing, builds nothing, and reveals whatever hidden lies under it. */
+    private fun highlightSwipe(d: Drawing) {
+        val n = d.size
+        val xs = FloatArray(n) { d.xs[it] }
+        val ys = FloatArray(n) { d.ys[it] }
+        swipes += Swipe(xs, ys, n, simT)
+        var found = 0
+        fun near(x: Float, y: Float, reach: Float): Boolean {
+            for (i in 0 until n) if (kotlin.math.abs(xs[i] - x) < reach && kotlin.math.abs(ys[i] - y) < reach) return true
+            return false
+        }
+        stars.fastEach { if (it.hidden && near(it.x, it.y, HIGHLIGHT_R)) { it.hidden = false; found++; events.burst(it.x, it.y, 4, 1f, Tok.STAR) } }
+        golds.fastEach { if (it.hidden && near(it.x, it.y, HIGHLIGHT_R)) { it.hidden = false; found++; events.burst(it.x, it.y, 10, 1.6f, Tok.STAR) } }
+        warps.fastEach { if (it.hidden && near(it.x, it.y - 0.3f, HIGHLIGHT_R + 0.3f)) { it.hidden = false; found++; events.burst(it.x, it.y - 0.4f, 10, 1.6f, Tok.INK) } }
+        for (i in hiddenBlocks.indices.reversed()) {
+            val b = hiddenBlocks[i]
+            var hit = false
+            for (k in 0 until n) if (xs[k] >= b.x - HIGHLIGHT_R && xs[k] <= b.right + HIGHLIGHT_R && ys[k] >= b.top - HIGHLIGHT_R && ys[k] <= b.top + b.depth + HIGHLIGHT_R) { hit = true; break }
+            if (!hit) continue
+            hiddenBlocks.removeAt(i)
+            val r = ink.addRect(b.x, b.top, b.w, b.depth)
+            r.level = b.top
+            blocks += r
+            found++
+            events.burst(b.x + b.w / 2f, b.top, 12, 2f, Tok.STAR)
+        }
+        for (i in hiddenBoxes.indices.reversed()) {
+            val b = hiddenBoxes[i]
+            if (!near(b.x + b.size / 2f, b.top + b.size / 2f, HIGHLIGHT_R + b.size / 2f)) continue
+            hiddenBoxes.removeAt(i)
+            addBox(b)
+            found++
+            events.burst(b.x + b.size / 2f, b.top, 10, 1.6f, Tok.STAR)
+        }
+        if (found > 0) events.sound(Sfx.GOLD)
+    }
+
+    private fun addBox(k: StageLayout.Box) {
+        val tag = FixtureTag(FixtureKind.BOX)
+        boxes += DoodleBox(ink.addRect(k.x, k.top, k.size, k.size, tag = tag), k.holds, tag)
+    }
+
+    private fun creatureTag(c: Creature) = when (c) {
+        Creature.BLOT -> FixtureTag.BLOT
+        Creature.ERASER -> FixtureTag.ERASER
+        Creature.BEETLE -> FixtureTag.BEETLE
+    }
+
+    /** A pickup caught: the marker cap makes the runner Bold; the others are timed powers. */
+    private fun applyPower(kind: ItemKind, x: Float, y: Float) {
+        happyUntil = simT + HAPPY_S * 2f
+        events.burst(x, y, 16, 2.4f, Tok.ACCENT)
+        if (kind == ItemKind.CAP) {
+            if (!runner.bold) setBold(true)
+            score += CAP_POINTS
+            events.pop(x, y - 1.2f, "Bold! +$CAP_POINTS", Tok.ACCENT)
+            events.sound(Sfx.BOLD)
+            events.toast("Bold: you survive one hit and flatten Blots.", force = true)
+            return
+        }
+        runner.power = kind
+        runner.powerUntil = simT + POWER_S
+        score += CAP_POINTS
+        events.sound(Sfx.BOLD)
+        val (name, what) = when (kind) {
+            ItemKind.HIGHLIGHTER -> "Highlighter!" to "Draw over the page to find what's hidden."
+            ItemKind.CHALK -> "Cloud chalk!" to "What you draw floats where you draw it."
+            ItemKind.GOLD_NIB -> "Gold nib!" to "Free ink that never snaps, and beetles can't bite."
+            else -> "Star nib!" to "Nothing can hurt you: roll right through."
+        }
+        events.pop(x, y - 1.2f, "$name +$CAP_POINTS", Tok.STAR)
+        events.toast("$name $what", force = true)
+    }
+
+    /** Timed powers run out. */
+    private fun updatePower() {
+        if (runner.power != null && simT >= runner.powerUntil) {
+            runner.power = null
+            events.sound(Sfx.POWER_END)
+        }
+        // highlighter swipes fade
+        swipes.removeAll { simT - it.at > SWIPE_S }
+    }
+
+    /** Rolling over an inkwell's mouth drops the runner to a bonus page, or lifts it back up. */
+    private fun updateWarps(px: Float, py: Float) {
+        val rb = runner.body
+        warps.fastEach { w ->
+            if (w.hidden || kotlin.math.abs(px - w.x) > 0.45f || kotlin.math.abs(py + runner.r - w.y) > 0.6f) return@fastEach
+            if (kotlin.math.abs(rb.linearVelocity.y) > 2f) return@fastEach
+            inBonus = !w.exit
+            drawing = null
+            ink.clearWet()
+            rb.setTransform(w.toX, w.toY - runner.r - 0.05f, rb.angle)
+            rb.setLinearVelocity(runSpeed, 0f)
+            runner.prev.snapshot()
+            runner.bestX = w.toX
+            runner.bestT = simT
+            snapCamera()
+            events.burst(w.toX, w.toY - 0.5f, 14, 2.2f, Tok.INK)
+            events.sound(if (w.exit) Sfx.CHECKPOINT else Sfx.POP)
+            if (!w.exit) events.toast("A bonus page!", force = true)
+            return
+        }
     }
 
     /** A rope longer than 6.8 m can't hold its own weight: its middle joint gives way after ~0.65 s. */
@@ -1099,10 +1283,15 @@ class GameSim(
                 }
             }
             takeStars(px, py)
+            updatePower()
+            updateCrumbling()
+            updateWarps(px, py)
             updateArena(px, py)
             updateBlots(px, py)
             updateCaps(px, py)
             gates.fastEach { if (!it.passed && px > it.x1 + 0.6f) { it.passed = true; it.passedAt = simT } }
+            // a crush gate is done once nothing is left alive under it
+            gates.fastEach { g -> if (g.crush && !g.done && blots.none { !it.dead && it.body.position.x > g.x0 - 1f && it.body.position.x < g.x1 + 4f }) g.done = true }
             // score: every metre is worth the current combo
             if (dist > scoredDist) {
                 score += (dist - scoredDist).toDouble() * combo
@@ -1110,7 +1299,9 @@ class GameSim(
             }
             judgeHazards(px, py)
             stageProgress(px)
-            if (py > levelNear(px) + 4f) die("Fell in", DeathKind.FELL)
+            // (read again: an inkwell may have just moved the runner)
+            val now = rb.position
+            if (now.y > levelNear(now.x) + 4f) die("Fell in", DeathKind.FELL)
             // riding a lift isn't being stuck
             if (px > runner.bestX + 0.5f || runnerHeld || waitingAt != null || bossFight || (runnerOnLift > 0 && liftMoving())) {
                 runner.bestX = px
@@ -1371,6 +1562,8 @@ class GameSim(
      */
     private fun hurt(why: String, kind: DeathKind) {
         if (state != GameState.RUN || simT < runner.safeUntil) return
+        // the Star nib: nothing hurts
+        if (runner.power == ItemKind.STAR_NIB) return
         val rb = runner.body
         val p = rb.position
         if (!runner.bold) {
@@ -1455,23 +1648,31 @@ class GameSim(
                 ink.destroyBody(body)
                 return@fastEach
             }
-            if (!b.awake && q.x - px < BLOT_WAKE) b.awake = true
+            if (!b.awake && q.x - px < b.kind.wake) b.awake = true
             val v = body.linearVelocity
+            val speed = b.kind.speed
             if (b.awake) {
-                if (b.walking && kotlin.math.abs(v.x) < BLOT_SPEED * 0.3f) b.dir = -b.dir // walked into something
+                if (b.walking && kotlin.math.abs(v.x) < speed * 0.3f) b.dir = -b.dir // walked into something
                 if (!b.x0.isNaN() && q.x <= b.x0) b.dir = 1
                 if (!b.x1.isNaN() && q.x >= b.x1) b.dir = -1
-                body.setLinearVelocity(b.dir * BLOT_SPEED, v.y)
+                body.setLinearVelocity(b.dir * speed, v.y)
                 b.walking = true
             }
+            if (b.kind == Creature.BEETLE) chew(b)
             if (state != GameState.RUN) return@fastEach
             val d = hypot(q.x - px, q.y - py)
             val rv = rb.linearVelocity
             // coming down on it counts a little wide, like a stomp in any platformer, and so does
             // meeting one anywhere in a spring's bounce, landing included
             val stomp = (rv.y > 0.5f && py < q.y - 0.15f) || simT - bounceAt < BOUNCE_STOMP_S
-            if (d > runner.r + BLOT_R + if (stomp) STOMP_SLACK else 0.04f) return@fastEach
+            if (d > runner.r + b.kind.r + if (stomp) STOMP_SLACK else 0.04f) return@fastEach
             when {
+                runner.power == ItemKind.STAR_NIB -> squash(b, "Zap! +$BLOT_POINTS", atRunner = true)
+                // an Eraser is too rubbery to squash: the runner bounces off it
+                stomp && b.kind == Creature.ERASER -> {
+                    rb.setLinearVelocity(rv.x, STOMP_VY)
+                    runner.squash = 1f
+                }
                 stomp -> {
                     squash(b, "Stomp! +$BLOT_POINTS")
                     rb.setLinearVelocity(rv.x, STOMP_VY)
@@ -1479,9 +1680,46 @@ class GameSim(
                 }
                 runner.bold -> squash(b, "Flattened! +$BLOT_POINTS", atRunner = true)
                 simT < runner.safeUntil -> Unit
-                else -> hurt("Blotted", DeathKind.BLOT)
+                else -> when (b.kind) {
+                    Creature.BLOT -> hurt("Blotted", DeathKind.BLOT)
+                    Creature.ERASER -> hurt("Rubbed out", DeathKind.ERASER)
+                    Creature.BEETLE -> hurt("Bitten", DeathKind.BEETLE)
+                }
             }
         }
+    }
+
+    /** The beam [body] belongs to crumbles away [CRUMBLE_S] from now. */
+    private fun crumble(body: Body) {
+        val st = (body.fixtureList.firstOrNull()?.userData as? FixtureTag)?.stroke ?: return
+        if (st in crumbling) return
+        crumbling += st
+        crumbleAt.add(simT + CRUMBLE_S)
+    }
+
+    private fun updateCrumbling() {
+        for (i in crumbling.indices.reversed()) {
+            if (simT < crumbleAt[i]) continue
+            val st = crumbling.removeAt(i)
+            crumbleAt.removeIndex(i)
+            if (st in ink.strokes) eraseStroke(st)
+        }
+    }
+
+    /** A beetle on rope or a spring eats it, [BITE_S] in. */
+    private fun chew(b: Blot) {
+        var food: Stroke? = null
+        for (i in beetleOn.indices) if (beetleOn[i] === b.body && beetleOnStroke[i] in ink.strokes) { food = beetleOnStroke[i]; break }
+        if (food == null) {
+            b.biteT = 0f
+            return
+        }
+        b.biteT += 1f / 60f
+        if (b.biteT < BITE_S) return
+        b.biteT = 0f
+        for (i in beetleOn.indices.reversed()) if (beetleOnStroke[i] === food) { beetleOn.removeAt(i); beetleOnStroke.removeAt(i) }
+        eraseStroke(food)
+        events.toast("A beetle ate it!", force = true)
     }
 
     /** Beams that fell on a Blot (rather than one it walked into) and boulders squash it. */
@@ -1492,13 +1730,17 @@ class GameSim(
                 // a falling beam (or a boulder) hurts the bosses that a beam can
                 val byB = blotHitBy[i]
                 val boulder = (byB.fixtureList.first().userData as? FixtureTag)?.kind == FixtureKind.BOULDER
+                // (a beam that hit a boss stays: lying there, it turns the boss round)
                 if ((boulder || blotHitVy[i] > 0.5f) && bs.kind != BossKind.BIG_SMUDGE && bs.kind != BossKind.AIRLINER) hitBoss(bs, "Beam drop!")
                 continue
             }
             val b = blots.firstOrNull { !it.dead && it.body === blotHits[i] } ?: continue
             val by = blotHitBy[i]
             val boulder = (by.fixtureList.first().userData as? FixtureTag)?.kind == FixtureKind.BOULDER
-            if (boulder || blotHitVy[i] > 0.5f) squash(b, if (boulder) "Squashed! +$BLOT_POINTS" else "Beam drop! +$BLOT_POINTS")
+            if (boulder || blotHitVy[i] > 0.5f) {
+                squash(b, if (boulder) "Squashed! +$BLOT_POINTS" else "Beam drop! +$BLOT_POINTS")
+                if (!boulder) crumble(by)
+            }
         }
     }
 
@@ -1541,11 +1783,20 @@ class GameSim(
         events.sound(Sfx.POP)
         events.burst(cx, r.y, 8, 1.8f, Tok.GRAPHITE)
         when (box.holds) {
-            ItemKind.CAP -> {
+            ItemKind.CAP, ItemKind.HIGHLIGHTER, ItemKind.CHALK, ItemKind.GOLD_NIB, ItemKind.STAR_NIB -> {
                 val body = ink.addWalker(cx, r.y - CAP_R - 0.05f, CAP_R, 1f, FixtureTag.CAP)
                 body.setLinearVelocity(CAP_SPEED, CAP_HOP)
-                caps += Cap(body)
-                events.toast("A marker cap! Catch it.", force = true)
+                caps += Cap(body, box.holds)
+                events.toast(
+                    when (box.holds) {
+                        ItemKind.CAP -> "A marker cap! Catch it."
+                        ItemKind.HIGHLIGHTER -> "A highlighter! Catch it."
+                        ItemKind.CHALK -> "Cloud chalk! Catch it."
+                        ItemKind.GOLD_NIB -> "A gold nib! Catch it."
+                        else -> "A star nib! Catch it."
+                    },
+                    force = true,
+                )
             }
             else -> {
                 // a box of stars: they spill out and count at once
@@ -1584,14 +1835,10 @@ class GameSim(
             }
             if (hypot(q.x - px, q.y - py) > runner.r + CAP_R + 0.1f || state != GameState.RUN) return@fastEach
             c.taken = true
+            val qx = q.x
+            val qy = q.y
             ink.destroyBody(body)
-            if (!runner.bold) setBold(true)
-            score += CAP_POINTS
-            happyUntil = simT + HAPPY_S * 2f
-            events.burst(q.x, q.y, 16, 2.4f, Tok.ACCENT)
-            events.pop(q.x, q.y - 1.2f, "Bold! +$CAP_POINTS", Tok.ACCENT)
-            events.sound(Sfx.BOLD)
-            events.toast("Bold: you survive one hit and flatten Blots.", force = true)
+            applyPower(c.kind, qx, qy)
         }
     }
 
@@ -1626,6 +1873,12 @@ class GameSim(
      * sides of the gap (a beam hint, a beam: rope and springs don't reach that far).
      */
     private fun missTip(g: Gate, s: Stroke, kind: Ink): String? {
+        if (g.forbid != null && kind == g.forbid) {
+            return if (kind == Ink.SPRING) "Not a spring here: it bounces you into the spikes. A light touch makes rope."
+            else "Not ${kind.label} here. Try a lighter touch."
+        }
+        // a crush gate is done when the creature under it is squashed, whatever the stroke looked like
+        if (g.crush) return null
         if (g.ink == Ink.SPRING) {
             val ground = max(g.gy0, g.gy1) + 0.1f
             var top = Float.POSITIVE_INFINITY
@@ -1866,6 +2119,14 @@ class GameSim(
         const val SMUDGE_LAUNCH = -15f
         /** A stroke begun this far either side of a tuning gate still belongs to it. */
         const val GATE_SLACK = 1.5f
+        /** Timed powers last this long; a highlighter swipe finds things this near it and fades over SWIPE_S. */
+        const val POWER_S = 9f
+        const val HIGHLIGHT_R = 1.1f
+        const val SWIPE_S = 1.6f
+        /** A beam that crushed something crumbles this long after. */
+        const val CRUMBLE_S = 0.8f
+        /** A beetle eats the rope or spring under it in this long. */
+        const val BITE_S = 0.9f
         /** A learning runner brakes at this rate (m/s²) from this far (m) before a gate's wait point. */
         const val WAIT_DECEL = 3f
         const val WAIT_FROM = 8f

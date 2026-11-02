@@ -180,6 +180,7 @@ class WorldRenderer(
         sim.ceilings.fastEach { c -> drawCeiling(c, pal, vx0, vx1, sim.cam.y - 2f, px, brick) }
         sim.spikeStrips.fastEach { k -> drawSpikes(k, pal, vx0, vx1) }
         drawBoxes(sim, pal, vx0, vx1, px)
+        drawWarps(sim, pal, vx0, vx1, px)
         drawGates(sim, pal, px)
         if (guideOn) drawGuide(sim, pal, px)
         drawLifts(sim, pal, px)
@@ -195,6 +196,7 @@ class WorldRenderer(
         drawBoulders(sim, pal, px)
         drawBoss(sim, pal, px)
         drawRunner(sim, pal, px)
+        drawSwipes(sim, pal)
         fx.particles.fastEach { q ->
             shapes.color(pal[q.color], min(1f, q.life * 2f)).circle(q.x, q.y, q.r)
         }
@@ -586,7 +588,13 @@ class WorldRenderer(
                 val bx = g.lerpX(sg.lbx, sg.lby, alpha)
                 val by = g.lerpY(sg.lbx, sg.lby, alpha)
                 if (max(ax, bx) < vx0 || min(ax, bx) > vx1) continue
-                shapes.color(inkColor(pal, sg.kind, tint)).capsule(ax, ay, bx, by, sg.t)
+                val col = when {
+                    s.gold -> pal[Tok.STAR]
+                    s.chalk -> pal[Tok.PAPER_WHITE]
+                    else -> inkColor(pal, sg.kind, tint)
+                }
+                if (s.chalk) shapes.color(pal[Tok.GRAPHITE], 0.6f).capsule(ax, ay, bx, by, sg.t + 2.4f * px)
+                shapes.color(col).capsule(ax, ay, bx, by, sg.t)
                 if (sg.kind == Ink.SPRING && !tint) {
                     // springs carry a little zig-zag so they read as bouncy
                     shapes.color(pal[Tok.PAPER]).zigzag(ax, ay, bx, by, 3, sg.t * 0.28f, 1.2f * px)
@@ -604,10 +612,16 @@ class WorldRenderer(
     private fun drawLiveStroke(sim: GameSim, pal: Palette, tint: Boolean, px: Float) {
         val d = sim.drawing ?: return
         val n = d.size
+        if (d.highlight) {
+            // a highlighter swipe in progress
+            shapes.color(pal[Tok.STAR], 0.45f)
+            for (i in 1 until n) shapes.capsule(d.xs[i - 1], d.ys[i - 1], d.xs[i], d.ys[i], 0.7f)
+            return
+        }
         val alpha = if (d.dry) 0.5f else 1f
         // one ink for the whole stroke: the one it is heading for, thicker or thinner within it
         val kind = sim.drawingInk ?: return
-        shapes.color(inkColor(pal, kind, tint), alpha)
+        shapes.color(if (d.goldNib) pal[Tok.STAR] else if (d.chalk) pal[Tok.PAPER_WHITE] else inkColor(pal, kind, tint), alpha)
         for (i in 1 until n) { // segments only, like the POC: a single point draws nothing
             val p = Ink.clampTo((d.ps[i] + d.ps[i - 1]) / 2f, kind)
             shapes.capsule(d.xs[i - 1], d.ys[i - 1], d.xs[i], d.ys[i], Ink.thickness(p))
@@ -687,6 +701,22 @@ class WorldRenderer(
         shapes.color(pal[Tok.INK], a).ellipse(cx, cy, r * sx, r * sy)
         shapes.color(pal[Tok.PAPER], 0.35f * a).arcScaled(cx, cy, r * 0.62f, 2f * px, 0.3f, 1.4f, pose.lerpA(alpha), sx, sy)
         drawFace(sim, pal, cx, cy, r, sx, sy, px, a)
+        // a timed power: a ring in its colour, the arc left showing the time left
+        val pw = run.power
+        if (pw != null) {
+            val left = ((run.powerUntil - sim.simT) / GameSim.POWER_S).coerceIn(0f, 1f)
+            val col = when (pw) {
+                com.pranshuparmar.inkmayhem.game.ItemKind.CHALK -> pal[Tok.PAPER_WHITE]
+                com.pranshuparmar.inkmayhem.game.ItemKind.HIGHLIGHTER -> pal[Tok.STAR]
+                else -> pal[Tok.STAR]
+            }
+            val blink = if (left < 0.25f && sin(sim.simT * 20f) > 0f) 0.4f else 1f
+            shapes.color(pal[Tok.GRAPHITE], 0.5f * blink).arc(cx, cy, r + 0.18f, 3.2f * px, -PI_F / 2f, -PI_F / 2f + 2f * PI_F * left)
+            shapes.color(col, blink).arc(cx, cy, r + 0.18f, 2.2f * px, -PI_F / 2f, -PI_F / 2f + 2f * PI_F * left)
+            if (pw == com.pranshuparmar.inkmayhem.game.ItemKind.STAR_NIB) {
+                shapes.color(pal[Tok.STAR], 0.35f + 0.25f * sin(sim.simT * 18f)).circle(cx, cy - r - 0.35f, 0.12f)
+            }
+        }
         if (run.bold) {
             // the marker cap, worn like a hat
             val w = r * 0.62f
@@ -855,6 +885,14 @@ class WorldRenderer(
             val y = b.prev.lerpY(alpha)
             if (x < vx0 || x > vx1) return@fastEach
             val walk = if (b.awake) t * 9f else 0f
+            if (b.kind == com.pranshuparmar.inkmayhem.game.Creature.ERASER) {
+                eraserShape(pal, x, y, b.kind.r, b.dir.toFloat(), walk, px)
+                return@fastEach
+            }
+            if (b.kind == com.pranshuparmar.inkmayhem.game.Creature.BEETLE) {
+                beetleShape(pal, x, y, b.kind.r, b.dir.toFloat(), walk, px, b.biteT > 0f)
+                return@fastEach
+            }
             val c = pal[Tok.BLOT]
             // feet, stepping
             shapes.color(c)
@@ -1016,10 +1054,94 @@ class WorldRenderer(
             val y = c.prev.lerpY(alpha)
             val w = r * 1.3f
             val h = r * 2f
-            shapes.color(pal[Tok.ACCENT]).roundRect(x - w / 2f, y - h / 2f, w, h, w * 0.3f)
-            shapes.color(pal[Tok.INK], 0.35f).rect(x - w / 2f, y + h * 0.22f, w, h * 0.14f)
-            shapes.color(pal[Tok.GRAPHITE]).line(x + w / 2f + 0.6f * px, y - h * 0.35f, x + w / 2f + 0.6f * px, y + h * 0.15f, 2f * px)
+            when (c.kind) {
+                com.pranshuparmar.inkmayhem.game.ItemKind.HIGHLIGHTER -> {
+                    // a fat yellow highlighter, chisel tip up
+                    shapes.color(pal[Tok.STAR]).roundRect(x - w / 2f, y - h / 2f + h * 0.2f, w, h * 0.8f, w * 0.25f)
+                    shapes.color(pal[Tok.INK], 0.6f).triangle(x - w * 0.35f, y - h * 0.3f, x + w * 0.35f, y - h * 0.3f, x + w * 0.2f, y - h * 0.6f)
+                }
+                com.pranshuparmar.inkmayhem.game.ItemKind.CHALK -> {
+                    // a stick of white chalk with a puff of cloud
+                    shapes.color(pal[Tok.PAPER_WHITE]).roundRect(x - w * 0.35f, y - h / 2f, w * 0.7f, h, w * 0.3f)
+                    shapes.color(pal[Tok.GRAPHITE]).roundRectOutline(x - w * 0.35f, y - h / 2f, w * 0.7f, h, w * 0.3f, 1.4f * px)
+                    shapes.color(pal[Tok.PAPER_WHITE], 0.8f).circle(x + w * 0.6f, y - h * 0.5f, r * 0.45f)
+                }
+                com.pranshuparmar.inkmayhem.game.ItemKind.GOLD_NIB -> {
+                    // a fountain-pen nib in gold
+                    shapes.color(pal[Tok.STAR]).triangle(x - w * 0.6f, y - h * 0.3f, x + w * 0.6f, y - h * 0.3f, x, y + h * 0.55f)
+                    shapes.color(pal[Tok.STAR]).rect(x - w * 0.6f, y - h * 0.5f, w * 1.2f, h * 0.22f)
+                    shapes.color(pal[Tok.INK], 0.7f).line(x, y - h * 0.2f, x, y + h * 0.4f, 1.6f * px)
+                    shapes.color(pal[Tok.INK], 0.7f).circle(x, y - h * 0.1f, r * 0.12f)
+                }
+                com.pranshuparmar.inkmayhem.game.ItemKind.STAR_NIB -> {
+                    val k = 1f + 0.15f * sin(sim.simT * 10f)
+                    shapes.color(pal[Tok.STAR]).star(x, y, r * 1.3f * k, 0.45f)
+                    shapes.color(pal[Tok.PAPER_WHITE]).star(x, y, r * 0.55f * k, 0.45f)
+                }
+                else -> {
+                    shapes.color(pal[Tok.ACCENT]).roundRect(x - w / 2f, y - h / 2f, w, h, w * 0.3f)
+                    shapes.color(pal[Tok.INK], 0.35f).rect(x - w / 2f, y + h * 0.22f, w, h * 0.14f)
+                    shapes.color(pal[Tok.GRAPHITE]).line(x + w / 2f + 0.6f * px, y - h * 0.35f, x + w / 2f + 0.6f * px, y + h * 0.15f, 2f * px)
+                }
+            }
             shapes.color(pal[Tok.ACCENT], 0.6f + 0.4f * sin(sim.simT * 8f)).ring(x, y, r * 1.9f, 1.2f * px, 2f * px, 3f * px)
+        }
+    }
+
+    /** An Eraser: a pink rubber block in a blue sleeve, crumbs at its foot, eyes on the runner. */
+    private fun eraserShape(pal: Palette, x: Float, y: Float, r: Float, look: Float, walk: Float, px: Float) {
+        val w = r * 2.1f
+        val h = r * 1.6f
+        val bob = kotlin.math.abs(sin(walk)) * 0.04f
+        val top = y + r - h - bob
+        shapes.color(pal[Tok.ERASER]).roundRect(x - w / 2f, top, w, h, r * 0.25f)
+        shapes.color(pal[Tok.DROP]).rect(x - w * 0.15f, top, w * 0.45f, h)
+        shapes.color(pal[Tok.INK], 0.55f).roundRectOutline(x - w / 2f, top, w, h, r * 0.25f, 1.5f * px)
+        angryEyes(pal, x - r * 0.05f + look * r * 0.1f, x + r * 0.45f + look * r * 0.1f, top + h * 0.4f, r * 0.17f, look, px, 1f)
+        shapes.color(pal[Tok.MUTED], 0.6f)
+        for (i in 0 until 3) shapes.circle(x - look * (w / 2f + 0.1f + i * 0.13f), y + r - 0.05f, 0.04f)
+    }
+
+    /** An ink beetle: a dark shell on six legs, jaws working when it's eating. */
+    private fun beetleShape(pal: Palette, x: Float, y: Float, r: Float, look: Float, walk: Float, px: Float, eating: Boolean) {
+        shapes.color(pal[Tok.INK])
+        for (i in -1..1) {
+            val lx = x + i * r * 0.6f
+            val kick = sin(walk + i) * 0.06f
+            shapes.line(lx, y, lx - r * 0.35f + kick, y + r * 0.95f, 1.6f * px)
+            shapes.line(lx, y, lx + r * 0.35f - kick, y + r * 0.95f, 1.6f * px)
+        }
+        shapes.color(pal[Tok.BEETLE]).ellipse(x, y, r * 1.2f, r * 0.85f)
+        shapes.color(pal[Tok.INK], 0.4f).line(x, y - r * 0.85f, x, y + r * 0.7f, 1.4f * px)
+        shapes.color(pal[Tok.BEETLE]).circle(x + look * r * 1.1f, y + r * 0.05f, r * 0.45f)
+        shapes.color(pal[Tok.PAPER]).circle(x + look * r * 1.25f, y - r * 0.1f, r * 0.14f)
+        val jaw = if (eating) 0.12f + 0.1f * kotlin.math.abs(sin(walk * 2f)) else 0.08f
+        shapes.color(pal[Tok.INK]).line(x + look * r * 1.5f, y + r * 0.1f, x + look * r * (1.75f + jaw), y + r * 0.35f, 1.6f * px)
+    }
+
+    /** Highlighter swipes: a wide translucent yellow band that fades. */
+    private fun drawSwipes(sim: GameSim, pal: Palette) {
+        sim.swipes.fastEach { s ->
+            val a = (1f - (sim.simT - s.at) / GameSim.SWIPE_S).coerceIn(0f, 1f) * 0.45f
+            shapes.color(pal[Tok.STAR], a)
+            for (i in 1 until s.n) shapes.capsule(s.xs[i - 1], s.ys[i - 1], s.xs[i], s.ys[i], 0.7f)
+        }
+    }
+
+    /** Inkwells: a squat jar with an inky mouth on the ground. */
+    private fun drawWarps(sim: GameSim, pal: Palette, vx0: Float, vx1: Float, px: Float) {
+        sim.warps.fastEach { w ->
+            if (w.hidden || w.x < vx0 - 1f || w.x > vx1 + 1f) return@fastEach
+            val lw = 1.6f * px
+            shapes.color(pal[Tok.ROCK]).roundRect(w.x - 0.55f, w.y - 0.75f, 1.1f, 0.75f, 0.2f)
+            shapes.color(pal[Tok.GRAPHITE]).roundRectOutline(w.x - 0.55f, w.y - 0.75f, 1.1f, 0.75f, 0.2f, lw)
+            shapes.color(pal[Tok.INK]).ellipse(w.x, w.y - 0.75f, 0.42f, 0.12f)
+            shapes.color(pal[Tok.GRAPHITE]).rect(w.x - 0.45f, w.y - 0.95f, 0.9f, 0.18f)
+            // an arrow: in (down) or out (up)
+            val pulse = 0.5f + 0.5f * sin(sim.simT * 5f)
+            shapes.color(pal[Tok.ACCENT], 0.5f + 0.4f * pulse)
+            if (w.exit) shapes.triangle(w.x - 0.25f, w.y - 1.3f, w.x + 0.25f, w.y - 1.3f, w.x, w.y - 1.7f)
+            else shapes.triangle(w.x - 0.25f, w.y - 1.6f, w.x + 0.25f, w.y - 1.6f, w.x, w.y - 1.2f)
         }
     }
 

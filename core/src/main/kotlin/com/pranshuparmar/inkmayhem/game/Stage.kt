@@ -24,7 +24,8 @@ class StageDef(
 
 /** Everything in a stage, in world metres (y down), before any physics exists. */
 class StageLayout {
-    class Block(val x: Float, val top: Float, val w: Float, val depth: Float, val topR: Float = top) {
+    /** [hidden]: only solid once a highlighter finds it; [bonus]: part of a bonus page far below. */
+    class Block(val x: Float, val top: Float, val w: Float, val depth: Float, val topR: Float = top, val hidden: Boolean = false, val bonus: Boolean = false) {
         val right: Float get() = x + w
     }
 
@@ -53,16 +54,20 @@ class StageLayout {
     class Runway(val x: Float, val level: Float, val triggerX: Float)
 
     /** A Blot standing on the ground at [x]; it paces between [x0] and [x1] (NaN: no limits). */
-    class BlotSpec(val x: Float, val y: Float, val x0: Float, val x1: Float)
+    class BlotSpec(val x: Float, val y: Float, val x0: Float, val x1: Float, val kind: Creature = Creature.BLOT)
+
+    /** An inkwell at ([x], [y]) dropping to ([toX], [toY]; NaN: the page's ground there). */
+    class WarpSpec(val x: Float, val y: Float, val toX: Float, val toY: Float, val hidden: Boolean, val exit: Boolean)
 
     /** A doodle box with its top-left at ([x], [top]), [size] square, holding [holds]. */
-    class Box(val x: Float, val top: Float, val size: Float, val holds: ItemKind)
+    class Box(val x: Float, val top: Float, val size: Float, val holds: ItemKind, val hidden: Boolean = false)
 
     class ArenaSpec(val x0: Float, val x1: Float, val level: Float, val kind: BossKind, val ceiling: Float)
 
     class GateSpec(
         val ink: Ink, val x0: Float, val x1: Float, val gx0: Float, val gy0: Float, val gx1: Float, val gy1: Float,
         val label: String, val tunes: Boolean, val waitX: Float, val slack: Float,
+        val forbid: Ink? = null, val crush: Boolean = false,
     )
 
     /** One stroke of the scripted solution, drawn once the runner reaches [atX]. */
@@ -81,6 +86,7 @@ class StageLayout {
     val boxes = ArrayList<Box>()
     val gates = ArrayList<GateSpec>()
     val arenas = ArrayList<ArenaSpec>()
+    val warps = ArrayList<WarpSpec>()
     val solution = ArrayList<Stroke>()
 
     /** A bookmark: once passed, a retry starts 1 m past it. */
@@ -95,11 +101,11 @@ class StageLayout {
     /** The finish flag stands on this level. */
     var finishLevel = 0f
 
-    /** Top of the highest solid surface under [x] (blocks only), or NaN over a gap. */
+    /** Top of the highest solid surface of the page under [x] (blocks only, not hidden or bonus ones), or NaN over a gap. */
     fun groundAt(x: Float): Float {
         var best = Float.NaN
         for (b in blocks) {
-            if (x < b.x || x > b.right) continue
+            if (x < b.x || x > b.right || b.hidden || b.bonus) continue
             val t = if (b.topR == b.top) b.top else b.top + (b.topR - b.top) * (x - b.x) / b.w
             if (best.isNaN() || t < best) best = t
         }
@@ -141,11 +147,11 @@ class StageBuilder(private val l: StageLayout) {
     }
 
     /** A gap to bridge; [solve] is the ink the scripted solution uses (par by default). */
-    fun gap(len: Float, type: HazardType = HazardType.GAP_M, par: Ink = type.par!!, solve: Ink = par): StageBuilder {
+    fun gap(len: Float, type: HazardType = HazardType.GAP_M, par: Ink = type.par!!, solve: Ink = par, lead: Float = 8f): StageBuilder {
         val x0 = x
         x += len
         l.hazards += StageLayout.Hazard(type, x0, x, par)
-        bridge(x0, level, x, level, solve)
+        bridge(x0, level, x, level, solve, lead)
         return this
     }
 
@@ -362,14 +368,42 @@ class StageBuilder(private val l: StageLayout) {
     }
 
     /** A Blot on the ground at [x0], pacing [patrol] metres either way once it wakes (0: free). */
-    fun blot(x0: Float, patrol: Float = 0f) {
+    fun blot(x0: Float, patrol: Float = 0f, kind: Creature = Creature.BLOT) {
         val g = ground(x0)
-        l.blots += StageLayout.BlotSpec(x0, g, if (patrol > 0f) x0 - patrol else Float.NaN, if (patrol > 0f) x0 + patrol else Float.NaN)
+        l.blots += StageLayout.BlotSpec(x0, g, if (patrol > 0f) x0 - patrol else Float.NaN, if (patrol > 0f) x0 + patrol else Float.NaN, kind)
+    }
+
+    /** An Eraser on the ground at [x0]: it rubs out rope and springs it touches. */
+    fun eraser(x0: Float, patrol: Float = 0f) = blot(x0, patrol, Creature.ERASER)
+
+    /** An ink beetle on the ground at [x0]: it eats rope and spring bridges it crawls on. */
+    fun beetle(x0: Float, patrol: Float = 0f) = blot(x0, patrol, Creature.BEETLE)
+
+    /** A ledge (or a bridge over a gap) that's only there once a highlighter finds it. */
+    fun hiddenLedge(x0: Float, top: Float, len: Float, thick: Float = LEDGE_THICK) {
+        l.blocks += StageLayout.Block(x0, top, len, thick, hidden = true)
+    }
+
+    /**
+     * An inkwell at [x0] on the ground ([hidden] until highlighted): it drops the runner to a bonus
+     * page of [stars] far below, [roomLen] long, whose own inkwell lifts it back up to the page at
+     * [x0] + [back].
+     */
+    fun inkwell(x0: Float, back: Float, roomLen: Float = 18f, hidden: Boolean = true, stars: Int = 12) {
+        val g = ground(x0)
+        val ry = g + BONUS_DROP
+        // the bonus page: a floor with a wall at each end, and stars along it
+        l.blocks += StageLayout.Block(x0 - 3f, ry, roomLen + 5f, 6f, bonus = true)
+        l.blocks += StageLayout.Block(x0 - 3.8f, ry - 8f, 0.8f, 14f, bonus = true)
+        l.blocks += StageLayout.Block(x0 + roomLen + 2f, ry - 8f, 0.8f, 14f, bonus = true)
+        for (i in 0 until stars) starAt(x0 + 1.5f + i * (roomLen - 3f) / (stars - 1), ry - 0.65f - (if (i % 4 == 1 || i % 4 == 2) 0.6f else 0f))
+        l.warps += StageLayout.WarpSpec(x0, g, x0 + 0.6f, ry, hidden, exit = false)
+        l.warps += StageLayout.WarpSpec(x0 + roomLen, ry, x0 + back, Float.NaN, false, exit = true)
     }
 
     /** A doodle box with its underside [up] metres above the ground at [x0] (a spring's bounce reaches it). */
-    fun box(x0: Float, up: Float = 2.6f, holds: ItemKind = ItemKind.CAP) {
-        l.boxes += StageLayout.Box(x0 - BOX / 2f, ground(x0) - up - BOX, BOX, holds)
+    fun box(x0: Float, up: Float = 2.6f, holds: ItemKind = ItemKind.CAP, hidden: Boolean = false) {
+        l.boxes += StageLayout.Box(x0 - BOX / 2f, ground(x0) - up - BOX, BOX, holds, hidden)
     }
 
     /**
@@ -380,8 +414,9 @@ class StageBuilder(private val l: StageLayout) {
     fun hint(
         ink: Ink, x0: Float, x1: Float, gx0: Float, gy0: Float, gx1: Float, gy1: Float,
         tunes: Boolean = false, waitX: Float = Float.NaN, slack: Float = 0.8f,
+        forbid: Ink? = null, crush: Boolean = false, label: String = ink.label,
     ) {
-        l.gates += StageLayout.GateSpec(ink, x0, x1, gx0, gy0, gx1, gy1, ink.label, tunes, waitX, slack)
+        l.gates += StageLayout.GateSpec(ink, x0, x1, gx0, gy0, gx1, gy1, label, tunes, waitX, slack, forbid, crush)
     }
 
     fun note(text: String, dx: Float = 0.6f, up: Float = 3.4f, maxW: Float = Float.POSITIVE_INFINITY) {
@@ -448,6 +483,9 @@ class StageBuilder(private val l: StageLayout) {
         if (solve) springOn(x0 - 2.6f)
     }
 
+    /** Scripted solution: a highlighter swipe (drawn while the Highlighter is on) from (x0, y0) to (x1, y1). */
+    fun swipe(x0: Float, y0: Float, x1: Float, y1: Float, lead: Float = 6f) = solve(x0, y0, x1, y1, Ink.ROPE, lead)
+
     /** A short spring lying on the ground from [x0] to [x1]. */
     fun spring(x0: Float, x1: Float, groundY: Float, lead: Float = 8f) {
         val p = PRESSURE.getValue(Ink.SPRING)
@@ -468,6 +506,8 @@ class StageBuilder(private val l: StageLayout) {
         /** A boss arena's length, and the Big Smudge's spiked roof height. */
         const val ARENA_LEN = 13f
         const val ARENA_ROOF = 8.2f
+        /** A bonus page lies this far below the page's ground. */
+        const val BONUS_DROP = 55f
         /** Mid-band pressure for each ink, as the Endless bot uses. */
         val PRESSURE = mapOf(Ink.ROPE to 0.2f, Ink.SPRING to 0.47f, Ink.BEAM to 0.8f)
     }

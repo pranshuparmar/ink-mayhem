@@ -57,12 +57,25 @@ class GoldStar(val x: Float, val y: Float, val index: Int, var hidden: Boolean) 
 }
 
 /**
- * A Blot: an ink smudge that waddles at the runner. A bounce onto it (or a beam dropped on it)
+ * What walks the page: Blots (squash them), Erasers (rub out rope and springs they touch; too
+ * rubbery to stomp) and ink beetles (eat rope and spring bridges they crawl on). [r] is the body's
+ * radius, [speed] its walk in m/s, [wake] how near the runner comes before it starts walking.
+ */
+enum class Creature(val r: Float, val speed: Float, val wake: Float) {
+    BLOT(0.38f, 1.1f, 11f),
+    ERASER(0.45f, 1.25f, 18f),
+    BEETLE(0.3f, 1.3f, 14f),
+}
+
+/**
+ * A Blot (or another [Creature]): an ink smudge that waddles at the runner. A bounce onto it (or a beam dropped on it)
  * squashes it; touching it otherwise costs a life, unless the runner is Bold. It wakes when the
  * runner comes near and paces between [x0] and [x1] (no limits when they're NaN).
  */
-class Blot(val body: Body, val x0: Float, val x1: Float) {
+class Blot(val body: Body, val x0: Float, val x1: Float, val kind: Creature = Creature.BLOT) {
     val prev = Pose(body)
+    /** A beetle: seconds it has been chewing the stroke under it. */
+    var biteT = 0f
     var awake = false
     /** −1 walking left (towards the runner), +1 right. */
     var dir = -1
@@ -93,7 +106,7 @@ class DoodleBox(
 }
 
 /** The marker cap a doodle box pops out: it rolls away along the ground until the runner catches it. */
-class Cap(val body: Body) {
+class Cap(val body: Body, val kind: ItemKind = ItemKind.CAP) {
     val prev = Pose(body)
     /** Picked up, or lost off the page: its body is gone. */
     var taken = false
@@ -114,6 +127,10 @@ class Gate(
     val label: String, val tunes: Boolean, val waitX: Float = Float.NaN,
     /** How far before the guide's start a spring may reach and still count (half that past its end). */
     val slack: Float = 0.8f,
+    /** An ink that won't do here (a spring under a spiked roof), or null. */
+    val forbid: Ink? = null,
+    /** The job is a creature under the guide squashed (a beam dropped on an Eraser), not a stroke's shape. */
+    val crush: Boolean = false,
 ) {
     /** The runner is past it: the guide fades out. */
     var passed = false
@@ -211,7 +228,20 @@ class Runner(val body: Body) {
     var bold = false
     /** After losing Bold, nothing hurts until this simT. */
     var safeUntil = -1f
+    /** A timed power (the Highlighter, Cloud chalk, the Gold nib, the Star nib) and when it ends. */
+    var power: ItemKind? = null
+    var powerUntil = 0f
 }
+
+/** A highlighter swipe: where it went (and what it revealed), fading from [at]. */
+class Swipe(val xs: FloatArray, val ys: FloatArray, val n: Int, val at: Float)
+
+/**
+ * An inkwell: roll over its mouth at ([x], [y], the ground) and you drop to ([toX], [toY]) — down
+ * to a bonus page, or ([exit]) back up to the page further along. [hidden] until a highlighter
+ * finds it.
+ */
+class Warp(val x: Float, val y: Float, val toX: Float, val toY: Float, var hidden: Boolean, val exit: Boolean)
 
 /** Why a run ended; picks the death-card tips. */
 enum class DeathKind { FELL, BOULDER, SPIKED, STUCK, BLOT, BOSS, ERASER, PLANE, BEETLE, TIDE }

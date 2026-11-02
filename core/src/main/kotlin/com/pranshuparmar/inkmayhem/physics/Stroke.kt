@@ -72,6 +72,8 @@ class GroundRect(
     var edgeRFrom = Float.NaN
     /** A spike strip: true when its spikes point up (on a floor). */
     var spikesUp = false
+    /** Game data: part of a bonus page (far below the page; only counts while the runner is down there). */
+    var bonus = false
 
     val right: Float get() = x + w
 }
@@ -154,6 +156,10 @@ class JointInfo(
 class Anchor(val x: Float, val y: Float, val joint: JointInfo)
 
 class Stroke(val id: Int) {
+    /** Game data: drawn with the Gold nib (free, unbreakable, and beetles can't eat it). */
+    var gold = false
+    /** Game data: Cloud chalk (static: it floats where it was drawn). */
+    var chalk = false
     val segs = ArrayList<Segment>()
     val groups = ArrayList<InkGroup>()
     val joints = ArrayList<JointInfo>()
