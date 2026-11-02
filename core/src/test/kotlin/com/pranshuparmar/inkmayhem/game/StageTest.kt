@@ -22,6 +22,8 @@ class StageTest {
             assertEquals(1, p.events.clears)
             val hearts = Stages.byId(id)!!.layout.items.count { it.kind == ItemKind.HEART }
             assertEquals(hearts, p.events.hearts, "the solution takes the high road to every heart")
+            val golds = Stages.byId(id)!!.layout.items.count { it.kind == ItemKind.GOLD }
+            assertEquals(golds, Integer.bitCount(p.sim.stageRun!!.goldMask), "the solution finds every gold star")
         } finally {
             p.dispose()
         }
@@ -58,6 +60,19 @@ class StageTest {
             } finally {
                 p.dispose()
             }
+        }
+    }
+
+    @Test
+    fun `every world has five stages, numbered in order, each with three gold stars`() {
+        for (w in Stages.WORLDS.filter { it.stages.size == 5 }) {
+            for ((i, def) in w.stages.withIndex()) {
+                assertEquals(w.number, def.world, def.id)
+                assertEquals(i + 1, def.number, def.id)
+                assertEquals(w.theme, def.theme, def.id)
+                assertEquals(3, def.layout.items.count { it.kind == ItemKind.GOLD }, "${def.id} gold stars")
+            }
+            assertTrue(w.stages.last().layout.arenas.isNotEmpty(), "${w.name} ends with a boss")
         }
     }
 

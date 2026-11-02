@@ -422,6 +422,32 @@ class StageBuilder(private val l: StageLayout) {
     fun bridge(x0: Float, y0: Float, x1: Float, y1: Float, ink: Ink, lead: Float = 8f) =
         solve(x0, y0 - 0.05f, x1, y1 - 0.05f, ink, lead)
 
+    /** Scripted solution: a short spring lying on the ground (following a slope) from [x0], [len] long. */
+    fun springOn(x0: Float, len: Float = 0.8f, lead: Float = 8f) {
+        val p = PRESSURE.getValue(Ink.SPRING)
+        val off = com.pranshuparmar.inkmayhem.physics.Ink.thickness(p) / 2f + 0.04f
+        solve(x0, ground(x0) - off, x0 + len, ground(x0 + len) - off, Ink.SPRING, lead)
+    }
+
+    /**
+     * A gold star at the top of a spring's bounce from [x0] (about 2 m on and 4.6 m up), with the
+     * spring in the solution. Land it on solid ground: a bounce snaps rope it lands on.
+     */
+    fun bounceGold(x0: Float, lead: Float = 5f) {
+        springOn(x0, lead = lead)
+        gold(x0 + 2f, ground(x0) - 4.6f)
+    }
+
+    /**
+     * A ledge up off the ground, [len] long, reached by a spring bounce from [up] metres up: the
+     * high road. The solution draws the spring 2.6 m before it.
+     */
+    fun highRoad(x0: Float, len: Float, up: Float = 3.2f, solve: Boolean = true) {
+        val g = ground(x0)
+        ledge(x0, g - up, len)
+        if (solve) springOn(x0 - 2.6f)
+    }
+
     /** A short spring lying on the ground from [x0] to [x1]. */
     fun spring(x0: Float, x1: Float, groundY: Float, lead: Float = 8f) {
         val p = PRESSURE.getValue(Ink.SPRING)

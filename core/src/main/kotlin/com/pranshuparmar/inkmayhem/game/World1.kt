@@ -41,6 +41,8 @@ object World1 {
         note("Beams use lots of ink: the bar at the top. Blue drops fill it up.", dx = 1f, up = 4.4f, maxW = 7f)
         drops(x + 4f, 3)
         flat(27f)
+        // gold stars are for later: one up where a spring's bounce peaks
+        bounceGold(x - 23f)
         // a Blot walks at you: a spring before it bounces you onto it
         val b1 = x - 5f
         note("A Blot! Don't touch it. Draw a spring and land on it.", dx = -19f, maxW = 8f)
@@ -82,6 +84,7 @@ object World1 {
         spring(hx + 4.4f, hx + 5.2f, level)
         for (i in 0 until 3) dropAt(hx + 9f + i * 1.8f, level - 3.95f)
         heart(hx + 15.6f, level - 4.1f)
+        gold(hx + 12.6f, level - 4.4f)
         stepDown(2.4f)
         flat(8f)
         note("Seesaws tip as you cross.", dx = -6f)
@@ -89,10 +92,198 @@ object World1 {
         flat(8f)
         drops(x - 6f, 3)
         gap(5f)
-        flat(8f)
+        flat(12f)
+        // clear of the gap's judging (a spring there would count as too heavy for it)
+        bounceGold(x - 9.5f)
         stars(x - 6f, 5)
         finish()
     }
 
-    val STAGES = listOf(FIRST_PAGE)
+    /**
+     * Downhill you speed up, uphill you slow down: gaps on hilltops and in the valleys between,
+     * a doodle box on a summit, a Blot rolling down to meet you, and a long run down to a beam gap.
+     */
+    val DOODLE_HILLS = StageDef(1, 2, "Doodle Hills", Theme.PAGE, 3.5f) {
+        start(14f)
+        note("Hills! Downhill you speed up, uphill you slow down.", dx = -12f, maxW = 8f)
+        stars(5f, 5)
+        slope(10f, 2f)
+        flat(3f)
+        starLine(x + 0.6f, level - 0.65f, x + 2.9f, level - 0.65f, 3)
+        gap(3.5f, HazardType.GAP_S)
+        flat(3f)
+        slope(12f, -3f)
+        flat(5f)
+        starLine(x + 0.8f, level - 0.65f, x + 4.2f, level - 0.65f, 4)
+        gap(5f)
+        flat(10f)
+        // a summit with a doodle box, and a gold star up on a high road
+        slope(8f, 2.5f)
+        val sx = x
+        flat(14f)
+        box(sx + 4f)
+        springOn(sx + 3.5f, lead = 4f)
+        highRoad(sx + 9f, 8f)
+        gold(sx + 13f, level - 4f)
+        slope(12f, -2.5f)
+        blot(x - 4f)
+        flat(6f)
+        checkpoint()
+        flat(6f)
+        slope(10f, 3f)
+        flat(8f)
+        note("Bounce over the wall at the top.", dx = -7f, maxW = 6f)
+        wall(2.4f)
+        // a gold star up where a spring's bounce peaks, landing well before the gap
+        val wx = x
+        flat(12f)
+        bounceGold(wx + 1.5f)
+        gap(4f)
+        flat(4f)
+        slope(14f, -4.4f)
+        flat(6f)
+        note("Too far for rope: a beam.", dx = -5f, maxW = 6f)
+        gap(7.6f, HazardType.GAP_L)
+        flat(6f)
+        highRoad(x + 2.6f, 6f)
+        gold(x + 6f, level - 4f)
+        flat(10f)
+        stars(x - 6f, 4)
+        finish()
+    }
+
+    /**
+     * Seesaws: planks that tip as you cross. They get longer, then go over spikes, then come two in a
+     * row; a Blot waits where one lands you.
+     */
+    val SEESAW_LANE = StageDef(1, 3, "Seesaw Lane", Theme.PAGE, 3.5f) {
+        start(14f)
+        note("Seesaws tip as you cross. Nothing to draw: just roll.", dx = -12f, maxW = 8f)
+        seesawGap(5f)
+        flat(8f)
+        stars(x - 6f, 4)
+        seesawGap(6f)
+        flat(6f)
+        drops(x - 4f, 3)
+        flat(4f)
+        // a gold star high over the next seesaw: bounce before it
+        bounceGold(x - 2.6f)
+        seesawGap(6.5f)
+        flat(10f)
+        note("A Blot! Bounce on it.", dx = -9f, maxW = 6f)
+        blot(x + 1f)
+        springOn(x - 7.2f, lead = 4f)
+        flat(4f)
+        checkpoint()
+        flat(6f)
+        note("Spikes below now: keep rolling.", dx = -5f, maxW = 6f)
+        seesawGap(6f, spikesBelow = true)
+        flat(6f)
+        wall(2.4f)
+        flat(10f)
+        highRoad(x - 6f, 5f)
+        gold(x - 3f, level - 4f)
+        seesawGap(6f, spikesBelow = true)
+        flat(3f)
+        seesawGap(6f, spikesBelow = true)
+        flat(8f)
+        starLine(x + 0.8f, level - 0.65f, x + 3.7f, level - 0.65f, 4)
+        gap(4.5f)
+        flat(8f)
+        // the last gold over a final seesaw
+        bounceGold(x - 2.6f)
+        seesawGap(6f)
+        flat(8f)
+        finish()
+    }
+
+    /**
+     * Blots in every arrangement: a pair one bounce squashes, a marker cap and then a whole parade
+     * to roll flat while Bold, a Blot guarding the top of a wall, and a pair after a gap.
+     */
+    val BLOT_PARADE = StageDef(1, 4, "Blot Parade", Theme.PAGE, 3.5f) {
+        start(14f)
+        note("Blots in a row: one bounce can squash them both.", dx = -12f, maxW = 8f)
+        val b1 = x + 14f
+        blot(b1)
+        blot(b1 + 1.3f)
+        springOn(b1 - 8.1f, lead = 4f)
+        flat(28f)
+        starLine(x + 0.8f, level - 0.65f, x + 3.2f, level - 0.65f, 3)
+        gap(4f)
+        flat(12f)
+        // the marker cap, then a parade to roll flat
+        val bx = x - 6f
+        note("Get the cap, then roll right through.", dx = -11f, up = 5.4f, maxW = 6f)
+        box(bx, up = 2.6f)
+        springOn(bx - 0.5f, lead = 4f)
+        flat(26f)
+        for (i in 0 until 4) blot(x - 12f + i * 3f)
+        stars(x - 13f, 6, gap = 1.5f)
+        flat(4f)
+        checkpoint()
+        flat(8f)
+        bounceGold(x - 6f)
+        flat(6f)
+        note("One waits on top of the wall: land on it.", dx = -5f, maxW = 6f)
+        wall(2.4f)
+        blot(x + 3.2f, patrol = 1.2f)
+        flat(18f)
+        highRoad(x - 8f, 6f)
+        gold(x - 4.5f, level - 4f)
+        heart(x - 2.5f, level - 4f)
+        flat(4f)
+        starLine(x + 0.8f, level - 0.65f, x + 3.7f, level - 0.65f, 4)
+        gap(4.5f)
+        flat(18f)
+        val b3 = x - 4f
+        blot(b3)
+        blot(b3 + 1.3f)
+        springOn(b3 - 8.1f, lead = 4f)
+        flat(4f)
+        bounceGold(x - 2f)
+        flat(10f)
+        finish()
+    }
+
+    /**
+     * The world's finale: a run through everything World 1 taught, then the Big Blot's arena.
+     * Bounce on it three times; it gets quicker with every hit.
+     */
+    val THE_BIG_BLOT = StageDef(1, 5, "The Big Blot", Theme.PAGE, 3.6f) {
+        start(14f)
+        note("The Big Blot waits at the end of the page.", dx = -12f, maxW = 7f)
+        starLine(x + 0.6f, level - 0.65f, x + 2.9f, level - 0.65f, 3)
+        gap(3.5f, HazardType.GAP_S)
+        flat(9f)
+        wall(2.4f)
+        flat(10f)
+        bounceGold(x - 8f)
+        slope(10f, -2.4f)
+        flat(14f)
+        blot(x - 3f)
+        springOn(x - 11.1f, lead = 4f)
+        flat(4f)
+        starLine(x + 0.8f, level - 0.65f, x + 4.2f, level - 0.65f, 4)
+        gap(5f)
+        flat(8f)
+        seesawGap(5.5f)
+        flat(14f)
+        highRoad(x - 8f, 6f)
+        gold(x - 4.5f, level - 4f)
+        heart(x - 2.5f, level - 4f)
+        flat(4f)
+        gap(7.6f, HazardType.GAP_L)
+        flat(8f)
+        bounceGold(x - 6.5f)
+        flat(2f)
+        checkpoint()
+        flat(10f)
+        note("Bounce on it three times!", dx = -8f, maxW = 6f)
+        arena(BossKind.BIG_BLOT)
+        flat(6f)
+        finish()
+    }
+
+    val STAGES = listOf(FIRST_PAGE, DOODLE_HILLS, SEESAW_LANE, BLOT_PARADE, THE_BIG_BLOT)
 }

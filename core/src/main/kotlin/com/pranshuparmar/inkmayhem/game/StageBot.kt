@@ -65,8 +65,12 @@ class StageBot(private val sim: GameSim, private val inkFor: (Ink) -> Ink = { it
         val blot = sim.blots.firstOrNull { !it.dead && (it.body.position.x - rp.x) * dir in 1.8f..6.5f }
         val drew = when {
             onGround && blot != null -> springAt(rp.x + dir * 0.5f, dir, g)
-            b.kind == BossKind.BIG_BLOT || b.kind == BossKind.BEETLE_QUEEN ->
-                onGround && ahead in 2.2f..7.5f && springAt(rp.x + dir * 0.5f, dir, g)
+            b.kind == BossKind.BIG_BLOT || b.kind == BossKind.BEETLE_QUEEN -> when {
+                onGround && ahead in 2.2f..7.5f -> springAt(rp.x + dir * 0.5f, dir, g)
+                // too close for that (just turned at a wall): a spring right under the runner
+                onGround && ahead in 0.6f..2.2f && sim.simT >= b.hurtUntil -> springAt(rp.x + dir * 0.1f, dir, g)
+                else -> false
+            }
             b.kind == BossKind.GIANT_ERASER -> when {
                 ahead in 3.5f..9f && sim.simT >= b.hurtUntil -> stroke(q.x - dir * 0.6f - 0.9f, g - 3.6f, q.x - dir * 0.6f + 0.9f, g - 3.6f, Ink.BEAM)
                 onGround && ahead in 1.3f..3.4f -> springAt(rp.x + dir * 0.4f, dir, g)
