@@ -47,7 +47,12 @@ class Note(val x: Float, val y: Float, val text: String) {
 }
 
 /** A star of a trail: worth points, rings a rising chime, and every 50 is a life. */
-class Star(val x: Float, val y: Float, val phase: Float) {
+class Star(val x: Float, val y: Float, val phase: Float, var hidden: Boolean = false) {
+    var taken = false
+}
+
+/** One of a stage's three gold stars ([index] 0..2); [hidden] until a highlighter finds it. */
+class GoldStar(val x: Float, val y: Float, val index: Int, var hidden: Boolean) {
     var taken = false
 }
 

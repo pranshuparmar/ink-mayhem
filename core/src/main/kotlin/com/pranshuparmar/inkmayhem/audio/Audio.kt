@@ -19,8 +19,11 @@ class Audio(private val settings: Settings) : Disposable {
     private val bySfx = arrayOfNulls<Sound>(Sfx.entries.size)
     private val chimes = arrayOfNulls<Sound>(10)
     private val starSteps = arrayOfNulls<Sound>(8)
+    /** The tune loaded now (a world's, or the boss's), by its file name under music/. */
     private var theme: Sound? = null
+    private var themeName: String? = null
     private var themeId = -1L
+    private var wantName: String? = null
     private var musicWant = Music.STOPPED
     private var musicIs = Music.STOPPED
     private var scratch: Sound? = null
@@ -39,9 +42,7 @@ class Audio(private val settings: Settings) : Disposable {
                 val f = Gdx.files.internal("sfx/$name.wav")
                 if (f.exists()) sounds[name] = Gdx.audio.newSound(f)
             }
-            // the theme is a looping sound, not streamed music: a sound loops without a gap
-            val m = Gdx.files.internal("music/ink_rush.wav")
-            if (m.exists()) theme = Gdx.audio.newSound(m)
+
         } catch (e: Exception) {
             Gdx.app.error("Audio", "sound effects unavailable", e)
         }
@@ -67,12 +68,36 @@ class Audio(private val settings: Settings) : Disposable {
         targetFreq = 1800f + (1f - p.coerceIn(0f, 1f)) * 2600f
     }
 
-    /** Call every frame: the theme starts, pauses (keeping its place), resumes or stops to match. */
-    fun music(want: Music) {
+    /**
+     * Call every frame: tune [name] starts, pauses (keeping its place), resumes or stops to match.
+     * A different tune stops the one playing and loads in its place (one tune in memory at a time).
+     */
+    fun music(want: Music, name: String) {
         musicWant = want
+        wantName = name
+    }
+
+    private fun switchTheme(name: String) {
+        theme?.let { t ->
+            if (themeId != -1L) t.stop(themeId)
+            t.dispose()
+        }
+        theme = null
+        themeId = -1L
+        musicIs = Music.STOPPED
+        themeName = name
+        try {
+            // a tune is a looping sound, not streamed music: a sound loops without a gap
+            val f = Gdx.files.internal("music/$name.wav")
+            if (f.exists()) theme = Gdx.audio.newSound(f)
+        } catch (e: Exception) {
+            Gdx.app.error("Audio", "music $name unavailable", e)
+        }
     }
 
     private fun updateMusic() {
+        val name = wantName
+        if (name != null && name != themeName && musicWant == Music.PLAYING) switchTheme(name)
         val m = theme ?: return
         val target = if (settings.music) musicWant else Music.STOPPED
         when {

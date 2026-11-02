@@ -3,7 +3,7 @@ package com.pranshuparmar.inkmayhem.game
 import com.pranshuparmar.inkmayhem.physics.Ink
 
 /** How a stage's page looks: the paper and how blocks are drawn. */
-enum class Theme { PAGE, CELLAR, SKY, CASTLE }
+enum class Theme { PAGE, CELLAR, SKY, CASTLE, MIDNIGHT }
 
 /**
  * A hand-built stage: World [world]-[number], always the same layout so it can be learned.
@@ -43,7 +43,8 @@ class StageLayout {
     /** A plank [len] long pinned at its centre, tipping between [minAngle] and [maxAngle] (radians, + = clockwise). */
     class Seesaw(val cx: Float, val cy: Float, val len: Float, val angle: Float, val minAngle: Float, val maxAngle: Float)
 
-    class Item(val x: Float, val y: Float, val kind: ItemKind)
+    /** [hidden] ones only show (and can only be taken) once a highlighter stroke finds them. */
+    class Item(val x: Float, val y: Float, val kind: ItemKind, val hidden: Boolean = false)
 
     class Text(val x: Float, val y: Float, val text: String, val maxW: Float)
 
@@ -103,7 +104,8 @@ class StageLayout {
     }
 }
 
-enum class ItemKind { DROP, HIGH_DROP, HEART, STAR, CAP }
+/** What a stage holds. GOLD is one of its three hidden gold stars; the last four only come out of doodle boxes. */
+enum class ItemKind { DROP, HIGH_DROP, HEART, STAR, GOLD, CAP, HIGHLIGHTER, CHALK, GOLD_NIB, STAR_NIB }
 
 /**
  * Lays out a stage left to right. [x] is the cursor and [level] the ground height there (y down,
@@ -307,8 +309,17 @@ class StageBuilder(private val l: StageLayout) {
         l.items += StageLayout.Item(x0, ground(x0) - up, ItemKind.STAR)
     }
 
-    fun starAt(x0: Float, y: Float) {
-        l.items += StageLayout.Item(x0, y, ItemKind.STAR)
+    fun starAt(x0: Float, y: Float, hidden: Boolean = false) {
+        l.items += StageLayout.Item(x0, y, ItemKind.STAR, hidden)
+    }
+
+    /**
+     * One of the stage's three gold stars, at an absolute height: somewhere off the obvious line
+     * (a high road, a risky bounce, a hidden spot a highlighter finds). Numbered in the order placed.
+     */
+    fun gold(x0: Float, y: Float, hidden: Boolean = false) {
+        check(l.items.count { it.kind == ItemKind.GOLD } < 3) { "three gold stars a stage" }
+        l.items += StageLayout.Item(x0, y, ItemKind.GOLD, hidden)
     }
 
     /** A row of [n] stars [gap] apart along the ground from [x0]. */

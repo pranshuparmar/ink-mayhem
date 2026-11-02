@@ -37,13 +37,18 @@ class Hud {
     private var livesText = ""
     private var lastStars = -1
     private var starsText = ""
+    /** Gold stars: taken this attempt, and found before. */
+    private var goldRun = 0
+    private var goldEver = 0
 
     private var left = 16f
     private var top = 10f
     private var scoreW = 0f
 
     /** [lives] ≥ 0 in a stage (shown with the stage id and the [stars] towards a life), −1 outside one. */
-    fun update(dt: Float, sim: GameSim, best: Int, reducedMotion: Boolean, lives: Int = -1, stars: Int = 0) {
+    fun update(dt: Float, sim: GameSim, best: Int, reducedMotion: Boolean, lives: Int = -1, stars: Int = 0, goldEver: Int = 0) {
+        goldRun = sim.stageRun?.goldMask ?: 0
+        this.goldEver = goldEver
         val sc = floor(sim.score).toInt()
         val d = floor(sim.dist).toInt()
         val shownBest = max(best, sc)
@@ -101,7 +106,24 @@ class Hud {
         if (stageId == null || livesX == 0f) return
         shapes.color(pal[Tok.BEAM]).heart(livesX + 6f, top + 48f, 6f)
         if (starsX > 0f) shapes.color(pal[Tok.SPRING]).star(starsX + 6f, top + 47.5f, 7f)
+        // the stage's three gold stars: taken now (gold), found before (faint), or not yet
+        if (goldX > 0f) {
+            for (i in 0 until 3) {
+                val cx = goldX + 6f + i * 15f
+                val bit = 1 shl i
+                when {
+                    goldRun and bit != 0 -> shapes.color(pal[Tok.STAR]).star(cx, top + 47.5f, 6.5f)
+                    goldEver and bit != 0 -> shapes.color(pal[Tok.STAR], 0.35f).star(cx, top + 47.5f, 6.5f)
+                    else -> {
+                        shapes.color(pal[Tok.MUTED], 0.6f).star(cx, top + 47.5f, 6.5f)
+                        shapes.color(pal[Tok.PAPER]).star(cx, top + 47.5f, 4f)
+                    }
+                }
+            }
+        }
     }
+
+    private var goldX = 0f
 
     /** Chip scale for the "bump" when the combo grows (CSS .bump: 1.25 with a 0.15 s transition). */
     private fun chipScale(): Float {
@@ -191,6 +213,7 @@ class Hud {
             text.line(small, livesText, livesX + 15f, top + 40f, 16f, pal[Tok.MUTED])
             starsX = livesX + 15f + text.width(small, livesText) + 12f
             text.line(small, starsText, starsX + 15f, top + 40f, 16f, pal[Tok.MUTED])
+            goldX = starsX + 15f + text.width(small, starsText) + 14f
         }
         val bar = barBox(wDp)
         text.line(fonts.get(Face.MONO_MEDIUM, 11f), "INK", bar.x - 8f, bar.y - 3f, 16f, pal[Tok.MUTED], align = Align.right)

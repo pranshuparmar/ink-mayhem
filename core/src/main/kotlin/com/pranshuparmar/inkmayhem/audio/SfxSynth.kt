@@ -114,6 +114,7 @@ object SfxSynth {
         "anchor", "hop", "boing", "boulder_boing", "snap", "erase", "speed_up", "rumble", "pickup", "pickup_high",
         "featherweight", "combo_lost", "death", "scratch",
         "stage_start", "checkpoint", "clear", "one_up", "game_over", "star", "life_lost", "squash", "pop", "bold", "shrink",
+        "gold", "power_end", "boss_hit", "boss_down",
     ) + (2..9).map { "chime_$it" } + (0..7).map { "star_$it" }
 
     /**
@@ -191,6 +192,12 @@ object SfxSynth {
         "pop" to tone(520.0, 0.14, Wave.SQUARE, 0.04, 1.8),
         "bold" to melody(Wave.SQUARE, 0.045, A4 to 0.05, C5_ to 0.05, E5_ to 0.05, A5_ to 0.05, C6 to 0.05, E6_ to 0.16),
         "shrink" to melody(Wave.SQUARE, 0.045, E6_ to 0.05, C6 to 0.05, A5_ to 0.05, E5_ to 0.05, A4 to 0.16),
+        // worlds: a gold star sparkles up an A major arpeggio; a power-up runs out with a falling
+        // pair; a boss hit is a low thump; a boss defeat is the clear fanfare's last bar, slower
+        "gold" to melody(Wave.SQUARE, 0.045, A5_ to 0.05, CS6 to 0.05, E6_ to 0.05, A6 to 0.05, CS6 * 2 to 0.05, E6_ * 2 to 0.2),
+        "power_end" to melody(Wave.TRIANGLE, 0.1, E5_ to 0.09, A4 to 0.2),
+        "boss_hit" to tone(110.0, 0.25, Wave.SQUARE, 0.1, 0.55),
+        "boss_down" to melody(Wave.SQUARE, 0.05, E5_ to 0.12, A5_ to 0.12, CS6 to 0.12, E6_ to 0.12, A6 to 0.5),
     ).apply {
         // combo chime: 660 + combo × 40 Hz, one file per combo level 2..9
         for (c in 2..9) put("chime_$c", tone(660.0 + c * 40.0, 0.1, Wave.SINE, 0.08, 1.2))

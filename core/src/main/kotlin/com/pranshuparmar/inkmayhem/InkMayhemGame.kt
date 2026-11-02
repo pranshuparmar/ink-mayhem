@@ -374,7 +374,12 @@ class InkMayhemGame(
             it.insets(frames.insetL, frames.insetT, frames.insetR, frames.insetB)
             it.frame(dt, now)
         }
-        pal = if (frames.dark) Palette.DARK else Palette.LIGHT
+        // World 5 is a midnight page whatever the system's theme
+        pal = when {
+            screen == Screen.STAGE && session?.stage?.theme == com.pranshuparmar.inkmayhem.game.Theme.MIDNIGHT -> Palette.MIDNIGHT
+            frames.dark -> Palette.DARK
+            else -> Palette.LIGHT
+        }
         val reduced = frames.reduced
         fx.reducedMotion = reduced
         sim.realTime = now
@@ -434,9 +439,9 @@ class InkMayhemGame(
         readout.update(now)
         toast.update(now, reduced)
         val ses = session
-        if (tutorial == null) hud.update(dt, ses?.sim ?: sim, settings.best, reduced, ses?.lives ?: -1, ses?.stars ?: 0)
+        if (tutorial == null) hud.update(dt, ses?.sim ?: sim, settings.best, reduced, ses?.lives ?: -1, ses?.stars ?: 0, goldEver)
         gauge.update(dt, active.drawing != null, reduced)
-        audio.music(musicWanted())
+        audio.music(musicWanted(), musicTheme())
         audio.update(dt)
 
         draw(now, reduced)
@@ -580,6 +585,7 @@ class InkMayhemGame(
         val ses = session
         when {
             hit === selectCard.play -> (nextStage() ?: Stages.ALL.first()).let(::startStage)
+            hit is StageSelectCard.WorldTab -> selectCard.show(hit.number)
             hit is StageDef -> startStage(hit)
             ses == null -> Unit
             hit === gameOverCard.again -> {
@@ -633,7 +639,11 @@ class InkMayhemGame(
     private var devToastShown = false
 
     /** [quick]: straight into play, no intro card (the game opening on 1-1). */
+    /** Gold stars found in the stage being played on earlier clears (read once per start). */
+    private var goldEver = 0
+
     private fun startStage(def: StageDef, quick: Boolean = false) {
+        goldEver = settings.gold(def.id)
         session?.sim?.dispose()
         val ss = GameSim(seed = 1, events = Events(saveBest = false), vwMetres = wDp / scale, vhMetres = hDp / scale)
         ss.scale = scale
@@ -655,11 +665,14 @@ class InkMayhemGame(
 
     private fun newBot(s: GameSim) = StageBot(s) { dev.wrongInk[it] ?: it }
 
-    /** The first page until it has been cleared once: the runner waits before each new thing. */
-    private fun firstRun(def: StageDef) = def === Stages.FIRST_PAGE && settings.stars(def.id) == 0
+    /** A world's first stage until it has been cleared once: the runner waits before each new thing. */
+    private fun firstRun(def: StageDef) = def.number == 1 && settings.stars(def.id) == 0
 
     private fun openSelect() {
         selectCard.refresh()
+        // on the world just played, or where play picks up
+        val at = session?.stage ?: nextStage() ?: Stages.ALL.last()
+        selectCard.show(Stages.worldOf(at).number)
         screen = Screen.SELECT
     }
 
@@ -693,6 +706,12 @@ class InkMayhemGame(
         if (tutorial != null || ses == null || screen != Screen.STAGE) return Audio.Music.STOPPED
         if (ses.phase != StageSession.Phase.INTRO && ses.phase != StageSession.Phase.PLAY) return Audio.Music.STOPPED
         return if (sheet.open || calibration.open || paused) Audio.Music.PAUSED else Audio.Music.PLAYING
+    }
+
+    /** The world's own tune; a boss fight has its own. */
+    private fun musicTheme(): String {
+        val ses = session ?: return Stages.WORLDS[0].music
+        return if (ses.sim.bossFight) BOSS_MUSIC else Stages.worldOf(ses.stage).music
     }
 
     /** Sounds for the session's moments: a lost life, game over, and a ding per star on the tally. */
@@ -1111,6 +1130,7 @@ class InkMayhemGame(
         const val STEP = 1f / 60f
         const val FINGER_TOAST = "Use the S Pen. Fingers don’t leave ink."
         const val TUNE_LATER = "For the best feel, tune your pen in settings."
+        const val BOSS_MUSIC = "boss"
         const val FIRST_STAR = "Stars! Every ${GameSim.STARS_PER_LIFE} is an extra life."
         const val READY_TOAST = "You’re ready. The lightest ink that works grows your combo."
         const val SNAP_BUZZ_MS = 12

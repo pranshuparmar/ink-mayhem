@@ -15,11 +15,14 @@ class StageSessionTest {
     class MapStore : StageStore {
         val stars = HashMap<String, Int>()
         val best = HashMap<String, Int>()
+        val gold = HashMap<String, Int>()
         override fun stars(id: String) = stars[id] ?: 0
         override fun best(id: String) = best[id] ?: 0
-        override fun record(id: String, stars: Int, score: Int) {
+        override fun gold(id: String) = gold[id] ?: 0
+        override fun record(id: String, stars: Int, score: Int, gold: Int) {
             this.stars[id] = maxOf(stars(id), stars)
             best[id] = maxOf(best(id), score)
+            this.gold[id] = gold(id) or gold
         }
     }
 
@@ -109,7 +112,7 @@ class StageSessionTest {
 
     @Test
     fun `a clean clear earns three stars, records the best and unlocks the next stage`() {
-        assertFalse(StageSession.unlocked(Stages.CELLAR, store))
+        assertFalse(StageSession.unlocked(Stages.next(Stages.FIRST_PAGE)!!, store))
         session.start(Stages.FIRST_PAGE)
         run(240f) { session.phase == Phase.CLEARED }
         val r = assertNotNull(session.result)
@@ -117,7 +120,7 @@ class StageSessionTest {
         assertTrue(r.newBest)
         assertEquals(r.total, store.best("1-1"))
         assertEquals(r.score + r.inkBonus, r.total)
-        assertTrue(StageSession.unlocked(Stages.CELLAR, store))
+        assertTrue(StageSession.unlocked(Stages.next(Stages.FIRST_PAGE)!!, store))
         // the 1-1 heart was picked up on the high road
         assertEquals(StageSession.START_LIVES + 1, session.lives)
     }
@@ -184,7 +187,7 @@ class StageSessionTest {
         assertEquals(StageSession.MAX_LIVES, session.lives)
         run(240f) { session.phase == Phase.CLEARED }
         assertTrue(session.next())
-        assertEquals(Stages.CELLAR, session.stage)
+        assertEquals(Stages.next(Stages.FIRST_PAGE)!!, session.stage)
         assertEquals(StageSession.MAX_LIVES, session.lives)
     }
 

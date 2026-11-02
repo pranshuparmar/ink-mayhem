@@ -26,79 +26,160 @@ internal fun drawStars(shapes: Shapes, pal: Palette, cx: Float, cy: Float, r: Fl
     }
 }
 
-/** World 1's stages as rows with their stars and best; locked ones until the one before is cleared. */
+/** Three small gold-star marks in a row from ([x], [cy]): found ones filled, the rest outlined. */
+internal fun drawGoldMarks(shapes: Shapes, pal: Palette, x: Float, cy: Float, r: Float, mask: Int, gap: Float) {
+    for (i in 0 until 3) {
+        val cx = x + r + i * gap
+        if (mask and (1 shl i) != 0) {
+            shapes.color(pal[Tok.STAR]).star(cx, cy, r)
+        } else {
+            shapes.color(pal[Tok.STAR], 0.55f).star(cx, cy, r)
+            shapes.color(pal[Tok.UI]).star(cx, cy, r * 0.55f)
+        }
+    }
+}
+
+/**
+ * The stage list: a notebook with a tab per world. Each of the world's stages is a row with its
+ * stars, gold stars and best; a stage is locked until the one before it is cleared, and a world
+ * until its first stage is open.
+ */
 class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
     val box = Box()
     /** Picks up where the player left off: the next stage not yet cleared. */
     val play = Box()
     val press = Press()
-    private val defs = Stages.ALL
-    private val rows = Array(defs.size) { Box() }
+    /** The world tabs' targets, 1-based by position. */
+    class WorldTab(val number: Int)
+    val tabs = Stages.WORLDS.map { WorldTab(it.number) }
+    private val tabBoxes = Array(tabs.size) { Box() }
+    /** The world on show. */
+    var world = 1
+        private set
+    private val all = Stages.ALL
+    private val rows = Array(MAX_ROWS) { Box() }
     // read from Preferences when the list opens (refresh), not on every frame or pen sample
-    private val open = BooleanArray(defs.size)
-    private val stars = IntArray(defs.size)
-    private val subs = Array(defs.size) { "" }
+    private val open = BooleanArray(all.size)
+    private val stars = IntArray(all.size)
+    private val gold = IntArray(all.size)
+    private val subs = Array(all.size) { "" }
+    private val worldOpen = BooleanArray(tabs.size)
+    private var title = ""
+    private var rowH = ROW_H
 
     fun refresh() {
-        for (i in defs.indices) {
-            open[i] = StageSession.unlocked(defs[i], store)
-            stars[i] = store.stars(defs[i].id)
-            val best = store.best(defs[i].id)
+        for (i in all.indices) {
+            open[i] = StageSession.unlocked(all[i], store)
+            stars[i] = store.stars(all[i].id)
+            gold[i] = store.gold(all[i].id)
+            val best = store.best(all[i].id)
             subs[i] = if (!open[i]) "LOCKED" else if (best > 0) "BEST ${Format.thousands(best)}" else "NOT CLEARED YET"
         }
+        for (w in Stages.WORLDS.indices) {
+            val first = Stages.WORLDS[w].stages.firstOrNull()
+            worldOpen[w] = first != null && open[all.indexOf(first)]
+        }
+        show(world)
     }
+
+    /** Shows world [n] (if it has any stages). */
+    fun show(n: Int) {
+        val w = Stages.WORLDS.firstOrNull { it.number == n } ?: return
+        world = n
+        title = "World ${w.number} · ${w.name}"
+    }
+
+    private val shown: List<StageDef> get() = Stages.WORLDS.first { it.number == world }.stages
 
     init {
         refresh()
     }
 
     fun layout(text: Text, f: Frame) {
-        val h = 20f + 36f + 12f + rows.size * (ROW_H + 8f) + 6f + 42f + 20f
-        box.set((f.wDp - f.cardW) / 2f + (f.padL - f.padR) / 2f, (f.hDp - h) / 2f, f.cardW, h)
-        var y = box.y + 20f + 36f + 12f
-        for (i in rows.indices) {
-            rows[i].set(box.x + 20f, y, box.w - 40f, ROW_H)
-            y += ROW_H + 8f
+        // five rows fit a landscape phone too: rows shrink to what the height allows
+        val avail = f.hDp - f.safeT - f.safeB - 24f
+        rowH = ((avail - FIXED_H) / MAX_ROWS - ROW_GAP).coerceIn(MIN_ROW_H, ROW_H)
+        val n = shown.size
+        val h = FIXED_H + n * (rowH + ROW_GAP)
+        box.set((f.wDp - f.cardW) / 2f + (f.padL - f.padR) / 2f, (f.hDp - h) / 2f + (f.safeT - f.safeB) / 2f, f.cardW, h)
+        var y = box.y + 20f + 34f + 10f
+        for (i in 0 until n) {
+            rows[i].set(box.x + 20f, y, box.w - 40f, rowH)
+            y += rowH + ROW_GAP
         }
         val bw = text.width(fonts.get(Face.UI_BOLD, 14f), "Play") + 48f
         play.set(box.right - 20f - bw, y + 6f, bw, 42f)
+        for (t in tabBoxes.indices) tabBoxes[t].set(box.x + 20f + t * (TAB + 6f), y + 6f + (42f - TAB) / 2f, TAB, TAB)
     }
 
-    /** The stage under (x, y) if it can be played, or [play]. */
+    /** The stage under (x, y) if it can be played, a world tab, or [play]. */
     fun targetAt(x: Float, y: Float): Any? {
         if (play.contains(x, y)) return play
-        for (i in rows.indices) if (rows[i].contains(x, y) && open[i]) return defs[i]
+        for (t in tabBoxes.indices) if (tabBoxes[t].contains(x, y) && worldOpen[t]) return tabs[t]
+        val list = shown
+        for (i in list.indices) {
+            val k = all.indexOf(list[i])
+            if (rows[i].contains(x, y) && open[k]) return list[i]
+        }
         return null
     }
 
     fun drawShapes(shapes: Shapes, pal: Palette, f: Frame) {
         shapes.color(pal[Tok.PAPER], 0.55f).rect(0f, 0f, f.wDp, f.hDp)
         Widgets.card(shapes, pal, box)
-        for (i in rows.indices) {
+        val list = shown
+        val big = rowH >= 50f
+        for (i in list.indices) {
             val b = rows[i]
-            Widgets.button(shapes, pal, b, primary = false, enabled = open[i], pressed = press.isPressed(defs[i]))
-            if (open[i]) drawStars(shapes, pal, b.right - 46f, b.y + b.h / 2f, 9f, stars[i], 21f)
+            val k = all.indexOf(list[i])
+            Widgets.button(shapes, pal, b, primary = false, enabled = open[k], pressed = press.isPressed(list[i]))
+            if (open[k]) {
+                drawStars(shapes, pal, b.right - 46f, b.y + b.h / 2f, if (big) 9f else 8f, stars[k], if (big) 21f else 18f)
+                drawGoldMarks(shapes, pal, b.x + 58f + subW[i] + 8f, b.y + b.h * 0.7f, 4.5f, gold[k], 11f)
+            }
+        }
+        for (t in tabBoxes.indices) {
+            val b = tabBoxes[t]
+            val sel = tabs[t].number == world
+            Widgets.button(shapes, pal, b, primary = sel, enabled = worldOpen[t], pressed = press.isPressed(tabs[t]))
         }
         Widgets.button(shapes, pal, play, primary = true, enabled = true, pressed = press.isPressed(play))
     }
 
+    /** Width of each row's subtitle, for placing its gold marks after it (measured in drawText). */
+    private val subW = FloatArray(MAX_ROWS)
+
     fun drawText(text: Text, pal: Palette) {
-        text.line(fonts.get(Face.HAND_BOLD, 34f), "World 1", box.x + 20f, box.y + 20f, 36f, pal[Tok.INK])
+        text.line(fonts.get(Face.HAND_BOLD, 30f), title, box.x + 20f, box.y + 20f, 34f, pal[Tok.INK])
         val idFont = fonts.get(Face.MONO_BOLD, 15f)
         val nameFont = fonts.get(Face.UI_BOLD, 16f)
         val small = fonts.get(Face.MONO_MEDIUM, 10.5f)
-        for (i in rows.indices) {
+        val list = shown
+        for (i in list.indices) {
             val b = rows[i]
-            val fg = if (open[i]) pal[Tok.UI_FG] else pal[Tok.MUTED]
-            text.line(idFont, defs[i].id, b.x + 14f, b.y, b.h, fg)
-            text.line(nameFont, defs[i].name, b.x + 58f, b.y + 9f, 20f, fg)
-            text.line(small, subs[i], b.x + 58f, b.y + 30f, 14f, pal[Tok.MUTED])
+            val k = all.indexOf(list[i])
+            val fg = if (open[k]) pal[Tok.UI_FG] else pal[Tok.MUTED]
+            text.line(idFont, list[i].id, b.x + 14f, b.y, b.h, fg)
+            text.line(nameFont, list[i].name, b.x + 58f, b.y + b.h * 0.14f, 20f, fg)
+            text.line(small, subs[k], b.x + 58f, b.y + b.h * 0.56f, 14f, pal[Tok.MUTED])
+            subW[i] = if (open[k]) text.width(small, subs[k]) else 0f
+        }
+        val tabFont = fonts.get(Face.MONO_BOLD, 14f)
+        for (t in tabBoxes.indices) {
+            val sel = tabs[t].number == world
+            Widgets.buttonLabel(text, tabFont, pal, tabBoxes[t], tabs[t].number.toString(), primary = sel, enabled = worldOpen[t])
         }
         Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 14f), pal, play, "Play", primary = true, enabled = true)
     }
 
     companion object {
         private const val ROW_H = 54f
+        private const val MIN_ROW_H = 40f
+        private const val ROW_GAP = 6f
+        private const val MAX_ROWS = 5
+        private const val TAB = 34f
+        /** Title, the gap under it, and the tabs and Play row. */
+        private const val FIXED_H = 20f + 34f + 10f + 6f + 42f + 18f
     }
 }
 
@@ -215,7 +296,7 @@ class ClearCard(private val fonts: Fonts) {
 
     fun layout(text: Text, f: Frame, r: StageSession.Result, t: Float) {
         hasNext = Stages.next(r.stage) != null
-        val h = 20f + 36f + 14f + 50f + 16f + 14f + 3 * 22f + 12f + 42f + 20f
+        val h = 20f + 36f + 14f + 50f + 16f + 14f + 4 * 22f + 12f + 42f + 20f
         box.set((f.wDp - f.cardW) / 2f + (f.padL - f.padR) / 2f, (f.hDp - h) / 2f, f.cardW, h)
         val font = fonts.get(Face.UI_BOLD, 14f)
         val y = box.bottom - 20f - 42f
@@ -264,6 +345,20 @@ class ClearCard(private val fonts: Fonts) {
         shapes.color(pal[Tok.PAPER], 0.55f).rect(0f, 0f, f.wDp, f.hDp)
         Widgets.card(shapes, pal, box)
         drawStars(shapes, pal, box.x + box.w / 2f, box.y + 20f + 36f + 14f + 25f, 22f, r.stars, STAR_GAP, starScale)
+        // gold stars: the row under the tally's heading, found ever (this clear's bright)
+        val gy = box.y + 20f + 36f + 14f + 50f + 8f + 14f + 8f + 3 * 22f + 11f
+        for (i in 0 until 3) {
+            val cx = box.right - 20f - 8f - (2 - i) * 22f
+            val bit = 1 shl i
+            when {
+                r.gold and bit != 0 -> shapes.color(pal[Tok.STAR]).star(cx, gy, 8.5f)
+                r.goldEver and bit != 0 -> shapes.color(pal[Tok.STAR], 0.4f).star(cx, gy, 8.5f)
+                else -> {
+                    shapes.color(pal[Tok.MUTED], 0.6f).star(cx, gy, 8.5f)
+                    shapes.color(pal[Tok.UI]).star(cx, gy, 5f)
+                }
+            }
+        }
         Widgets.button(shapes, pal, next, primary = true, enabled = true, pressed = press.isPressed(next))
         Widgets.button(shapes, pal, retry, primary = false, enabled = true, pressed = press.isPressed(retry))
         Widgets.button(shapes, pal, stages, primary = false, enabled = true, pressed = press.isPressed(stages))
@@ -300,6 +395,8 @@ class ClearCard(private val fonts: Fonts) {
         y += 22f
         text.line(mono, if (r.newBest && totalText.isNotEmpty()) TOTAL_BEST else TOTAL, x, y, 22f, if (r.newBest) pal[Tok.BEAM] else pal[Tok.MUTED])
         text.line(big, totalText, right, y, 22f, pal[Tok.INK], 1f, Align.right)
+        y += 22f
+        text.line(mono, GOLD, x, y, 22f, pal[Tok.MUTED])
         val font = fonts.get(Face.UI_BOLD, 14f)
         Widgets.buttonLabel(text, font, pal, next, if (hasNext) "Next" else "Stages", primary = true, enabled = true)
         Widgets.buttonLabel(text, font, pal, retry, "Retry", primary = false, enabled = true)
@@ -315,5 +412,6 @@ class ClearCard(private val fonts: Fonts) {
         private const val STAR_GAP = 96f
         private const val TOTAL = "TOTAL"
         private const val TOTAL_BEST = "TOTAL · NEW BEST"
+        private const val GOLD = "GOLD STARS"
     }
 }

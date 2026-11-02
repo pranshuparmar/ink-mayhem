@@ -34,9 +34,15 @@ class AssetsTest {
         assertEquals(MusicSynth.NAMES.toSet(), MusicSynth.all().keys)
         // eight bars at 168 bpm, to the sample
         assertEquals(252_000, MusicSynth.INK_RUSH.loopSamples)
-        var eighths = 0
-        for ((_, len) in MusicSynth.INK_RUSH.lead) eighths += len
-        assertEquals(64, eighths, "the melody fills the eight bars")
+        for ((name, theme) in MusicSynth.THEMES) {
+            var eighths = 0
+            for ((_, len) in theme.lead) eighths += len
+            assertEquals(64, eighths, "$name: the melody fills the eight bars")
+            assertEquals(8, theme.chords.size, "$name: a chord a bar")
+        }
+        // every world's tune exists, and the boss fights'
+        for (w in com.pranshuparmar.inkmayhem.game.Stages.WORLDS) assertTrue(w.music in MusicSynth.THEMES, w.name)
+        assertTrue("boss" in MusicSynth.THEMES)
     }
 
     @Test

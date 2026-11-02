@@ -29,6 +29,20 @@ class Palette private constructor(private val colors: Array<Color>) {
             Tok.BLOT to "6A3FB5", Tok.STAR to "E3A500",
         )
 
+        /**
+         * World 5's ink-soaked page, light mode or dark: deep blue-black paper drawn on in pale ink,
+         * the inks a little brighter than dark mode's so they glow.
+         */
+        val MIDNIGHT = of(
+            Tok.PAPER to "0B0F1E", Tok.RULE to "1B2340", Tok.MARGIN to "3A2440",
+            Tok.INK to "E8EEFF", Tok.GRAPHITE to "8F9BC2", Tok.ROCK to "141B33", Tok.DROP to "7FB0FF",
+            Tok.UI to "161D35", Tok.UI_FG to "E8EEFF", Tok.MUTED to "98A5C8", Tok.LINE to "2A3456",
+            Tok.ACCENT to "8FB0FF", Tok.ACCENT_FG to "0B0F1E",
+            Tok.ROPE to "6EE0A0", Tok.SPRING to "F5C04F", Tok.BEAM to "FF8078",
+            Tok.SHADOW to "00000099",
+            Tok.BLOT to "C3A6FF", Tok.STAR to "FFE07A",
+        )
+
         val DARK = of(
             Tok.PAPER to "121621", Tok.RULE to "222B3E", Tok.MARGIN to "4D2C36",
             Tok.INK to "DCE6FF", Tok.GRAPHITE to "8E99B2", Tok.ROCK to "1D2434", Tok.DROP to "7FA3FF",

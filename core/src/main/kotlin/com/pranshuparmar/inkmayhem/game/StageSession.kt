@@ -7,7 +7,9 @@ import kotlin.math.min
 interface StageStore {
     fun stars(id: String): Int
     fun best(id: String): Int
-    fun record(id: String, stars: Int, score: Int)
+    /** Gold stars ever found in a stage: a bit per index 0..2. */
+    fun gold(id: String): Int
+    fun record(id: String, stars: Int, score: Int, gold: Int)
 }
 
 /**
@@ -30,6 +32,9 @@ class StageSession(val sim: GameSim, private val store: StageStore) {
         val noDeaths: Boolean,
         val allLight: Boolean,
         val newBest: Boolean,
+        /** Gold stars taken on this clear, and all ever found in the stage (bits per index). */
+        val gold: Int,
+        val goldEver: Int,
     )
 
     lateinit var stage: StageDef
@@ -138,8 +143,8 @@ class StageSession(val sim: GameSim, private val store: StageStore) {
         val light = run.allLight
         val stars = 1 + (if (noDeaths) 1 else 0) + (if (light) 1 else 0)
         val newBest = total > store.best(stage.id)
-        store.record(stage.id, stars, total)
-        result = Result(stage, score, inkBonus, total, stars, noDeaths, light, newBest)
+        store.record(stage.id, stars, total, run.goldMask)
+        result = Result(stage, score, inkBonus, total, stars, noDeaths, light, newBest, run.goldMask, store.gold(stage.id))
         enter(Phase.CLEARED)
     }
 

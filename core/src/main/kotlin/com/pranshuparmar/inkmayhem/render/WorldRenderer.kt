@@ -89,7 +89,7 @@ class WorldRenderer(
         val off = (((-camY * scale) % gap) + gap) % gap
         val offX = (((-camX * scale) % gap) + gap) % gap
         when (theme) {
-            Theme.PAGE, Theme.CASTLE -> {
+            Theme.PAGE, Theme.CASTLE, Theme.MIDNIGHT -> {
                 var y = off
                 while (y < hDp) {
                     shapes.rect(0f, floor(y), wDp, 1f)
@@ -187,6 +187,7 @@ class WorldRenderer(
         drawFlags(sim, pal, px, behind = false)
         drawDrops(sim, pal, vx0, vx1, px)
         drawStars(sim, pal, vx0, vx1)
+        drawGolds(sim, pal, vx0, vx1, px)
         drawStrokes(sim, pal, tint, vx0, vx1, px)
         drawLiveStroke(sim, pal, tint, px)
         drawBlots(sim, pal, vx0, vx1, px)
@@ -807,10 +808,22 @@ class WorldRenderer(
         val t = sim.simT
         shapes.color(pal[Tok.STAR])
         sim.stars.fastEach { st ->
-            if (st.taken || st.x < vx0 || st.x > vx1) return@fastEach
+            if (st.taken || st.hidden || st.x < vx0 || st.x > vx1) return@fastEach
             val bob = sin(t * 3f + st.phase) * 0.06f
             val tw = 1f + 0.12f * sin(t * 5f + st.phase * 2f)
             shapes.star(st.x, st.y + bob, 0.27f * tw, 0.48f)
+        }
+    }
+
+    /** Gold stars: bigger, outlined, with a turning sparkle ring. */
+    private fun drawGolds(sim: GameSim, pal: Palette, vx0: Float, vx1: Float, px: Float) {
+        val t = sim.simT
+        sim.golds.fastEach { g ->
+            if (g.taken || g.hidden || g.x < vx0 || g.x > vx1) return@fastEach
+            val bob = sin(t * 2.4f + g.index) * 0.08f
+            shapes.color(pal[Tok.INK], 0.85f).star(g.x, g.y + bob, 0.5f, 0.5f)
+            shapes.color(pal[Tok.STAR]).star(g.x, g.y + bob, 0.44f, 0.5f)
+            shapes.color(pal[Tok.STAR], 0.5f + 0.3f * sin(t * 6f)).ring(g.x, g.y + bob, 0.7f, 1.4f * px, 3f * px, 4f * px)
         }
     }
 

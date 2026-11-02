@@ -29,7 +29,7 @@ class StageTest {
 
     @Test
     fun `spring under the cellar's spiked ceilings is fatal`() {
-        val p = StagePlay(Stages.CELLAR, inkFor = { if (it == Ink.ROPE) Ink.SPRING else it })
+        val p = StagePlay(World2.CELLAR_DOOR, inkFor = { if (it == Ink.ROPE) Ink.SPRING else it })
         try {
             assertEquals(GameState.DEAD, p.play(240f))
             assertEquals(DeathKind.SPIKED, p.sim.death?.kind, p.summary)
@@ -40,7 +40,7 @@ class StageTest {
 
     @Test
     fun `rope over Up High's long gap falls in`() {
-        val p = StagePlay(Stages.UP_HIGH, inkFor = { if (it == Ink.BEAM) Ink.ROPE else it })
+        val p = StagePlay(World3.CLOUD_STEPS, inkFor = { if (it == Ink.BEAM) Ink.ROPE else it })
         try {
             assertEquals(GameState.DEAD, p.play(240f))
             assertEquals(DeathKind.FELL, p.sim.death?.kind, p.summary)

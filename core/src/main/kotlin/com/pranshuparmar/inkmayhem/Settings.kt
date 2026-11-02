@@ -77,9 +77,12 @@ class Settings(private val prefs: Preferences) : StageStore {
 
     override fun best(id: String): Int = prefs.getInteger("best.$id", 0)
 
-    override fun record(id: String, stars: Int, score: Int) = put {
+    override fun gold(id: String): Int = prefs.getInteger("gold.$id", 0)
+
+    override fun record(id: String, stars: Int, score: Int, gold: Int) = put {
         putInteger("stars.$id", maxOf(stars(id), stars))
         putInteger("best.$id", maxOf(best(id), score))
+        putInteger("gold.$id", gold(id) or gold)
     }
 
     private inline fun put(block: Preferences.() -> Unit) {

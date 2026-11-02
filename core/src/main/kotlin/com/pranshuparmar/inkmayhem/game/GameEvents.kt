@@ -10,6 +10,8 @@ enum class Sfx {
     STAGE_START, CHECKPOINT, CLEAR, ONE_UP, GAME_OVER, STAR,
     // slice 1: a lost life, Blots, doodle boxes, the marker cap; star trails use [STAR_TRAIL] variants
     LIFE_LOST, SQUASH, POP, BOLD, SHRINK, STAR_TRAIL,
+    // worlds: a gold star, a power-up wearing off, a boss hit and its defeat
+    GOLD, POWER_END, BOSS_HIT, BOSS_DOWN,
 }
 
 /**
@@ -52,6 +54,9 @@ interface GameEvents {
 
     /** Stages: a star was taken (every [GameSim.STARS_PER_LIFE] is a life). */
     fun star() {}
+
+    /** Stages: gold star [index] (0..2) was taken. */
+    fun goldStar(index: Int) {}
 
     object None : GameEvents
 }

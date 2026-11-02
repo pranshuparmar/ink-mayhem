@@ -64,6 +64,7 @@ class GameSim(
     val seesaws = ArrayList<Seesaw>()
     /** Stage only: star trails, Blots, doodle boxes, the marker caps they pop and the doodled hints. */
     val stars = ArrayList<Star>()
+    val golds = ArrayList<GoldStar>()
     val blots = ArrayList<Blot>()
     val boxes = ArrayList<DoodleBox>()
     val caps = ArrayList<Cap>()
@@ -148,6 +149,9 @@ class GameSim(
     /** The tuning gate the last finished stroke was drawn at, or null. */
     var lastGate: Gate? = null
         private set
+    /** A boss arena has closed behind the runner and its boss is still up (the boss tune plays). */
+    var bossFight = false
+        private set
     /** The gate the runner is stopping or stopped at, waiting for a stroke, or null. */
     var waitingAt: Gate? = null
         private set
@@ -192,15 +196,18 @@ class GameSim(
         val judged = IntArray(hazardCount)
         private val cpJudged = IntArray(hazardCount)
         var drops = 0
+        /** Gold stars taken this attempt (bit per index), and at the checkpoint. */
+        var goldMask = 0
+        private var cpGold = 0
 
         internal fun save(sim: GameSim, index: Int) {
             reached = index
-            cpScore = sim.score; cpCombo = sim.combo; cpInk = sim.inkLeft; cpDrops = drops
+            cpScore = sim.score; cpCombo = sim.combo; cpInk = sim.inkLeft; cpDrops = drops; cpGold = goldMask
             judged.copyInto(cpJudged)
         }
 
         internal fun restore(sim: GameSim) {
-            sim.score = cpScore; sim.combo = cpCombo; sim.inkLeft = cpInk; drops = cpDrops
+            sim.score = cpScore; sim.combo = cpCombo; sim.inkLeft = cpInk; drops = cpDrops; goldMask = cpGold
             cpJudged.copyInto(judged)
         }
 
@@ -312,7 +319,7 @@ class GameSim(
         ink.world.setContactListener(contacts)
         blocks.clear(); drops.clear(); notes.clear(); boulders.clear()
         ceilings.clear(); hazards.clear(); spikeStrips.clear(); lifts.clear(); seesaws.clear()
-        stars.clear(); blots.clear(); boxes.clear(); caps.clear(); gates.clear()
+        stars.clear(); golds.clear(); blots.clear(); boxes.clear(); caps.clear(); gates.clear()
         blotHits.clear(); blotHitBy.clear(); pendingBox = null
         starsTaken = 0; squashed = 0; starStep = -1; lastStarT = -10f
         mood = Mood.CALM; bounceAt = -10f; happyUntil = -10f; ouchAt = -10f; lastGate = null
@@ -393,10 +400,14 @@ class GameSim(
                 ItemKind.HIGH_DROP -> Drop(k.x, k.y, HIGH_DROP_INK, true, fx.nextFloat() * 6f)
                 ItemKind.HEART -> Drop(k.x, k.y, 0f, true, fx.nextFloat() * 6f, heart = true)
                 ItemKind.STAR -> {
-                    stars += Star(k.x, k.y, fx.nextFloat() * 6f)
+                    stars += Star(k.x, k.y, fx.nextFloat() * 6f, k.hidden)
                     continue
                 }
-                ItemKind.CAP -> continue // only doodle boxes hold caps
+                ItemKind.GOLD -> {
+                    golds += GoldStar(k.x, k.y, golds.size, k.hidden)
+                    continue
+                }
+                else -> continue // power-ups only come out of doodle boxes
             }
         }
         for (k in l.blots) {
@@ -425,6 +436,8 @@ class GameSim(
         boxes.fastEach { if (it.rect.right < sx) it.used = true }
         val run = keep ?: StageRun(def, l.hazards.size)
         if (keep != null) run.restore(this)
+        // gold stars taken before the checkpoint stay taken
+        golds.fastEach { if (run.goldMask and (1 shl it.index) != 0) it.taken = true }
         stageRun = run
         runnerHeld = true
         camFocusX = Float.NaN
@@ -1173,9 +1186,20 @@ class GameSim(
     }
 
     private fun takeStars(px: Float, py: Float) {
+        golds.fastEach { gs ->
+            if (gs.taken || gs.hidden || hypot(gs.x - px, gs.y - py) > runner.r + GOLD_R) return@fastEach
+            gs.taken = true
+            stageRun?.let { it.goldMask = it.goldMask or (1 shl gs.index) }
+            score += GOLD_POINTS
+            happyUntil = simT + HAPPY_S * 2f
+            events.burst(gs.x, gs.y, 18, 2.6f, Tok.STAR)
+            events.pop(gs.x, gs.y - 1f, "Gold star! +$GOLD_POINTS", Tok.STAR)
+            events.sound(Sfx.GOLD)
+            events.goldStar(gs.index)
+        }
         val reach = runner.r + STAR_R
         stars.fastEach { st ->
-            if (st.taken || kotlin.math.abs(st.x - px) > reach || hypot(st.x - px, st.y - py) > reach) return@fastEach
+            if (st.taken || st.hidden || kotlin.math.abs(st.x - px) > reach || hypot(st.x - px, st.y - py) > reach) return@fastEach
             st.taken = true
             // taken close together, each rings one note higher (eight in all)
             starStep = if (simT - lastStarT < STREAK_S) min(STAR_NOTES - 1, starStep + 1) else 0
@@ -1512,6 +1536,7 @@ class GameSim(
         drops.removeAll { it.taken || it.x <= lim }
         notes.removeAll { it.x <= lim - 10f }
         stars.removeAll { it.taken || it.x <= lim }
+        golds.removeAll { it.taken || it.x <= lim }
         blots.removeAll { b ->
             if (b.dead) b.sx < lim
             else (b.body.position.x < lim).also { if (it) ink.destroyBody(b.body) }
@@ -1563,6 +1588,9 @@ class GameSim(
         const val STAR_POINTS = 20
         const val STREAK_S = 0.9f
         const val STAR_NOTES = 8
+        /** Gold stars: pickup radius and points. */
+        const val GOLD_R = 0.5f
+        const val GOLD_POINTS = 250
         /** Every this many stars is an extra life. */
         const val STARS_PER_LIFE = 50
         /** Blots: size, walking speed, how near they wake, points, and the stomp's hop (m/s, up). */
