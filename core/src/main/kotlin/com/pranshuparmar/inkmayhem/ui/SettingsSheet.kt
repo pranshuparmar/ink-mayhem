@@ -18,13 +18,9 @@ class SettingsSheet(
     private val onRecalibrate: () -> Unit,
     private val onHowToPlay: () -> Unit,
     private val onChanged: () -> Unit,
-    private val onQuit: () -> Unit = {},
     /** Debug builds that record input: "Share input recording". */
     private val onShareRecording: (() -> Unit)? = null,
 ) {
-    /** Show "Stage list" (during a stage). */
-    var showQuit = false
-
     private class Option(val title: String, val detail: String, val get: () -> Boolean, val set: (Boolean) -> Unit) {
         val box = Box()
     }
@@ -34,7 +30,7 @@ class SettingsSheet(
 
     private val options = buildList {
         add(Option("Sound", "Pen scratch, snaps, bounces", { settings.sound }, { settings.sound = it }))
-        add(Option("Music", "Ink Rush, while you play a stage", { settings.music }, { settings.music = it }))
+        add(Option("Music", "Each world's theme, and the title tune", { settings.music }, { settings.music = it }))
         add(Option("Colour ink by type", "Rope green, spring amber, beam red", { settings.tint }, { settings.tint = it }))
         add(Option("Pen readout", "Pointer type, pressure, buttons, hover rate", { settings.penReadout }, { settings.penReadout = it }))
         add(Option("Haptics", "A short buzz on snaps and crashes", { settings.haptics }, { settings.haptics = it }))
@@ -45,7 +41,6 @@ class SettingsSheet(
     }
     private val card = Box()
     private val howTo = Box()
-    private val quit = Box()
     private val share = Box()
     private val recal = Box()
     private val done = Box()
@@ -64,9 +59,8 @@ class SettingsSheet(
     fun layout(text: Text, f: Frame) {
         val rowH = 10f + 19f + 16f + 10f
         val n = options.size
-        val quitH = if (showQuit) 42f + 10f else 0f
         val shareH = if (onShareRecording != null) 42f + 10f else 0f
-        fun height(rows: Int) = 20f + rows * rowH + (rows - 1) * 4f + 4f + 10f + quitH + shareH + 42f + f.safeB + 18f
+        fun height(rows: Int) = 20f + rows * rowH + (rows - 1) * 4f + 4f + 10f + shareH + 42f + f.safeB + 18f
         // too tall for the screen (landscape, debug rows): the options go into two columns
         val cols = if (height(n) > f.hDp - f.safeT && f.wDp >= 640f) 2 else 1
         val rows = (n + cols - 1) / cols
@@ -78,12 +72,6 @@ class SettingsSheet(
             o.box.set(card.x + 20f + (i % cols) * (colW + COL_GAP), card.y + 20f + (i / cols) * (rowH + 4f), colW, rowH)
         }
         var y = card.y + 20f + rows * (rowH + 4f)
-        if (showQuit) {
-            quit.set(card.x + 20f, y + 10f, card.w - 40f, 42f)
-            y += 42f + 10f
-        } else {
-            quit.set(0f, 0f, 0f, 0f)
-        }
         if (onShareRecording != null) {
             share.set(card.x + 20f, y + 10f, card.w - 40f, 42f)
             y += 42f + 10f
@@ -119,10 +107,6 @@ class SettingsSheet(
                     hide()
                     onHowToPlay()
                 }
-                quit -> {
-                    hide()
-                    onQuit()
-                }
                 share -> {
                     hide()
                     onShareRecording?.invoke()
@@ -141,7 +125,6 @@ class SettingsSheet(
         if (done.contains(x, y)) return done
         if (recal.contains(x, y)) return recal
         if (howTo.contains(x, y)) return howTo
-        if (showQuit && quit.contains(x, y)) return quit
         if (onShareRecording != null && share.contains(x, y)) return share
         return options.firstOrNull { it.box.contains(x, y) }
     }
@@ -154,7 +137,6 @@ class SettingsSheet(
             Widgets.checkbox(shapes, pal, o.box.x + 2f, o.box.y + (o.box.h - 20f) / 2f, o.get())
         }
         Widgets.button(shapes, pal, howTo, primary = false, enabled = true, pressed = press.isPressed(howTo))
-        if (showQuit) Widgets.button(shapes, pal, quit, primary = false, enabled = true, pressed = press.isPressed(quit))
         if (onShareRecording != null) Widgets.button(shapes, pal, share, primary = false, enabled = true, pressed = press.isPressed(share))
         Widgets.button(shapes, pal, recal, primary = false, enabled = true, pressed = press.isPressed(recal))
         Widgets.button(shapes, pal, done, primary = true, enabled = true, pressed = press.isPressed(done))
@@ -170,7 +152,6 @@ class SettingsSheet(
         }
         val font = fonts.get(Face.UI_BOLD, 14f)
         Widgets.buttonLabel(text, font, pal, howTo, HOW_TO_PLAY, primary = false, enabled = true)
-        if (showQuit) Widgets.buttonLabel(text, font, pal, quit, "Stage list", primary = false, enabled = true)
         if (onShareRecording != null) Widgets.buttonLabel(text, font, pal, share, "Share input recording", primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, recal, RECALIBRATE, primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, done, "Done", primary = true, enabled = true)

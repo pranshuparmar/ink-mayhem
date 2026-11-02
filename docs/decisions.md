@@ -388,3 +388,28 @@ They also asked for each world to have its own music.
   counts as a stomp, so a runner meeting the Big Smudge as a spring threw it up was stomped
   upwards every step, all the way into the spikes. A boss flying up now brushes the runner
   aside.
+
+
+## 27. A title screen and a pause screen
+
+Slice 1 opened the game straight into 1-1, so a newcomer had something to do in the first
+seconds. On a phone that read the other way: opening the app threw the player straight in,
+with nothing to say what it was or how to stop. The owner asked for a greeting and a pause
+screen.
+
+- **The title screen is the way in, not a lobby.** One big button picks up at the first stage
+  not yet cleared (so a newcomer still starts 1-1 with a single tap, now with its name card
+  first); the stage list, How to play and Settings sit under it. The three inks are drawn on
+  it, so the one idea of the game is on the first screen.
+- **Pausing holds everything.** The sim stops stepping, the music holds its place and the pen
+  lays no ink. A stroke half drawn is let go first, so pausing never leaves wet ink hanging.
+- **A countdown back in.** The player's pen is off the screen while paused; restarting the
+  runner at once would cost them the next obstacle. Three half-second beats give the hand time
+  to come back.
+- **One button, two jobs.** The top-right button pauses in a stage (two bars) and opens
+  Settings elsewhere (⋯), so the HUD doesn't grow; Settings moved into the pause screen, and the
+  settings sheet lost its "Stage list" button.
+- **Android back is gentle.** In a stage it pauses instead of quitting, on the pause screen it
+  resumes, on the stage list it goes to the title, and only the title leaves the app.
+- **Recordings** now start on the title screen, so ones made before this don't replay
+  identically (they began in a stage).

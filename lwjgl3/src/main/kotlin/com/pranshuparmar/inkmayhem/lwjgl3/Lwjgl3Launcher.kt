@@ -32,7 +32,7 @@ import java.util.zip.Deflater
  * Options: --landscape, --size WxH (dp), --density D, --dark, --reduced-motion,
  *          --autoplay (the correct-ink bot plays), --wrong-ink TUNNEL=SPRING, --seed N, --settings,
  *          --calibration, --skip-calibration, --tutorial LESSON (1-based), --skip-tutorial,
- *          --stage 1-2 (with --autoplay its solution plays), --select, --speed N,
+ *          --stage 1-2 (with --autoplay its solution plays), --select, --pause-at seconds, --speed N,
  *          --rotate-after seconds, --demo-draw, --demo-tune LINES (with --calibration),
  *          --screenshot out.png --after seconds,
  *          --record out.txt (an input recording, as debug builds make on Android),
@@ -67,6 +67,7 @@ private fun devOptions(opts: Options, seed: Long?) = DevOptions(
     speed = opts.speed,
     wrongInk = opts.wrongInk,
     toast = opts.toast,
+    pauseAt = opts.pauseAt,
 )
 
 private class Options(args: Array<String>) {
@@ -88,6 +89,7 @@ private class Options(args: Array<String>) {
     val openSelect = "--select" in list
     val speed = value("--speed")?.toFloat() ?: 1f
     val toast = value("--toast")
+    val pauseAt = value("--pause-at")?.toFloat()
     /** e.g. --wrong-ink ROPE=SPRING */
     val wrongInk = value("--wrong-ink")?.split(',')?.associate {
         val (a, b) = it.split('=')

@@ -78,8 +78,14 @@ previous one if both were signed with the same debug key. CI keeps one (see
 [Debug signing](#debug-signing)); if Android still says the app conflicts, uninstall the old one
 first, which clears its best score, calibration and tutorial progress.
 
-The game opens **straight into play**: 1-1 is already running when it starts (later launches
-pick up at the first stage not yet cleared). A short handwritten note introduces each new thing
+The game opens on its **title screen**: the name, a reminder of the three inks, and **Start**
+(**Play** once something is cleared, naming the stage it picks up at: the first not yet
+cleared), **Stages**, **How to play** and **Settings**. The stage list has a **Menu** button
+back to it. In a stage the button at the top right **pauses**: Resume (the runner is counted
+back in, 3‑2‑1), Restart, Settings or Stage list. Android back pauses too (and on the pause
+screen resumes), and so does leaving the app. The title and the stage list play Ink Rush.
+
+Each stage opens with its name and the lives left. A short handwritten note introduces each new thing
 just before it. The first three obstacles each ask for one ink with a dotted guide and a word:
 a rope gap, a spring wall and a beam chasm. On a first run (until 1-1 has been cleared once)
 the runner stops before each new thing, those three, the first Blot and the doodle box, and
@@ -88,18 +94,19 @@ stop stay hidden, so one thing comes at a time. Every world's first stage does t
 that world's new things on its first run (the ink tide holds still while the runner waits). Until the pen has been tuned, a stroke drawn at
 one of the three is that ink whatever the pressure, and the pressures of those three strokes
 **tune the pen** (if they rise from rope to beam). Each stroke becomes
-one ink, from the pressure it settles at once the pen has landed. The ⋯ menu has **Tune your
-pen** (draw a rope, a spring and a beam line along a guide, then try a few strokes), **How to
-play** (four short lessons on rope, spring, beam and erasing), **Music**, the **Stage list**
-(a notebook with a tab per world), and the **Pen readout** (tool type, raw and normalized
-pressure, buttons, tilt, hover and event rates) for checking the S Pen.
+one ink, from the pressure it settles at once the pen has landed. **Settings** (on the title,
+the pause screen, or ⋯ on the stage list) has **Tune your pen** (draw a rope, a spring and a
+beam line along a guide, then try a few strokes), **How to play** (four short lessons on rope,
+spring, beam and erasing), **Music**, and the **Pen readout** (tool type, raw and normalized
+pressure, buttons, tilt, hover and event rates) for checking the S Pen. The **stage list** is a
+notebook with a tab per world.
 
 ### Sending a recording
 
-Debug builds record every session's input from launch (⋯ → **Record input**, on by default
+Debug builds record every session's input from launch (Settings → **Record input**, on by default
 and shown only in debug builds; off stops recording at once, on starts at the next launch): each frame's clock and every pen sample
 (position, pressure, tilt, buttons), plus notes on what happened (strokes, the tutorial's hints,
-deaths, toasts, pen-tuning lines). When something goes wrong, open ⋯ → **Share input
+deaths, toasts, pen-tuning lines). When something goes wrong, open Settings → **Share input
 recording** (shown only while recording): it saves a copy to **Downloads** and opens the share
 sheet, so you can attach it in a chat or send it anywhere. The last five sessions are kept in the app's storage. A
 recording holds the device model, Android version, app version and settings at launch, and
@@ -132,7 +139,7 @@ For fast iteration with a mouse (`lwjgl3` module):
 
 | Option | |
 |---|---|
-| *(none)* | The mouse is a mouse: like a finger on Android, it only draws with **Allow finger and mouse** on (⋯ menu). |
+| *(none)* | The mouse is a mouse: like a finger on Android, it only draws with **Allow finger and mouse** on (Settings). |
 | `--emulate-pen` | The mouse acts as an S Pen. Keys `1` / `2` / `3` give light / normal / hard pressure; the right button is the side button. |
 | `--autoplay` | Each stage's scripted solution plays it, then the next. |
 | `--wrong-ink ROPE=SPRING` | The bot draws the second ink wherever its solution has the first, to reach a death. |
@@ -141,7 +148,8 @@ For fast iteration with a mouse (`lwjgl3` module):
 | `--settings`, `--calibration` | Open the settings sheet or pen tuning at start. |
 | `--demo-tune N` | With `--calibration`: draws N tuning lines with a light pen's pressures (4 adds a free stroke). |
 | `--tutorial N` | Open the tutorial at lesson N (1–4). |
-| `--stage 1-2`, `--select` | Start straight into a stage (with `--autoplay`, its scripted solution plays it), or open the stage list. |
+| `--stage 1-2`, `--select` | Start straight into a stage (with `--autoplay`, its scripted solution plays it), or open the stage list, instead of the title screen. |
+| `--pause-at S` | Pause the stage S seconds in (screenshots of the pause screen). |
 | `--speed N` | Run the game N times faster (to screenshot late moments). |
 | `--rotate-after S` | Swap width and height after S seconds, like rotating the phone mid-run. |
 | `--screenshot out.png --after S` | Save a screenshot after S seconds and quit. |

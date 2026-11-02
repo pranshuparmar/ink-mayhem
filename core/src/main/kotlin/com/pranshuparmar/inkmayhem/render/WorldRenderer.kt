@@ -63,9 +63,10 @@ class WorldRenderer(
      * [alpha] (0..1) is how far the frame sits between the previous and the latest sim tick: moving
      * bodies and the camera are interpolated so 120 Hz displays scroll smoothly over a 60 Hz sim.
      */
+    /** [pageOnly]: just the paper (behind the title screen and the stage list). */
     fun render(
         sim: GameSim, fx: Fx, pal: Palette, tint: Boolean, uiCam: OrthographicCamera,
-        wDp: Float, hDp: Float, scale: Float, density: Float, alpha: Float,
+        wDp: Float, hDp: Float, scale: Float, density: Float, alpha: Float, pageOnly: Boolean = false,
     ) {
         this.alpha = alpha
         val px = 1f / scale // one dp in metres
@@ -122,6 +123,7 @@ class WorldRenderer(
         }
         // (the POC's fixed red margin line is left out: it read as a line chasing the runner)
         shapes.end()
+        if (pageOnly) return
 
         // notes in the margin hand
         text.batch.projectionMatrix = uiCam.combined

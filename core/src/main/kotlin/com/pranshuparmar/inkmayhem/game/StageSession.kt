@@ -58,11 +58,8 @@ class StageSession(val sim: GameSim, private val store: StageStore) {
     var stars = 0
         private set
 
-    /**
-     * Starts [def]. [quick] skips the intro card: the runner is off at once (the game opening
-     * straight into play).
-     */
-    fun start(def: StageDef, freshLives: Boolean = true, quick: Boolean = false) {
+    /** Starts [def] with its intro card. */
+    fun start(def: StageDef, freshLives: Boolean = true) {
         stage = def
         if (freshLives) {
             lives = START_LIVES
@@ -72,13 +69,7 @@ class StageSession(val sim: GameSim, private val store: StageStore) {
         result = null
         firstIntro = true
         sim.loadStage(def, fromCheckpoint = false)
-        if (quick) {
-            firstIntro = false
-            sim.runnerHeld = false
-            enter(Phase.PLAY)
-        } else {
-            enter(Phase.INTRO)
-        }
+        enter(Phase.INTRO)
     }
 
     /** A star was taken. Returns true when it made an extra life. */

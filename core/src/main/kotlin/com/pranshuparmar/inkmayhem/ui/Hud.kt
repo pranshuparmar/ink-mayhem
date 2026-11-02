@@ -21,7 +21,10 @@ import kotlin.math.min
 class Hud {
     /** The right-hand cluster (meter + button) swallows pen-downs, as in the POC. */
     val rightArea = Box()
+    /** Settings on the stage list; in a stage it is the pause button. */
     val settingsButton = Box()
+    /** The stage list's way back to the title screen. */
+    val backButton = Box()
     private val chip = Box()
 
     private var scoreText = "0"
@@ -86,6 +89,7 @@ class Hud {
         val comboW = text.width(fonts.get(Face.MONO_BOLD, 16f), comboText)
         chip.set(left + scoreW + 10f, top + (40f - 27f) / 2f, comboW + 18f + 3f, 27f)
         settingsButton.set(right - 40f, top, 40f, 40f)
+        backButton.set(left, top, text.width(fonts.get(Face.UI_BOLD, 14f), BACK) + 44f, 40f)
         val barW = (wDp * 0.26f).coerceIn(80f, 160f)
         val labelW = text.width(fonts.get(Face.MONO_MEDIUM, 11f), "INK")
         val meterW = labelW + 8f + barW
@@ -155,10 +159,17 @@ class Hud {
         shapes.color(pal[Tok.INK]).circle(rx, y + 2f, 5f)
     }
 
-    /** [full] = false on the stage list: only the settings button. */
-    fun drawShapes(shapes: Shapes, pal: Palette, wDp: Float, ink: Float, combo: Int, pressedSettings: Boolean, full: Boolean = true) {
+    /**
+     * [full] = false on the stage list: only the settings button, and the [back] button to the title.
+     * [pause]: the right-hand button pauses the stage (two bars) instead of opening settings (⋯).
+     */
+    fun drawShapes(
+        shapes: Shapes, pal: Palette, wDp: Float, ink: Float, combo: Int, pressedSettings: Boolean, full: Boolean = true,
+        pause: Boolean = false, back: Boolean = false, pressedBack: Boolean = false,
+    ) {
         if (!full) {
-            drawSettingsButton(shapes, pal, pressedSettings)
+            if (back) drawBackButton(shapes, pal, pressedBack)
+            drawSettingsButton(shapes, pal, pressedSettings, pause)
             return
         }
         // combo chip
@@ -185,16 +196,37 @@ class Hud {
                 shapes.roundRect(bar.x, bar.y + (5f - fw / 2f).coerceAtLeast(0f), fw, min(bar.h, fw), fw / 2f)
             }
         }
-        drawSettingsButton(shapes, pal, pressedSettings)
+        drawSettingsButton(shapes, pal, pressedSettings, pause)
     }
 
-    private fun drawSettingsButton(shapes: Shapes, pal: Palette, pressedSettings: Boolean) {
+    private fun drawSettingsButton(shapes: Shapes, pal: Palette, pressedSettings: Boolean, pause: Boolean) {
         val b = settingsButton
         shapes.color(pal[Tok.LINE]).circle(b.x + 20f, b.y + 20f, 20f)
         shapes.color(pal[Tok.UI]).circle(b.x + 20f, b.y + 20f, 19f)
         if (pressedSettings) shapes.color(pal[Tok.INK], 0.08f).circle(b.x + 20f, b.y + 20f, 20f)
         shapes.color(pal[Tok.UI_FG])
-        for (i in -1..1) shapes.circle(b.x + 20f + i * 5.5f, b.y + 20f, 1.7f)
+        if (pause) {
+            shapes.roundRect(b.x + 20f - 6f, b.y + 13f, 4.5f, 14f, 1.5f)
+            shapes.roundRect(b.x + 20f + 1.5f, b.y + 13f, 4.5f, 14f, 1.5f)
+        } else {
+            for (i in -1..1) shapes.circle(b.x + 20f + i * 5.5f, b.y + 20f, 1.7f)
+        }
+    }
+
+    private fun drawBackButton(shapes: Shapes, pal: Palette, pressed: Boolean) {
+        val b = backButton
+        shapes.color(pal[Tok.LINE]).roundRect(b.x, b.y, b.w, b.h, 20f)
+        shapes.color(pal[Tok.UI]).roundRect(b.x + 1f, b.y + 1f, b.w - 2f, b.h - 2f, 19f)
+        if (pressed) shapes.color(pal[Tok.INK], 0.08f).roundRect(b.x, b.y, b.w, b.h, 20f)
+        shapes.color(pal[Tok.UI_FG])
+        shapes.capsule(b.x + 22f, b.y + 14f, b.x + 16f, b.y + 20f, 2.4f)
+        shapes.capsule(b.x + 16f, b.y + 20f, b.x + 22f, b.y + 26f, 2.4f)
+    }
+
+    /** The back button's label (stage list only). */
+    fun drawBackText(text: Text, fonts: Fonts, pal: Palette) {
+        val b = backButton
+        text.line(fonts.get(Face.UI_BOLD, 14f), BACK, b.x + 32f, b.y, b.h, pal[Tok.UI_FG])
     }
 
     fun drawText(text: Text, fonts: Fonts, pal: Palette, wDp: Float, combo: Int, full: Boolean = true) {
@@ -221,6 +253,7 @@ class Hud {
 
     companion object {
         private const val BUMP_S = 0.31f
+        private const val BACK = "Menu"
     }
 }
 

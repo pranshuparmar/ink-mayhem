@@ -78,13 +78,13 @@ Slice 1 of the reimagining ("Your doodle is alive. The page fights back."), appr
 owner: the Ink Rush theme, Slice 1 as pitched, no Endless, straight into play. Numbers under
 [Slice 1](#slice-1).
 
-11. **No Endless, no title card.** The game opens straight into play: the first stage not yet
-    cleared starts running at once, with no intro card (1-1 on a first launch). The stage list
-    has a Play button; Android back there leaves the app. The endless run, its title and death
-    cards and its best score are gone from the game. `GameSim` keeps the POC's generator, which
+11. **No Endless.** The game opens on a title screen of its own (see [Menus and
+    pausing](#menus-and-pausing)); at first it opened straight into play, but players were
+    taken by surprise. The endless run, its title and death cards and its best score are gone
+    from the game. `GameSim` keeps the POC's generator, which
     the reference tests still play.
 12. **Music.** Ink Rush (original, 168 bpm, A minor, eight bars) loops through a stage's intro
-    and play and restarts after a lost life; the settings sheet and leaving the app pause it.
+    and play and restarts after a lost life; pausing, the settings sheet and leaving the app hold it.
     The stage start, clear, extra-life and game-over jingles are cut from its motif, and a lost
     life plays a falling jingle instead of the POC's death thud. Off with "Music" in settings.
 13. **Silent tuning.** First launch no longer asks for pen tuning or runs the tutorial (both
@@ -320,14 +320,14 @@ has three gold stars, all but 2-1 and 2-3 a heart, and every world's last stage 
 | Drive braking | torque clamp ±7 | −1.5 / +7, so downhill rolls build speed (1-1's hills reach 4.5 m/s, a 27° slope 5.6 m/s) |
 | Camera | lerp y 2.5/s | lerp y 4/s with a vertical look-ahead of 0.3 s of the runner's fall or rise (clamped −2…4 m) |
 | Speed toasts | every 100 m | none |
-| Settings sheet | doesn't pause (POC) | pauses, as does recalibrating; leaving the app mid-stage opens the sheet, so coming back is paused |
+| Settings sheet | doesn't pause (POC) | pauses, as does recalibrating, the pause screen and leaving the app (which opens the pause screen, so coming back is paused) |
 
 ### Lives, retries and stars
 
 | | |
 |---|---|
 | Lives | 3 at the start of a stage from the list; carried into Next; +1 per heart and per 50 stars, max 9 |
-| Intro | 2.2 s (stage name and lives) before the first try, 1.2 s before a retry; the runner waits, and during a retry's intro ink can already go down. The stage the game opens on has none: it is running at once |
+| Intro | 2.2 s (stage name and lives) before the first try, 1.2 s before a retry; the runner waits, and during a retry's intro ink can already go down |
 | Death | −1 life; after 1.6 s, retry from the checkpoint (or the start) with the score, combo, ink and hazard judgements the player had there |
 | Game over | no lives left: Try again restarts the stage with 3 lives |
 | Clear | 1 s after the flag: score + ink left × 10 = total |
@@ -471,7 +471,20 @@ isn't launched by springs drawn under it. While drawing in the tutorial or a sta
 16 dp right of and 44 dp above the pen names the ink being laid. A death, or 3 s without 0.3 m of progress, fails the lesson with a hint for
 what went wrong; the scene resets 2.2 s later. A pass moves on after 1.6 s. The tutorial runs
 from "How to play" (no longer on first launch: 1-1 teaches by playing); Skip (or Android back)
-ends it.
+ends it, back to the title or the stage list, wherever it was opened from.
+
+## Menus and pausing
+
+`ui/MenuCards.kt` (the title, the pause screen, the countdown), `InkMayhemGame` (where each leads).
+
+| | |
+|---|---|
+| Title | what the game opens on: the name (64 dp, smaller if it and the runner beside it don't fit), "Draw the way ahead with your S Pen.", the three inks drawn with their pressures, then **Start** (nothing cleared yet) or **Play**, naming the first stage not yet cleared (with every stage cleared it opens the list), and **Stages**, **How to play**, **Settings**. Fades in over 0.5 s; Android back leaves the app |
+| Stage list | a **Menu** button at the top left goes back to the title, as does Android back |
+| Menus | only the ruled paper behind them; Ink Rush plays (the Music setting turns it off) |
+| Pause | the top-right button in a stage (two bars; ⋯ on the stage list), Android back, or leaving the app, during a stage's intro, play or a lost life's moment. A stroke being drawn is let go. The page dims; the card has the stage, **Resume**, **Restart** (the stage from the start, keeping the lives), **Settings** and **Stage list**. Android back on it resumes |
+| Countdown | Resume mid-play counts 3, 2, 1, 0.5 s each, with a rising chime; the stage, its music and the pen stay held until it ends. Resuming during an intro skips it |
+
 
 ## Where the brief and the POC differ
 
