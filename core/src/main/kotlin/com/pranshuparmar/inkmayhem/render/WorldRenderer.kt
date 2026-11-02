@@ -176,6 +176,7 @@ class WorldRenderer(
         shapes.begin(worldCam.combined, density * scale)
         val brick = theme == Theme.CASTLE
         drawFlags(sim, pal, px, behind = true)
+        drawPools(sim, pal, vx0, vx1, sim.cam.y + vh + 2f, px)
         sim.blocks.fastEach { r -> drawBlock(r, pal, vx0, vx1, sim.cam.y + vh + 2f, px, brick) }
         sim.ceilings.fastEach { c -> drawCeiling(c, pal, vx0, vx1, sim.cam.y - 2f, px, brick) }
         sim.spikeStrips.fastEach { k -> drawSpikes(k, pal, vx0, vx1) }
@@ -197,6 +198,7 @@ class WorldRenderer(
         drawBoulders(sim, pal, px)
         drawBoss(sim, pal, px)
         drawPlanes(sim, pal, px)
+        drawTide(sim, pal, sim.cam.y - 2f, sim.cam.y + vh + 2f, px)
         drawRunner(sim, pal, px)
         drawSwipes(sim, pal)
         fx.particles.fastEach { q ->
@@ -234,6 +236,12 @@ class WorldRenderer(
             val xx = sim.cam.x + 0.5f
             shapes.color(pal[Tok.BEAM], pulse).triangle(xx - 0.25f, yy, xx + 0.35f, yy - 0.4f, xx + 0.35f, yy + 0.4f)
         }
+        val tide = risingTide(sim)
+        if (tide != null && tide.x < sim.cam.x + 0.2f) {
+            val yy = sim.runner.body.position.y.coerceIn(sim.cam.y + 2f, sim.cam.y + vh - 2f)
+            val xx = sim.cam.x + 0.5f
+            shapes.color(pal[Tok.BEAM], pulse).triangle(xx - 0.25f, yy, xx + 0.35f, yy - 0.4f, xx + 0.35f, yy + 0.4f)
+        }
         shapes.end()
         text.batch.projectionMatrix = uiCam.combined
         text.batch.begin()
@@ -245,6 +253,13 @@ class WorldRenderer(
             val xx = sim.cam.x + 0.55f
             markerLabel.setLength(0)
             markerLabel.append("BOULDER ").append(max(0, (sim.runner.body.position.x - q.x).roundToInt())).append(" m")
+            text.draw(markerFont, markerLabel, (xx + 0.5f - viewX) * scale, (yy - viewY) * scale - markerFont.capHeight / 2f, pal[Tok.BEAM], pulse)
+        }
+        if (tide != null && tide.x < sim.cam.x + 0.2f) {
+            val yy = sim.runner.body.position.y.coerceIn(sim.cam.y + 2f, sim.cam.y + vh - 2f)
+            val xx = sim.cam.x + 0.55f
+            markerLabel.setLength(0)
+            markerLabel.append("TIDE ").append(max(0, (sim.runner.body.position.x - tide.x).roundToInt())).append(" m")
             text.draw(markerFont, markerLabel, (xx + 0.5f - viewX) * scale, (yy - viewY) * scale - markerFont.capHeight / 2f, pal[Tok.BEAM], pulse)
         }
         text.batch.end()
@@ -1196,6 +1211,63 @@ class WorldRenderer(
         }
     }
 
+    private fun risingTide(sim: GameSim): com.pranshuparmar.inkmayhem.game.Tide? =
+        sim.tides.firstOrNull { it.up && it.ebbAt.isNaN() }
+
+    /** Ink pools: deep ink between the pit's walls under a slow, glossy swell, the odd bubble rising. */
+    private fun drawPools(sim: GameSim, pal: Palette, vx0: Float, vx1: Float, screenBottom: Float, px: Float) {
+        sim.pools.fastEach { p ->
+            if (p.x0 > vx1 || p.x1 < vx0 || p.surface > screenBottom) return@fastEach
+            val t = sim.simT
+            shapes.color(pal[Tok.TIDE]).rect(p.x0, p.surface + 0.12f, p.x1 - p.x0, screenBottom - p.surface)
+            val step = 0.2f
+            var x = p.x0
+            while (x < p.x1 - 0.001f) {
+                val w = min(step, p.x1 - x)
+                val h = 0.08f * sin(x * 2.3f + t * 2.4f) + 0.04f * sin(x * 5.1f - t * 3.3f)
+                shapes.color(pal[Tok.TIDE]).rect(x, p.surface + h, w, 0.14f - h)
+                shapes.color(pal[Tok.BLOT], 0.75f).rect(x, p.surface + h, w, 1.6f * px)
+                x += step
+            }
+            // bubbles rising from the deep
+            val span = p.x1 - p.x0
+            for (k in 0 until max(1, (span / 2.5f).toInt())) {
+                val u = ((t * 0.35f + k * 0.618f) % 1f)
+                val bx = p.x0 + span * ((k * 0.37f + 0.2f) % 1f)
+                val by = p.surface + 1.4f - 1.3f * u
+                shapes.color(pal[Tok.BLOT], 0.55f * (1f - u)).ring(bx, by, 0.06f + 0.06f * u, 1.2f * px)
+            }
+        }
+    }
+
+    /** The ink tide: a wall of ink behind its rolling front, flecks flying off its crest; it drains as it breaks. */
+    private fun drawTide(sim: GameSim, pal: Palette, top: Float, bottom: Float, px: Float) {
+        sim.tides.fastEach { tide ->
+            if (!tide.up) return@fastEach
+            val a = if (tide.ebbAt.isNaN()) 1f else 1f - ((sim.simT - tide.ebbAt) / TIDE_DRAIN_S).coerceIn(0f, 1f)
+            if (a <= 0f) return@fastEach
+            val fx = tide.lerpX(alpha)
+            val left = viewX - 2f
+            if (fx < left) return@fastEach
+            val t = sim.simT
+            val step = 0.12f
+            var y = top
+            while (y < bottom) {
+                val off = 0.35f * sin(y * 1.6f + t * 4.2f) + 0.12f * sin(y * 3.3f - t * 6f)
+                val ex = fx + off
+                shapes.color(pal[Tok.TIDE], 0.94f * a).rect(left, y, ex - left, step)
+                shapes.color(pal[Tok.BLOT], 0.8f * a).rect(ex - 2.2f * px, y, 2.2f * px, step)
+                y += step
+            }
+            // flecks thrown ahead of the front
+            for (k in 0 until 7) {
+                val u = ((t * 1.3f + k * 0.29f) % 1f)
+                val fy = top + (bottom - top) * ((k * 0.43f + 0.1f) % 1f)
+                shapes.color(pal[Tok.TIDE], a * (1f - u)).circle(fx + 0.3f + 0.9f * u, fy - 0.3f * u, 0.09f * (1f - u * 0.5f))
+            }
+        }
+    }
+
     /** Highlighter swipes: a wide translucent yellow band that fades. */
     private fun drawSwipes(sim: GameSim, pal: Palette) {
         sim.swipes.fastEach { s ->
@@ -1224,6 +1296,8 @@ class WorldRenderer(
 
     companion object {
         private const val PI_F = kotlin.math.PI.toFloat()
+        /** A broken tide fades out over this long. */
+        private const val TIDE_DRAIN_S = 1.5f
         /** A hint shows once the runner is this close (m) to its start, fading in over 3 m. */
         private const val GATE_SHOW = 9f
         /** Above the guide and any stars over it. */

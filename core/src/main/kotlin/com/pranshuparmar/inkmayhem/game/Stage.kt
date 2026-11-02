@@ -82,6 +82,12 @@ class StageLayout {
     /** A row of crumbling bricks, each [w] wide, their tops at [y]. */
     class CrumbleRow(val x: Float, val y: Float, val n: Int, val w: Float)
 
+    /** An ink pool from [x0] to [x1], its surface at [surface]: it swallows the runner, ink and creatures. */
+    class Pool(val x0: Float, val x1: Float, val surface: Float)
+
+    /** The ink tide: it rises behind the runner once it passes [x0] and chases it until [x1]. */
+    class TideSpec(val x0: Float, val x1: Float)
+
     /** One stroke of the scripted solution, drawn once the runner reaches [atX]. */
     class Stroke(val atX: Float, val xs: FloatArray, val ys: FloatArray, val ink: Ink)
 
@@ -101,6 +107,8 @@ class StageLayout {
     val warps = ArrayList<WarpSpec>()
     val flights = ArrayList<Flight>()
     val crumbles = ArrayList<CrumbleRow>()
+    val pools = ArrayList<Pool>()
+    val tides = ArrayList<TideSpec>()
     val solution = ArrayList<Stroke>()
 
     /** A bookmark: once passed, a retry starts 1 m past it. */
@@ -472,6 +480,58 @@ class StageBuilder(private val l: StageLayout) {
         return this
     }
 
+    /**
+     * An ink pool across a [len]-metre gap, its surface [down] metres below the ground: it swallows
+     * whatever touches it, the runner, ink and creatures alike. The far side may be [drop] metres
+     * lower (a sloping bridge). Rope across by default; [solve] null scripts nothing.
+     */
+    fun inkPool(
+        len: Float, drop: Float = 0f, down: Float = POOL_DOWN, type: HazardType = HazardType.GAP_M,
+        par: Ink = type.par!!, solve: Ink? = par, lead: Float = 8f,
+    ): StageBuilder {
+        val x0 = x
+        val l0 = level
+        l.pools += StageLayout.Pool(x0, x0 + len, l0 + maxOf(0f, drop) + down)
+        openGap(len, type, par)
+        level += drop
+        if (solve != null) bridge(x0, l0, x, level, solve, lead)
+        return this
+    }
+
+    /** Just an ink pool's surface, [len] from [x0], [down] below the ground there: under a seesaw, say. */
+    fun pool(x0: Float, len: Float, down: Float = POOL_DOWN) {
+        l.pools += StageLayout.Pool(x0, x0 + len, ground(x0) + down)
+    }
+
+    /**
+     * An ink pool [len] wide whose far bank stands [up] metres higher: spring across it from the
+     * near edge (the solution's spring lies just before it).
+     */
+    fun poolWall(len: Float = 2.5f, up: Float = 2.4f, lead: Float = 8f): StageBuilder {
+        l.pools += StageLayout.Pool(x, x + len, level + POOL_DOWN)
+        l.hazards += StageLayout.Hazard(HazardType.WALL, x, x + len, Ink.SPRING)
+        spring(x - 1f, x - 0.2f, level, lead)
+        x += len
+        level -= up
+        return this
+    }
+
+    private var tideFrom = Float.NaN
+
+    /** The ink tide rises behind the runner from here (see [tideEnd]). */
+    fun tideStart(): StageBuilder {
+        tideFrom = x
+        return this
+    }
+
+    /** The tide that rose at [tideStart] breaks here and drains away. */
+    fun tideEnd(): StageBuilder {
+        check(!tideFrom.isNaN()) { "tideEnd() without tideStart()" }
+        l.tides += StageLayout.TideSpec(tideFrom, x)
+        tideFrom = Float.NaN
+        return this
+    }
+
     fun note(text: String, dx: Float = 0.6f, up: Float = 3.4f, maxW: Float = Float.POSITIVE_INFINITY) {
         l.notes += StageLayout.Text(x + dx, level - up, text, maxW)
     }
@@ -561,6 +621,8 @@ class StageBuilder(private val l: StageLayout) {
         const val ARENA_ROOF = 8.2f
         /** A cloud's thickness. */
         const val CLOUD_THICK = 0.7f
+        /** An ink pool's surface lies this far below the ground either side. */
+        const val POOL_DOWN = 1.5f
         /** A bonus page lies this far below the page's ground. */
         const val BONUS_DROP = 55f
         /** Mid-band pressure for each ink, as the Endless bot uses. */

@@ -43,6 +43,7 @@ class StageBot(private val sim: GameSim, private val inkFor: (Ink) -> Ink = { it
     }
 
     private var nextFightStroke = 0f
+    private var nextBlotStroke = 0f
 
     /**
      * A boss fight can't be scripted by position (the runner rolls back and forth), so the bot
@@ -52,7 +53,7 @@ class StageBot(private val sim: GameSim, private val inkFor: (Ink) -> Ink = { it
      */
     private fun fight() {
         val b = sim.boss ?: return
-        if (b.down || sim.simT < nextFightStroke) return
+        if (b.down) return
         val run = sim.runner
         val rp = run.body.position
         val dir = run.dir
@@ -63,8 +64,15 @@ class StageBot(private val sim: GameSim, private val inkFor: (Ink) -> Ink = { it
         val towards = b.dir == -dir
         // a Blot it spat, walking at the runner
         val blot = sim.blots.firstOrNull { !it.dead && (it.body.position.x - rp.x) * dir in 1.8f..6.5f }
+        // (a Blot close in front can't wait for the last stroke's cooldown)
+        if (onGround && blot != null && sim.simT >= nextBlotStroke && (sim.simT >= nextFightStroke || (blot.body.position.x - rp.x) * dir < 3.5f)) {
+            springAt(rp.x + dir * 0.5f, dir, g)
+            nextBlotStroke = sim.simT + 0.8f
+            nextFightStroke = maxOf(nextFightStroke, sim.simT + 0.8f)
+            return
+        }
+        if (sim.simT < nextFightStroke) return
         val drew = when {
-            onGround && blot != null -> springAt(rp.x + dir * 0.5f, dir, g)
             b.kind == BossKind.BIG_BLOT || b.kind == BossKind.BEETLE_QUEEN -> when {
                 onGround && ahead in 2.2f..7.5f -> springAt(rp.x + dir * 0.5f, dir, g)
                 // too close for that (just turned at a wall): a spring right under the runner

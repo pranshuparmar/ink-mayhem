@@ -177,6 +177,11 @@ class GameSim(
     val planes = ArrayList<Plane>()
     private val flights = ArrayList<StageLayout.Flight>()
     private val planeHits = ArrayList<Body>(4)
+    /** Ink pools, the ink tides, and strokes a pool is swallowing (and when they're gone). */
+    val pools = ArrayList<StageLayout.Pool>()
+    val tides = ArrayList<Tide>()
+    private val sinking = ArrayList<Stroke>(2)
+    private val sinkAt = com.badlogic.gdx.utils.FloatArray(2)
     /** Beams that crushed something crumble away a moment later (they'd lie about as obstacles): stroke and when. */
     private val crumbling = ArrayList<Stroke>(2)
     private val crumbleAt = com.badlogic.gdx.utils.FloatArray(2)
@@ -361,6 +366,7 @@ class GameSim(
         crumbling.clear(); crumbleAt.clear()
         planes.clear(); flights.clear(); planeHits.clear()
         crumbles.clear(); crumbleTouched.clear()
+        pools.clear(); tides.clear(); sinking.clear(); sinkAt.clear()
         beetleOn.clear(); beetleOnStroke.clear()
         starsTaken = 0; squashed = 0; starStep = -1; lastStarT = -10f
         mood = Mood.CALM; bounceAt = -10f; happyUntil = -10f; ouchAt = -10f; lastGate = null
@@ -395,6 +401,7 @@ class GameSim(
         boss?.let { if (!it.down) it.prev.snapshot() }
         planes.fastEach { if (!it.down) it.prev.snapshot() }
         crumbles.fastEach { if (!it.gone) it.prev.snapshot() }
+        tides.fastEach { it.prevX = it.x }
         caps.fastEach { if (!it.taken) it.prev.snapshot() }
         ink.strokes.fastEach { s -> s.groups.fastEach { it.snapshot() } }
     }
@@ -474,6 +481,8 @@ class GameSim(
             val body = ink.addLift(bx + 0.02f, row.y, row.w - 0.04f, CRUMBLE_H, FixtureTag.CRUMBLE)
             crumbles += Crumble(body, bx, row.y, row.w, CRUMBLE_H)
         }
+        pools += l.pools
+        for (k in l.tides) tides += Tide(k.x0, k.x1)
         for (k in l.warps) {
             val ty = if (k.toY.isNaN()) l.groundAt(k.toX).let { if (it.isNaN()) k.y else it } else k.toY
             warps += Warp(k.x, k.y, k.toX, ty, k.hidden, k.exit)
@@ -569,6 +578,8 @@ class GameSim(
                 frac = max(frac, min(CHASE_FRAC, (runnerX - bx + BOULDER_R + 1f) / vw))
             }
         }
+        // and so does the ink tide, though less: there's drawing to do ahead
+        tides.fastEach { t -> if (t.up && t.ebbAt.isNaN()) frac = max(frac, min(TIDE_FRAC, (runnerX - t.x + 1.2f) / vw)) }
         return runnerX - vw * frac
     }
 
@@ -1320,6 +1331,8 @@ class GameSim(
             updatePlanes(px, py)
             updatePower()
             updateCrumbling()
+            updatePools()
+            updateTide(px, sdt)
             updateWarps(px, py)
             updateArena(px, py)
             updateBlots(px, py)
@@ -1336,6 +1349,10 @@ class GameSim(
             stageProgress(px)
             // (read again: an inkwell may have just moved the runner)
             val now = rb.position
+            if (inPool(now.x, now.y + runner.r - POOL_GRACE)) {
+                events.burst(now.x, now.y, 18, 3f, Tok.BLOT)
+                die("Swallowed by the ink", DeathKind.POOL)
+            }
             if (now.y > levelNear(now.x) + 4f) die("Fell in", DeathKind.FELL)
             // riding a lift isn't being stuck
             if (px > runner.bestX + 0.5f || runnerHeld || waitingAt != null || bossFight || (runnerOnLift > 0 && liftMoving())) {
@@ -1490,8 +1507,13 @@ class GameSim(
                 return
             }
             BossKind.GIANT_ERASER, BossKind.BIG_SMUDGE -> if (stomp) {
+                if (b.launched || b.body.linearVelocity.y < -1f) {
+                    // flying up at its roof: it brushes the runner aside rather than carrying it up there
+                    rb.setLinearVelocity(if (px < q.x) -3f else 3f, max(rv.y, 2f))
+                    return
+                }
                 // too big to squash: the runner bounces off its top
-                rb.setLinearVelocity(rv.x, STOMP_VY)
+                if (py < q.y) rb.setLinearVelocity(rv.x, STOMP_VY)
                 runner.squash = 1f
                 return
             }
@@ -1688,7 +1710,8 @@ class GameSim(
             if (b.dead) return@fastEach
             val body = b.body
             val q = body.position
-            if (q.y > levelNear(q.x) + 10f) {
+            if (q.y > levelNear(q.x) + 10f || inPool(q.x, q.y)) {
+                if (q.y < levelNear(q.x) + 10f) events.burst(q.x, q.y, 10, 2f, Tok.BLOT)
                 b.gone = true
                 ink.destroyBody(body)
                 return@fastEach
@@ -1847,6 +1870,87 @@ class GameSim(
         b.biteT = 0f
         eraseStroke(s)
         events.toast("A beetle ate it!", force = true)
+    }
+
+    /** Whether ([x], [y]) is under an ink pool's surface. */
+    private fun inPool(x: Float, y: Float): Boolean {
+        for (i in pools.indices) {
+            val p = pools[i]
+            if (x > p.x0 && x < p.x1 && y > p.surface) return true
+        }
+        return false
+    }
+
+    /** Ink that dips into a pool is swallowed a moment later: bridges have to stay above it. */
+    private fun updatePools() {
+        if (pools.isEmpty()) return
+        ink.strokes.fastEach { s ->
+            if (s.x1.isNaN() || s in sinking || s.chalk) return@fastEach
+            var wet = false
+            s.groups.fastEach { g ->
+                if (!wet && g.body != null) g.segs.fastEach { sg ->
+                    if (!wet && (inPool(g.worldX(sg.lax, sg.lay), g.worldY(sg.lax, sg.lay)) || inPool(g.worldX(sg.lbx, sg.lby), g.worldY(sg.lbx, sg.lby)))) wet = true
+                }
+            }
+            if (!wet) return@fastEach
+            sinking += s
+            sinkAt.add(simT + POOL_SINK_S)
+        }
+        for (i in sinking.indices.reversed()) {
+            if (simT < sinkAt[i]) continue
+            val st = sinking.removeAt(i)
+            sinkAt.removeIndex(i)
+            if (st !in ink.strokes) continue
+            val p = st.groups.firstOrNull { it.body != null }?.body?.position
+            if (p != null) events.burst(p.x, p.y, 12, 2f, Tok.BLOT)
+            events.sound(Sfx.ERASE)
+            ink.removeStroke(st)
+            if (state == GameState.RUN) events.toast("The ink pool swallowed it!", force = true)
+        }
+    }
+
+    /**
+     * The ink tide: once the runner passes its start it rises [TIDE_RISE] behind and closes in to
+     * settle [TIDE_GAP] behind a runner at full speed: further back it runs faster, nearer it
+     * slows ([TIDE_PULL] of the run speed a metre), so a clean run keeps it at bay and a stall of
+     * a second or two lets it catch up. It holds still while a first-timer waits at a gate. Ink
+     * and creatures behind its front go under. Past its end it breaks and drains.
+     */
+    private fun updateTide(px: Float, dt: Float) {
+        tides.fastEach { t ->
+            if (!t.up) {
+                if (px > t.x0 && px < t.x1) {
+                    t.x = px - TIDE_RISE
+                    t.prevX = t.x
+                    events.toast("The ink tide is rising! Keep rolling.", force = true)
+                    events.sound(Sfx.RUMBLE)
+                    events.shake(0.2f)
+                }
+                return@fastEach
+            }
+            if (!t.ebbAt.isNaN()) {
+                t.x -= TIDE_EBB * dt
+                return@fastEach
+            }
+            if (px >= t.x1) {
+                t.ebbAt = simT
+                return@fastEach
+            }
+            if (waitingAt != null || runnerHeld) return@fastEach
+            val pace = (1f + (px - t.x - TIDE_GAP) * TIDE_PULL).coerceIn(TIDE_PACE_MIN, TIDE_PACE_MAX)
+            t.x += runSpeed * pace * dt
+            if (px - runner.r < t.x) {
+                events.burst(px, runner.body.position.y, 18, 3f, Tok.BLOT)
+                die("Swallowed by the tide", DeathKind.TIDE)
+                return@fastEach
+            }
+            blots.fastEach { b ->
+                if (!b.dead && b.body.position.x < t.x) {
+                    b.gone = true
+                    ink.destroyBody(b.body)
+                }
+            }
+        }
     }
 
     /** Touched crumbling bricks drop away a moment later, faster and faster. */
@@ -2290,6 +2394,21 @@ class GameSim(
         const val CRUMBLE_S = 0.8f
         /** A beetle eats the rope or spring under it in this long. */
         const val BITE_S = 0.9f
+        /** Ink pools: a stroke dipping in is gone this long after, and the runner sinks this far in first. */
+        const val POOL_SINK_S = 0.35f
+        const val POOL_GRACE = 0.1f
+        /**
+         * The ink tide: how far behind it rises, how far behind it settles, how its pace (a share of
+         * the run speed) changes per metre off that and its limits, how fast it drains, and how far
+         * across the view the runner may slide so it stays in sight.
+         */
+        const val TIDE_RISE = 9f
+        const val TIDE_GAP = 5f
+        const val TIDE_PULL = 0.08f
+        const val TIDE_PACE_MIN = 0.6f
+        const val TIDE_PACE_MAX = 1.25f
+        const val TIDE_EBB = 4f
+        const val TIDE_FRAC = 0.4f
         /** A learning runner brakes at this rate (m/s²) from this far (m) before a gate's wait point. */
         const val WAIT_DECEL = 3f
         const val WAIT_FROM = 8f
@@ -2344,7 +2463,8 @@ class GameSim(
             DeathKind.ERASER to listOf("A beam wall stops an Eraser. Rope over a gap drops it."),
             DeathKind.PLANE to listOf("A beam roof stops paper planes. Or spring over them."),
             DeathKind.BEETLE to listOf("Beetles can't bite beams. Race them, or bounce on them."),
-            DeathKind.TIDE to listOf("Keep moving: the tide never stops."),
+            DeathKind.TIDE to listOf("Keep moving: the tide never stops.", "Draw ahead: every stall lets the tide catch up."),
+            DeathKind.POOL to listOf("Ink pools swallow ink too. Keep bridges tight, above the ink.", "A beam doesn't sag into the pool."),
         )
     }
 }

@@ -7,7 +7,7 @@ import org.junit.jupiter.params.provider.MethodSource
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** Every World 1 stage, played with its scripted solution. */
+/** Every stage of every world, played with its scripted solution. */
 class StageTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("stageIds")
@@ -65,7 +65,9 @@ class StageTest {
 
     @Test
     fun `every world has five stages, numbered in order, each with three gold stars`() {
-        for (w in Stages.WORLDS.filter { it.stages.size == 5 }) {
+        assertEquals(5, Stages.WORLDS.size)
+        for (w in Stages.WORLDS) {
+            assertEquals(5, w.stages.size, w.name)
             for ((i, def) in w.stages.withIndex()) {
                 assertEquals(w.number, def.world, def.id)
                 assertEquals(i + 1, def.number, def.id)

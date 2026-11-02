@@ -257,6 +257,19 @@ class Crumble(val body: Body, val x: Float, val y: Float, val w: Float, val h: F
     var gone = false
 }
 
+/**
+ * The ink tide: a wave of ink filling the page behind its front at [x] (NaN until it rises). It
+ * rises [GameSim.TIDE_RISE] behind the runner once the runner passes [x0] and chases it, settling
+ * [GameSim.TIDE_GAP] behind a runner at full speed; past [x1] it breaks and drains from [ebbAt].
+ */
+class Tide(val x0: Float, val x1: Float) {
+    var x = Float.NaN
+    var prevX = Float.NaN
+    var ebbAt = Float.NaN
+    val up: Boolean get() = !x.isNaN()
+    fun lerpX(alpha: Float) = if (prevX.isNaN()) x else prevX + (x - prevX) * alpha
+}
+
 /** A highlighter swipe: where it went (and what it revealed), fading from [at]. */
 class Swipe(val xs: FloatArray, val ys: FloatArray, val n: Int, val at: Float)
 
@@ -268,7 +281,7 @@ class Swipe(val xs: FloatArray, val ys: FloatArray, val n: Int, val at: Float)
 class Warp(val x: Float, val y: Float, val toX: Float, val toY: Float, var hidden: Boolean, val exit: Boolean)
 
 /** Why a run ended; picks the death-card tips. */
-enum class DeathKind { FELL, BOULDER, SPIKED, STUCK, BLOT, BOSS, ERASER, PLANE, BEETLE, TIDE }
+enum class DeathKind { FELL, BOULDER, SPIKED, STUCK, BLOT, BOSS, ERASER, PLANE, BEETLE, TIDE, POOL }
 
 class Death(
     val reason: String,
