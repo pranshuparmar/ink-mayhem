@@ -334,3 +334,57 @@ Endless could go, and chose straight into play over a short tuning step.
   drawn 3–9 m before an oncoming Blot is always safe.
 - **Bold keeps the runner's mass.** A bigger runner of the same weight rolls the same and
   doesn't snap ropes a normal one wouldn't; only its radius (and so its drive target) changes.
+
+
+## 26. Five worlds of five stages
+
+The owner approved five worlds (The Notebook, The Cellar, Up High, The Castle, Midnight Ink),
+each opening with a stage that teaches its new things and ending with a boss, and agreed six
+changes to the plan: power-ups change the ink, one idea per stage, no difficulty from finer
+pressure, a boss in every world, three hidden gold stars a stage, and fresh-player playtests.
+They also asked for each world to have its own music.
+
+- **One registry, one save format.** `Stages.WORLDS` lists each world's number, name, page
+  theme, tune and five stages; stage ids stay `world-number`, so saved stars and scores from
+  World 1 carry over. Gold stars are a 3-bit mask per stage, added to (never replaced) on each
+  clear.
+- **Teaching is the same everywhere.** 1-1's first-run waiting became a rule for every world's
+  first stage: until it has a star, the runner stops before each new thing until a stroke that
+  works is there. Gates gained what later worlds need: an ink that won't do, an ink that must,
+  and "squash what's under the guide".
+- **Power-ups change the ink, not just the runner.** The marker cap stays (Bold). The others
+  last 9 s and change what a stroke is: Highlighter swipes find hidden things, Cloud chalk
+  floats, Gold nib ink is free and unbreakable, and the Star nib makes the runner untouchable.
+  Cloud chalk replaced the Feather from the pitch: a lighter runner overlapped with what rope
+  and springs already do, while ink that floats opens new shapes (a light line across 11 m).
+- **The pressure bands never narrow.** Rope, spring and beam are the same three bands in every
+  world. Later worlds are harder through layout, speed (3.4 m/s in 1-1 up to 3.9 m/s), what
+  walks the page and what chases you, never through finer pressure control a pen and a hand
+  can't give reliably.
+- **Bosses are walkers in an arena.** An arena is flat ground between two walls; the near one
+  closes behind the runner, which then rolls back and forth between them. Each boss is weak
+  to one thing the world taught (a bounce, a beam drop, a bounce from below, a spring under
+  it). The test bot can't script a fight by position, so `StageBot.fight` reacts to where the
+  boss and its creatures are.
+- **Music is synthesized per world** with the same `MusicSynth` as Ink Rush (now a small
+  theme description: tempo, melody, chords, lead wave, drums, filter, echo, arpeggio), each a
+  seamless loop under SoundPool's 1 MB. Only the playing tune is loaded, so six tunes cost no
+  more memory than one.
+- **Ink pools swallow ink.** A pit that only killed the runner would just be a spike pit in
+  another colour. Swallowing ink as well means a bridge has to stay above the surface, and
+  islands, sloping bridges and springs up to higher banks make the sea a puzzle of its own.
+- **The ink tide is a rubber band.** First built to chase at 90 % of the run speed and never
+  fall more than 10 m behind, it never came within 8.5 m on a clean run, off screen in both
+  orientations. Now its pace depends on the gap: it settles 5 m behind a runner at full speed,
+  runs faster when further back and slows as it closes, so a clean run sees it looming at the
+  edge of the screen and a stall of a second and a half is caught. While it is up the camera
+  gives it room, as it does a boulder.
+- **Fresh-player checks.** Every world's first stage is played on a first run (waiting at
+  each new thing) in `StageTest`. A probe of all 25 stages with every scripted stroke drawn 3 m
+  later than its script (about 0.8 s less warning) cleared every one; at 5 m late the failures
+  were strokes whose script already draws them only 3.5 to 4 m ahead (springs onto creatures,
+  a gap bridged after an Eraser falls in), where 5 m late means after the runner is there.
+- **A boss flying upwards doesn't carry the runner.** Anything met within a spring bounce
+  counts as a stomp, so a runner meeting the Big Smudge as a spring threw it up was stomped
+  upwards every step, all the way into the spikes. A boss flying up now brushes the runner
+  aside.

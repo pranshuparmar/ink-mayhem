@@ -9,19 +9,42 @@ you draw the way ahead. How hard you press decides what the ink becomes:
 | Normal writing | **Spring** | Bounces you (and boulders) high. Fatal under spiked ceilings. |
 | Press hard | **Beam** | Spans anything, carries anything, costs far more ink. |
 
-The game is **stages**: hand-built levels in numbered worlds with lives, a checkpoint, a finish
-flag and up to three stars each (World 1 has four: First Page, Cellar, Up High and Castle). The
-page fights back and pays out:
+The game is **25 hand-built stages in five worlds**, each stage with lives, a checkpoint, a
+finish flag, up to three stars and three hidden **gold stars**. Each world's first stage teaches
+what's new in it, each stage after that is built round one idea, and each world ends with a boss:
+
+| World | Page | What's new | Power-up | Boss | Music |
+|---|---|---|---|---|---|
+| 1 The Notebook | ruled paper | rope, spring and beam; hills and seesaws; Blots | marker cap (Bold) | **The Big Blot**: bounce on it | Ink Rush |
+| 2 The Cellar | graph paper underground | low roofs, spiked tunnels, slides, lifts; Erasers; inkwells down to bonus pages | Highlighter | **The Giant Eraser**: drop beams on it | Cellar |
+| 3 Up High | dot grid in the sky | floating islands, bouncy clouds; paper planes | Cloud chalk | **The Paper Airliner**: bounce up into it | Sky |
+| 4 The Castle | brickwork | boulders, crumbling bricks; ink beetles | Gold nib | **The Beetle Queen**: bounce on her | Castle |
+| 5 Midnight Ink | a dark, ink-soaked page | ink pools, the ink tide; every creature at once | Star nib | **The Big Smudge**: spring it into its own spiked roof | Midnight |
+
+The page fights back and pays out:
 
 - **Star trails** mark the good line, over a spring's bounce or along a bridge. Stars taken
   close together ring a note higher each; every 50 is an extra life.
-- **Blots**, violet ink smudges, waddle at you. Bounce on one with a spring, or drop a beam on
-  it; touching one otherwise costs a life.
-- **Doodle boxes** hang overhead. Bounce up into one and it pops a **marker cap**: catch it and
-  the runner goes **Bold**, bigger, rolling Blots flat and surviving one hit.
+- **Creatures** walk the page. **Blots** waddle at you: bounce on one with a spring, or drop a
+  beam on it. **Erasers** rub out rope and springs they touch and are too rubbery to stomp; a
+  dropped beam squashes them. **Ink beetles** hop up to rope and springs and eat them; beams
+  they can't bite. Touching any of them otherwise costs a life.
+- **Doodle boxes** hang overhead. Bounce up into one and it pops a power-up. The **marker cap**
+  makes the runner **Bold**: bigger, rolling creatures flat and surviving one hit. The others
+  change your ink for 9 s: the **Highlighter** turns strokes into swipes that show hidden
+  ledges, boxes, stars and inkwells; **Cloud chalk** lines float where you draw them, so even a
+  light one holds across a long gap; **Gold nib** ink is free, never snaps and beetles can't
+  bite it; with the **Star nib** nothing hurts you.
+- **Gold stars**, three a stage, sit off the obvious line: at the top of a risky bounce, on a
+  high road, on a bonus page, or hidden until a highlighter finds them. The stage list shows
+  which ones you have.
+- **Ink pools** swallow anything that touches them, ink included, so a bridge has to stay
+  above them. The **ink tide** rises behind you and chases you: keep rolling and it hangs back,
+  stall and it catches you.
 - The runner has a **face**: wide-eyed at an edge, a grin on a combo, dizzy after a bounce,
   sweating when a boulder is behind it.
-- **Ink Rush**, an original chiptune theme, plays while you run; the jingles come from it.
+- **Music**: an original chiptune theme for each world and one for the boss fights; the
+  jingles come from Ink Rush, the first world's.
 
 Clear each hazard with the lightest ink that works to grow the combo. Ink is solid the moment
 it's drawn, so the runner can roll onto a stroke you're still finishing. Hover to see where the
@@ -61,14 +84,15 @@ just before it. The first three obstacles each ask for one ink with a dotted gui
 a rope gap, a spring wall and a beam chasm. On a first run (until 1-1 has been cleared once)
 the runner stops before each new thing, those three, the first Blot and the doodle box, and
 waits until a stroke that will work is there; a miss is wiped, with a tip. Notes past the next
-stop stay hidden, so one thing comes at a time. Until the pen has been tuned, a stroke drawn at
+stop stay hidden, so one thing comes at a time. Every world's first stage does the same for
+that world's new things on its first run (the ink tide holds still while the runner waits). Until the pen has been tuned, a stroke drawn at
 one of the three is that ink whatever the pressure, and the pressures of those three strokes
 **tune the pen** (if they rise from rope to beam). Each stroke becomes
 one ink, from the pressure it settles at once the pen has landed. The ⋯ menu has **Tune your
 pen** (draw a rope, a spring and a beam line along a guide, then try a few strokes), **How to
-play** (four short lessons on rope, spring, beam and erasing), **Music**, the **Stage list**,
-and the **Pen readout** (tool type, raw and normalized pressure, buttons, tilt, hover and event
-rates) for checking the S Pen.
+play** (four short lessons on rope, spring, beam and erasing), **Music**, the **Stage list**
+(a notebook with a tab per world), and the **Pen readout** (tool type, raw and normalized
+pressure, buttons, tilt, hover and event rates) for checking the S Pen.
 
 ### Sending a recording
 
@@ -128,8 +152,9 @@ For fast iteration with a mouse (`lwjgl3` module):
 ### Sound effects
 
 The sounds are synthesized from the POC's WebAudio recipes (and, for the new ones, from the Ink
-Rush motif) and committed as WAVs; so is the theme itself (`MusicSynth`, one seamless loop at
-22.05 kHz). After changing either, regenerate them (a test fails if they drift):
+Rush motif) and committed as WAVs; so is the music (`MusicSynth`: Ink Rush, Cellar, Sky, Castle,
+Midnight and Boss, each one seamless loop at 22.05 kHz, under 1 MB). After changing either,
+regenerate them (a test fails if they drift):
 
 ```sh
 ./gradlew :core:generateSfx
@@ -243,7 +268,7 @@ the `.apk`); a run on `main` also refreshes `latest-debug`.
 
 | Path | |
 |---|---|
-| `core/` | Pure Kotlin game: physics (`physics/`), simulation and generation (`game/`), pen input model (`input/`), rendering (`render/`), UI (`ui/`), audio (`audio/`). Headless tests in `core/src/test`. |
+| `core/` | Pure Kotlin game: physics (`physics/`), simulation and the stages (`game/`: `GameSim`, `Stage.kt` for the builder, `World1.kt` … `World5.kt`, `Stages.kt` for the list of worlds), pen input model (`input/`), rendering (`render/`), UI (`ui/`), audio (`audio/`). Headless tests in `core/src/test`. |
 | `android/` | `AndroidLauncher` and the S Pen bridge (`AndroidPenInput`), resources, and the shared `assets/` (fonts with their OFL licences, sounds). |
 | `lwjgl3/` | Desktop launcher. |
 | `reference/` | The HTML proof of concept and the Planck.js harness. |

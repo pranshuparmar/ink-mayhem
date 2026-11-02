@@ -4,11 +4,11 @@ import com.pranshuparmar.inkmayhem.physics.Ink
 import com.pranshuparmar.inkmayhem.physics.TestNatives
 
 /** Plays a stage headlessly with its scripted solution (or [inkFor] swapping inks). */
-class StagePlay(val def: StageDef, inkFor: (Ink) -> Ink = { it }, solve: Boolean = true) {
+class StagePlay(val def: StageDef, inkFor: (Ink) -> Ink = { it }, solve: Boolean = true, late: Float = 0f) {
     val events = RecordingEvents()
     // A portrait phone: 412 × 915 dp at 34.3 dp/m.
     val sim = GameSim(seed = 1, events = events, vwMetres = 12f, vhMetres = 26.7f)
-    private val bot = if (solve) StageBot(sim, inkFor) else null
+    private val bot = if (solve) StageBot(sim, inkFor, late) else null
     var lowestY = Float.NEGATIVE_INFINITY
     var highestY = Float.POSITIVE_INFINITY
 

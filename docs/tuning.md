@@ -240,19 +240,45 @@ Two notes on scenario design, both true of the POC as well:
 
 ## Stages
 
-`core/.../game/Stage.kt` (layout and builder), `World1.kt` (the stages), `StageSession.kt` (lives,
-retries, stars). Each stage runs on its own `GameSim`.
+`core/.../game/Stage.kt` (layout and builder), `World1.kt` … `World5.kt` (the stages),
+`Stages.kt` (the worlds in order), `StageSession.kt` (lives, retries, stars). Each stage runs on
+its own `GameSim`. Lengths are start to flag.
 
-### World 1
+| Stage | Speed | Length | The idea |
+|---|---|---|---|
+| **World 1, The Notebook** (ruled paper) | | | |
+| 1-1 First Page | 3.4 m/s | 232 m | the three inks (the tuning gates), a Blot, the marker cap, a second Blot, a seesaw |
+| 1-2 Doodle Hills | 3.5 m/s | 191 m | hills: gaps on hilltops and in valleys, a Blot rolling downhill, a long run down to a beam gap |
+| 1-3 Seesaw Lane | 3.5 m/s | 139 m | seesaws, longer, over spikes, two in a row |
+| 1-4 Blot Parade | 3.5 m/s | 159 m | Blots: a pair for one bounce, a parade to roll flat while Bold, one on top of a wall |
+| 1-5 The Big Blot | 3.6 m/s | 146 m | a run through the world, then the Big Blot |
+| **World 2, The Cellar** (graph paper, cave roofs) | | | |
+| 2-1 Cellar Door | 3.5 m/s | 166 m | low roof (rope, not springs), a spiked tunnel, a slide, an Eraser to drop a beam on, the Highlighter, an inkwell |
+| 2-2 Rubber Tunnels | 3.5 m/s | 139 m | Erasers: beams dropped on them, ones that walk off edges, one in a tunnel |
+| 2-3 Hidden Ways | 3.5 m/s | 168 m | two Highlighters: a hidden bridge, hidden stars, an inkwell, gold stars only a swipe shows |
+| 2-4 Mine Lifts | 3.6 m/s | 164 m | down slides and up lifts, spike pits between |
+| 2-5 The Giant Eraser | 3.6 m/s | 126 m | a run through the cellar, then the Giant Eraser |
+| **World 3, Up High** (dot grid, islands 5 m deep) | | | |
+| 3-1 Cloud Steps | 3.6 m/s | 176 m | a bouncy cloud, a flight of paper planes, Cloud chalk across an 11 m gap |
+| 3-2 Flight Path | 3.7 m/s | 156 m | paper planes, flight after flight |
+| 3-3 Drifting | 3.6 m/s | 153 m | bouncy clouds over the void, plain ones to bridge between |
+| 3-4 Thin Air | 3.6 m/s | 139 m | Cloud chalk over long gaps, gold stars where only a chalk path reaches |
+| 3-5 The Paper Airliner | 3.7 m/s | 118 m | a run across the sky, then the Paper Airliner |
+| **World 4, The Castle** (brickwork) | | | |
+| 4-1 Castle Gate | 3.8 m/s | 193 m | a boulder runway (rope), a crumbling bridge, a beetle pit (beam), the Gold nib |
+| 4-2 Rolling Stones | 3.8 m/s | 199 m | boulders, runway after runway |
+| 4-3 Crumble Keep | 3.8 m/s | 154 m | crumbling bridges, longer each time, one into a gap |
+| 4-4 Beetle Bridges | 3.8 m/s | 121 m | beetle pits: beams, or the Gold nib's rope |
+| 4-5 The Beetle Queen | 3.8 m/s | 141 m | a run through the castle, then the Beetle Queen |
+| **World 5, Midnight Ink** (dark page) | | | |
+| 5-1 Lights Out | 3.8 m/s | 180 m | an ink pool, the Star nib before a crowd of creatures, then the ink tide |
+| 5-2 Tide Run | 3.9 m/s | 185 m | two long tide chases: gaps, climbs, a tunnel, crumbling bricks, a seesaw |
+| 5-3 Ink Sea | 3.8 m/s | 150 m | island to island across pools: sloping bridges down, springs up, a beam over the widest |
+| 5-4 All Hands | 3.9 m/s | 165 m | every creature and paper planes, and a Star nib for the crowd |
+| 5-5 The Big Smudge | 3.9 m/s | 135 m | a tide chase and the sea, then the Big Smudge |
 
-| Stage | Theme | Speed | Length | What's in it |
-|---|---|---|---|---|
-| 1-1 First Page | ruled paper | 3.4 m/s | 228 m | a rope gap, a spring wall and a beam chasm (the tuning gates), a checkpoint, a Blot, a doodle box with the marker cap, a second Blot, hills, a high road with a heart, a second checkpoint, a seesaw |
-| 1-2 Cellar | graph paper, cave roof 3.6 m up | 3.5 m/s | 131 m | tunnels, a rope slide down a shaft, spike pits, a lift up a 5 m wall |
-| 1-3 Up High | dot grid, islands 5 m deep | 3.6 m/s | 123 m | a three-spring climb, a 7.6 m beam gap, a seesaw, sloping bridges down, a cloud with a heart |
-| 1-4 Castle | brickwork | 3.8 m/s | 134 m | spike pits, a tunnel, a 6 m lift, a seesaw over spikes, a climb, a beam gap over spikes, a boulder runway |
-
-Ground starts at level 20; blocks are 40 m deep unless the theme says otherwise.
+Ground starts at level 20; blocks are 40 m deep unless the theme says otherwise. Every stage
+has three gold stars, all but 2-1 and 2-3 a heart, and every world's last stage a boss.
 
 ### Pieces
 
@@ -269,6 +295,22 @@ Ground starts at level 20; blocks are 40 m deep unless the theme says otherwise.
 | Finish | a flag; past it the runner brakes to a stop |
 | Heart | +1 life (max 9), pickup radius 0.85 m like drops |
 | Hint | a dotted guide in an ink's colour with an arrow and the ink's name 1.35 m above it; fades in from 12 m to 9 m before it and out over 0.5 s once passed. A tuning gate is a hint that also tunes |
+| High road | a 0.6 m ledge 3.2 m up, reached by a spring 2.6 m before it; a gold star and a heart sit on it |
+| Bounce gold | a gold star at the top of a spring's bounce: 2 m on and 4.6 m up from the spring |
+| Tunnel | a spiked rock 2.1 m over the ground, overhanging the gap by 3.5 m each side: rope under it, never a spring |
+| Doodle box | 0.9 m square, its underside 2.6 m up; holds the marker cap, a power-up or 5 stars; a hidden one shows only once highlighted |
+| Cave | plain rock overhead (the Cellar's roof is 3.6 m up) |
+| Hidden ledge | solid only once a highlighter swipe finds it |
+| Inkwell | a jar on the ground (hidden until highlighted, or not); rolling over its mouth at under 2 m/s up or down drops the runner to a bonus page 55 m below: a floor with a wall at each end and a row of stars, 18 m long, whose own inkwell lifts it back up further along |
+| Cloud | 0.7 m thick; a bouncy one launches the runner like a spring |
+| Planes | a flight of 3 paper planes 1.4 m apart at head height (0.55 m up), flying in from 16 m ahead at 4 m/s once the runner passes its mark |
+| Crumbling bridge | bricks about 1.2 m long and 0.5 m thick over spikes 3 m down; each falls 0.45 s after the runner touches it |
+| Boulder runway | a boulder starts rolling 10 m behind the runner once it is 10.5 m along, at 1.3 × the run speed; rope lets it drop through the gap at the end |
+| Beetle pit | a gap 5 m deep with ink beetles on its floor |
+| Ink pool | a gap whose ink surface lies 1.5 m below the ground (or below the lower side) |
+| Pool wall | a 2.5 m pool whose far bank is 2.4 m higher; a spring 0.2–1 m before the edge carries the runner over |
+| Tide | the ink tide rises once the runner passes its start and breaks at its end |
+| Arena | 13 m of flat ground with walls 12 m high at each end; the Big Smudge's has a spiked roof 8.2 m up |
 
 ### Rules that differ from the POC's endless run
 
@@ -318,6 +360,94 @@ ink or no ink fails.
 | Waiting | 1-1 until it has been cleared once: from 8 m before a wait point the drive aims for √(2 × 3 m/s² × distance left), so the runner stops there (1.4 m before the rope and beam gaps, 5 m before the spring wall, 12.5 m before the first Blot, before it wakes, and 4.5 m before the box) and holds until a stroke that does the job is there; it never counts as stuck. Nudge after 7 s |
 | Doing the job | a bridge: hooked within 0.9 m of each end of the guide (over the beam chasm, a beam); a spring: a spring, hooked, its lowest point within 0.6 m and its top within 1.2 m of the ground, reaching to within 0.8 m before the guide's start and 0.4 m past its end (the box: 0.1 / 0.05 m). Sweeps of where a newcomer might draw: every spring accepted at the wall clears it, at the Blot stomps it, and at the box pops the cap and catches it |
 | Music | Ink Rush: 168 bpm, 8 bars, square lead (3.2 kHz low-pass), triangle bass, noise drums; one 11.4 s loop at 22.05 kHz mono, 504 KB (under SoundPool's 1 MB), played at 0.42 volume |
+
+## Worlds
+
+`GameSim` (`updateBlots`, `chew`, `updateArena`, `updateBoss`, `bossAct`, `hitBoss`,
+`applyPower`, `highlightSwipe`, `updateWarps`, `updatePlanes`, `updateCrumbles`, `updatePools`,
+`updateTide`), `Level.kt` (the pieces), `StageBot.fight` (the test bot's boss tactics).
+`StageTest`, `BossTest` and `World5Test` cover them. None of these is in the POC; every number
+here is new.
+
+### First runs
+
+| | |
+|---|---|
+| Learning | each world's first stage until it has a star: the runner stops before each new thing and waits for a stroke that does the job, as on 1-1 above |
+| Gates | besides a rope, spring or beam guide, a gate can forbid an ink (a spring under a spiked roof), need one (rope to let a boulder drop, a beam over beetles) or want a creature squashed (a beam dropped on an Eraser) |
+
+### Creatures
+
+| | Radius | Walk | Wakes within | |
+|---|---|---|---|---|
+| Blot | 0.38 m | 1.1 m/s | 11 m | squashed by a stomp, a beam drop, Bold or the Star nib |
+| Eraser | 0.45 m | 1.25 m/s | 18 m | rubs out rope and springs it touches; a stomp bounces off it; a beam drop squashes it |
+| Ink beetle | 0.3 m | 1.3 m/s | 14 m | hops up to rope or a spring up to 7 m above it (and within 3 m to the side) and eats it after 0.9 s on it; leaves beams and Gold nib ink alone; stompable |
+
+A squash is +100. A beam that squashes a creature crumbles away 0.8 s later (it would lie about
+as an obstacle), unless it is hooked to something or hit a boss.
+
+### Power-ups
+
+| | |
+|---|---|
+| Marker cap | Bold (see Slice 1), +500 |
+| Timed powers | last 9 s, shown by a ring round the runner; +500 when caught |
+| Highlighter | strokes lay no ink; a swipe finds hidden ledges, boxes, stars, gold stars and inkwells within 1.1 m of it, and fades over 1.6 s |
+| Cloud chalk | strokes are static: they stay where they're drawn, so even rope spans an 11 m gap |
+| Gold nib | strokes cost no ink, their joints never break and beetles can't eat them |
+| Star nib | nothing hurts: creatures, a boss's touch, planes and spikes; creatures touched are zapped (+100). Falls, boulders, ink pools and the tide still cost a life |
+
+### Gold stars
+
+Three a stage, pickup radius 0.5 m + the runner's, +250 each. Ones taken before a checkpoint
+stay taken on a retry. A clear saves the ones taken, added to those from earlier clears; the
+stage list and the clear card show them.
+
+### Bosses
+
+| | Hit points | Radius | Walk | Hit it by | Every 3.5 s |
+|---|---|---|---|---|---|
+| The Big Blot | 3 | 1.1 m | 1.4 m/s | a stomp (a spring's bounce onto it) | |
+| The Giant Eraser | 3 | 1.0 m | 1.0 m/s | a beam dropped on it (falling faster than 0.5 m/s); it rubs out rope and springs, and stomps bounce off | |
+| The Paper Airliner | 3 | 0.9 m | flies 4.4 m up at 2.6 m/s | bouncing up into it | dives a paper plane at the runner at 4.5 m/s |
+| The Beetle Queen | 3 | 1.0 m | 1.0 m/s | a stomp | lays a beetle (2 alive at most) |
+| The Big Smudge | 4 | 1.2 m | 1.2 m/s | a spring under it throws it up at 15 m/s into its spiked roof | spits a Blot (2 alive at most) |
+
+A boss walks 20 % faster for each hit taken. After a hit it is knocked back at 4 m/s (up at
+5 m/s) and flashes for 1.2 s, when it neither hurts nor can be hurt. Touching it otherwise costs
+a life, except that one flying up brushes the runner aside rather than carrying it into the
+roof. +200 a hit, +1000 for the win; then the arena's ink is cleared and the far wall opens.
+The near wall closes once the runner is 1.5 m in, the camera holds the arena, the runner turns
+at each wall and the boss theme plays.
+
+### Paper planes
+
+Radius 0.28 m; a flight flies level at 4 m/s. A spring's bounce through a plane (or Bold, or the
+Star nib) crumples it (+50); so does spring or beam ink in its way; it tears through rope.
+Touching one otherwise costs a life.
+
+### Ink pools and the ink tide
+
+| | |
+|---|---|
+| Ink pool | the runner goes under 0.1 m past the surface; ink with any point below the surface is swallowed 0.35 s later (Cloud chalk floats); creatures sink. A 4.5 m rope bridge drawn edge to edge stays clear of it |
+| Ink tide | rises 9 m behind the runner. Its pace is the run speed × (1 + 0.08 × (gap − 5 m)), kept within 0.6–1.25, so it settles 5 m behind a runner at full speed and catches one that stalls for about 1.5 s; on clean runs it comes within 2.4–3.7 m. It holds still while a first-timer waits at a gate. Ink and creatures behind its front go under. Past its end it drains back at 4 m/s, fading over 1.5 s |
+| Framing | while the tide is up the runner may slide up to 40 % across the view so the tide stays in sight; when it's off screen, a TIDE marker gives its distance |
+
+### Music
+
+| Theme | Key | Tempo | |
+|---|---|---|---|
+| Ink Rush (World 1) | A minor | 168 bpm | square lead, triangle bass, noise drums |
+| Cellar (World 2) | D minor | 120 bpm | a hollow pulse lead that echoes, slow bass, soft drums |
+| Sky (World 3) | C major | 150 bpm | a triangle lead over arpeggios |
+| Castle (World 4) | E minor | 140 bpm | a march with snare rolls |
+| Midnight (World 5) | C minor | 176 bpm | a dark pulse lead with a short echo, four on the floor |
+| Boss | A minor | 184 bpm | racing arpeggios |
+
+Each is an 8-bar seamless loop at 22.05 kHz mono under 1 MB (SoundPool's limit; a test checks).
+Only the playing tune is loaded.
 
 ## Tutorial
 

@@ -7,7 +7,12 @@ import com.pranshuparmar.inkmayhem.physics.Ink
  * runner reaches its trigger. Tests use it to prove every stage can be cleared with par ink; the
  * desktop autoplay uses it for screenshots.
  */
-class StageBot(private val sim: GameSim, private val inkFor: (Ink) -> Ink = { it }) {
+class StageBot(
+    private val sim: GameSim,
+    private val inkFor: (Ink) -> Ink = { it },
+    /** Draws each scripted stroke this many metres later than its script says: a slower hand. */
+    private val late: Float = 0f,
+) {
     private var drawn = BooleanArray(0)
     private var builtFor: Any? = null
     private var t = 0.0
@@ -35,7 +40,7 @@ class StageBot(private val sim: GameSim, private val inkFor: (Ink) -> Ink = { it
         val rx = sim.waitingAt?.let { maxOf(sim.runner.body.position.x, it.x1) } ?: sim.runner.body.position.x
         for (i in l.solution.indices) {
             val s = l.solution[i]
-            if (drawn[i] || rx < s.atX) continue
+            if (drawn[i] || rx < s.atX + late) continue
             drawn[i] = true
             draw(s)
             return // one stroke per tick, like a hand

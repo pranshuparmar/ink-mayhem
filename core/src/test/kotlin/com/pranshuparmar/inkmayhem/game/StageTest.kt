@@ -4,6 +4,7 @@ import com.pranshuparmar.inkmayhem.physics.Ink
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.ValueSource
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -24,6 +25,23 @@ class StageTest {
             assertEquals(hearts, p.events.hearts, "the solution takes the high road to every heart")
             val golds = Stages.byId(id)!!.layout.items.count { it.kind == ItemKind.GOLD }
             assertEquals(golds, Integer.bitCount(p.sim.stageRun!!.goldMask), "the solution finds every gold star")
+        } finally {
+            p.dispose()
+        }
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = ["2-1", "3-1", "4-1", "5-1"])
+    fun `a first run of a world's first stage stops at each new thing and clears`(id: String) {
+        val def = Stages.byId(id)!!
+        val p = StagePlay(def)
+        try {
+            p.sim.learning = true
+            val waited = HashSet<Gate>()
+            val st = p.play(300f) { p.sim.waitingAt?.let { waited += it } }
+            assertEquals(GameState.CLEAR, st, p.summary)
+            assertEquals(def.layout.gates.count { !it.waitX.isNaN() }, waited.size, "waited at ${waited.map { it.label }}")
+            assertEquals(3, Integer.bitCount(p.sim.stageRun!!.goldMask), "gold stars")
         } finally {
             p.dispose()
         }

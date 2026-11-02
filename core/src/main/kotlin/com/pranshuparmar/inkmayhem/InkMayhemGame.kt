@@ -663,7 +663,7 @@ class InkMayhemGame(
         if (!quick) audio.play(Sfx.STAGE_START)
     }
 
-    private fun newBot(s: GameSim) = StageBot(s) { dev.wrongInk[it] ?: it }
+    private fun newBot(s: GameSim) = StageBot(s, inkFor = { dev.wrongInk[it] ?: it })
 
     /** A world's first stage until it has been cleared once: the runner waits before each new thing. */
     private fun firstRun(def: StageDef) = def.number == 1 && settings.stars(def.id) == 0
