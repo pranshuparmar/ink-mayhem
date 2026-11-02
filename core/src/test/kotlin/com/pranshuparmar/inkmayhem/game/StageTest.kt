@@ -41,8 +41,8 @@ class StageTest {
     }
 
     @Test
-    fun `rope over Up High's long gap falls in`() {
-        val p = StagePlay(World3.CLOUD_STEPS, inkFor = { if (it == Ink.BEAM) Ink.ROPE else it })
+    fun `rope over Flight Path's long gap falls in`() {
+        val p = StagePlay(World3.FLIGHT_PATH, inkFor = { if (it == Ink.BEAM) Ink.ROPE else it })
         try {
             assertEquals(GameState.DEAD, p.play(240f))
             assertEquals(DeathKind.FELL, p.sim.death?.kind, p.summary)

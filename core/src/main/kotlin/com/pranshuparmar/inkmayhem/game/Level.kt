@@ -233,6 +233,19 @@ class Runner(val body: Body) {
     var powerUntil = 0f
 }
 
+/**
+ * A paper plane: it flies straight at ([vx], [vy]) m/s (a flight comes in level at head height;
+ * the Airliner's dive), crumples against spring or beam ink and tears through rope.
+ */
+class Plane(val body: Body, val vx: Float, val vy: Float) {
+    val prev = Pose(body)
+    /** simT it crumpled at (NaN while flying), and where. */
+    var crumpledAt = Float.NaN
+    var cx = 0f
+    var cy = 0f
+    val down: Boolean get() = !crumpledAt.isNaN()
+}
+
 /** A highlighter swipe: where it went (and what it revealed), fading from [at]. */
 class Swipe(val xs: FloatArray, val ys: FloatArray, val n: Int, val at: Float)
 

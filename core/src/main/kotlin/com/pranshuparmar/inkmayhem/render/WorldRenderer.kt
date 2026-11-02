@@ -195,6 +195,7 @@ class WorldRenderer(
         drawCaps(sim, pal, px)
         drawBoulders(sim, pal, px)
         drawBoss(sim, pal, px)
+        drawPlanes(sim, pal, px)
         drawRunner(sim, pal, px)
         drawSwipes(sim, pal)
         fx.particles.fastEach { q ->
@@ -273,6 +274,10 @@ class WorldRenderer(
 
     private fun drawBlock(r: GroundRect, pal: Palette, vx0: Float, vx1: Float, screenBottom: Float, px: Float, brick: Boolean) {
         if (r.x > vx1 || r.x + r.w < vx0) return
+        if (r.cloud) {
+            drawCloud(r, pal, px)
+            return
+        }
         val bottom = min(r.y + r.h, screenBottom)
         val h = bottom - r.y
         if (h <= 0f) return
@@ -300,6 +305,58 @@ class WorldRenderer(
         sideEdge(r.x + r.w, r.y - lw / 2f, bottom, r.edgeRTo, r.edgeRFrom, lw)
         // floating ledges show their underside
         if (r.y + r.h <= screenBottom) shapes.line(r.x - lw / 2f, r.y + r.h, r.x + r.w + lw / 2f, r.y + r.h, lw)
+    }
+
+    /** A cloud: a row of puffs over a flat base; a bouncy one has a springy amber rim. */
+    private fun drawCloud(r: GroundRect, pal: Palette, px: Float) {
+        val n = max(2, (r.w / 0.7f).toInt())
+        val step = r.w / n
+        val rr = r.h * 0.75f
+        val lw = 1.6f * px
+        // outline first, then the fill over it
+        shapes.color(pal[Tok.GRAPHITE], 0.7f)
+        for (i in 0..n) shapes.circle(r.x + i * step, r.y + r.h * 0.45f, rr + lw)
+        shapes.rect(r.x - lw, r.y + r.h * 0.45f, r.w + 2f * lw, r.h * 0.55f + lw)
+        shapes.color(if (r.bouncy) pal[Tok.SPRING] else pal[Tok.PAPER_WHITE])
+        for (i in 0..n) shapes.circle(r.x + i * step, r.y + r.h * 0.45f, rr)
+        shapes.rect(r.x, r.y + r.h * 0.45f, r.w, r.h * 0.55f)
+        if (r.bouncy) {
+            shapes.color(pal[Tok.PAPER_WHITE], 0.8f)
+            for (i in 0..n) shapes.circle(r.x + i * step - rr * 0.25f, r.y + r.h * 0.3f, rr * 0.35f)
+        }
+    }
+
+    /** Paper planes: a small folded dart, nose the way it flies; a crumpled one is a falling ball of paper. */
+    private fun drawPlanes(sim: GameSim, pal: Palette, px: Float) {
+        sim.planes.fastEach { pl ->
+            if (pl.down) {
+                val age = sim.simT - pl.crumpledAt
+                if (age > 0.8f) return@fastEach
+                val a = 1f - age / 0.8f
+                shapes.color(pal[Tok.PAPER_WHITE], a).circle(pl.cx, pl.cy + age * age * 5f, 0.16f)
+                shapes.color(pal[Tok.GRAPHITE], a).ring(pl.cx, pl.cy + age * age * 5f, 0.16f, px)
+                return@fastEach
+            }
+            val x = pl.prev.lerpX(alpha)
+            val y = pl.prev.lerpY(alpha)
+            val len = kotlin.math.hypot(pl.vx, pl.vy).coerceAtLeast(0.01f)
+            val ux = pl.vx / len
+            val uy = pl.vy / len
+            val s = GameSim.PLANE_R * 1.6f
+            val tipX = x + ux * s
+            val tipY = y + uy * s
+            val tailX = x - ux * s
+            val tailY = y - uy * s
+            // wings either side of the body line
+            val nx = -uy
+            val ny = ux
+            shapes.color(pal[Tok.PAPER_WHITE]).triangle(tipX, tipY, tailX + nx * s * 0.6f, tailY + ny * s * 0.6f, tailX, tailY)
+            shapes.color(pal[Tok.RULE]).triangle(tipX, tipY, tailX - nx * s * 0.45f, tailY - ny * s * 0.45f, tailX, tailY)
+            shapes.color(pal[Tok.GRAPHITE])
+            shapes.line(tipX, tipY, tailX + nx * s * 0.6f, tailY + ny * s * 0.6f, 1.2f * px)
+            shapes.line(tipX, tipY, tailX - nx * s * 0.45f, tailY - ny * s * 0.45f, 1.2f * px)
+            shapes.line(tipX, tipY, tailX, tailY, 1.2f * px)
+        }
     }
 
     /** A block's side from [top] to [bottom], minus the stretch a flush neighbour covers. */

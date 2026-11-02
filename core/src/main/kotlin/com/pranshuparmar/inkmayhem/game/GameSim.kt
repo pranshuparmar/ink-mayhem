@@ -170,6 +170,10 @@ class GameSim(
     /** Beetles touching rope or springs: the beetle's body and the stroke it is chewing. */
     private val beetleOn = ArrayList<Body>(4)
     private val beetleOnStroke = ArrayList<Stroke>(4)
+    /** Paper planes in the air, flights still to come, and planes that touched ink this step. */
+    val planes = ArrayList<Plane>()
+    private val flights = ArrayList<StageLayout.Flight>()
+    private val planeHits = ArrayList<Body>(4)
     /** Beams that crushed something crumble away a moment later (they'd lie about as obstacles): stroke and when. */
     private val crumbling = ArrayList<Stroke>(2)
     private val crumbleAt = com.badlogic.gdx.utils.FloatArray(2)
@@ -352,6 +356,7 @@ class GameSim(
         arenas.clear(); boss = null; bossFight = false; toErase.clear(); bossOnSpring = false
         swipes.clear(); warps.clear(); hiddenBlocks.clear(); hiddenBoxes.clear(); inBonus = false
         crumbling.clear(); crumbleAt.clear()
+        planes.clear(); flights.clear(); planeHits.clear()
         beetleOn.clear(); beetleOnStroke.clear()
         starsTaken = 0; squashed = 0; starStep = -1; lastStarT = -10f
         mood = Mood.CALM; bounceAt = -10f; happyUntil = -10f; ouchAt = -10f; lastGate = null
@@ -384,6 +389,7 @@ class GameSim(
         seesaws.fastEach { it.prev.snapshot() }
         blots.fastEach { if (!it.dead) it.prev.snapshot() }
         boss?.let { if (!it.down) it.prev.snapshot() }
+        planes.fastEach { if (!it.down) it.prev.snapshot() }
         caps.fastEach { if (!it.taken) it.prev.snapshot() }
         ink.strokes.fastEach { s -> s.groups.fastEach { it.snapshot() } }
     }
@@ -404,10 +410,12 @@ class GameSim(
                 hiddenBlocks += b
                 continue
             }
-            val r = if (b.topR == b.top) ink.addRect(b.x, b.top, b.w, b.depth)
+            val r = if (b.topR == b.top) ink.addRect(b.x, b.top, b.w, b.depth, tag = if (b.bouncy) FixtureTag.wet(Ink.SPRING) else null)
             else ink.addSlope(b.x, b.top, b.w, b.topR, max(b.top, b.topR) + b.depth)
             r.level = max(b.top, b.topR)
             r.bonus = b.bonus
+            r.cloud = b.cloud
+            r.bouncy = b.bouncy
             blocks += r
         }
         // touching blocks share an edge: hide the stretch the neighbour covers, not the rest
@@ -455,6 +463,7 @@ class GameSim(
         for (k in l.boxes) {
             if (k.hidden) hiddenBoxes += k else addBox(k)
         }
+        flights += l.flights
         for (k in l.warps) {
             val ty = if (k.toY.isNaN()) l.groundAt(k.toX).let { if (it.isNaN()) k.y else it } else k.toY
             warps += Warp(k.x, k.y, k.toX, ty, k.hidden, k.exit)
@@ -738,6 +747,15 @@ class GameSim(
                 val other2 = if (eraserA) ub else ua
                 val st = other2?.stroke
                 if (st != null && (other2.kind == FixtureKind.ROPE || other2.kind == FixtureKind.SPRING) && st !in toErase) toErase += st
+            }
+            // a paper plane tears through rope and crumples against springs and beams
+            val planeA = ua?.kind == FixtureKind.PLANE
+            val planeB = ub?.kind == FixtureKind.PLANE
+            if (planeA != planeB) {
+                val ink2 = if (planeA) ub else ua
+                val st = ink2?.stroke
+                if (st != null && ink2.kind == FixtureKind.ROPE && st !in toErase) toErase += st
+                if (st != null && (ink2.kind == FixtureKind.SPRING || ink2.kind == FixtureKind.BEAM)) planeHits += if (planeA) fa.body else fb.body
             }
             // a beetle on rope or a spring starts chewing it
             val beetleA = ua?.kind == FixtureKind.BEETLE
@@ -1230,6 +1248,8 @@ class GameSim(
                 bossSpring()
             }
             toErase.fastEach { st -> if (st in ink.strokes) eraseStroke(st) }
+            planeHits.fastEach { pb -> planes.firstOrNull { !it.down && it.body === pb }?.let { crumplePlane(it, null) } }
+            planeHits.clear()
             toErase.clear(); bossOnSpring = false
             blotHits.clear(); blotHitBy.clear(); blotHitVy.clear(); pendingBox = null
             while (ink.events.isNotEmpty()) {
@@ -1283,6 +1303,7 @@ class GameSim(
                 }
             }
             takeStars(px, py)
+            updatePlanes(px, py)
             updatePower()
             updateCrumbling()
             updateWarps(px, py)
@@ -1479,6 +1500,15 @@ class GameSim(
     private fun bossAct(b: Boss, px: Float) {
         val q = b.body.position
         when (b.kind) {
+            BossKind.AIRLINER -> {
+                // a plane dives at where the runner is
+                val rp = runner.body.position
+                val dx = rp.x - q.x
+                val dy = rp.y - q.y
+                val len = max(0.1f, hypot(dx, dy))
+                launchPlane(q.x, q.y + b.r, dx / len * PLANE_DIVE, dy / len * PLANE_DIVE)
+                events.sound(Sfx.POP)
+            }
             BossKind.BIG_SMUDGE, BossKind.BEETLE_QUEEN -> {
                 if (blots.count { !it.dead } >= 2) return
                 // a Blot out of its mouth, towards the runner
@@ -1686,6 +1716,61 @@ class GameSim(
                     Creature.BEETLE -> hurt("Bitten", DeathKind.BEETLE)
                 }
             }
+        }
+    }
+
+    /** Flights take off as the runner passes their mark; planes fly on, hit the runner or crumple. */
+    private fun updatePlanes(px: Float, py: Float) {
+        for (i in flights.indices.reversed()) {
+            val f = flights[i]
+            if (px < f.x) continue
+            flights.removeAt(i)
+            for (k in 0 until f.count) launchPlane(f.x + PLANE_START + k * f.gap, f.ground - f.up, -PLANE_SPEED, 0f)
+        }
+        val rb = runner.body
+        planes.fastEach { pl ->
+            if (pl.down) return@fastEach
+            val q = pl.body.position
+            if (q.x < cam.x - 6f || q.y > levelNear(q.x) + 6f) {
+                pl.crumpledAt = simT - 10f
+                ink.destroyBody(pl.body)
+                return@fastEach
+            }
+            if (state != GameState.RUN) return@fastEach
+            if (hypot(q.x - px, q.y - py) > runner.r + PLANE_R) return@fastEach
+            val rv = rb.linearVelocity
+            val bouncing = simT - bounceAt < BOUNCE_STOMP_S || (rv.y > 0.5f && py < q.y - 0.15f)
+            when {
+                bouncing || runner.bold || runner.power == ItemKind.STAR_NIB -> crumplePlane(pl, "Crumpled! +$PLANE_POINTS")
+                simT < runner.safeUntil -> Unit
+                else -> {
+                    crumplePlane(pl, null)
+                    hurt("Hit by a paper plane", DeathKind.PLANE)
+                }
+            }
+        }
+        planes.removeAll { it.down && simT - it.crumpledAt > 0.8f }
+    }
+
+    private fun launchPlane(x: Float, y: Float, vx: Float, vy: Float) {
+        val body = ink.addFlyer(x, y, PLANE_R, FixtureTag.PLANE)
+        body.setLinearVelocity(vx, vy)
+        planes += Plane(body, vx, vy)
+    }
+
+    private fun crumplePlane(pl: Plane, label: String?) {
+        if (pl.down) return
+        val q = pl.body.position
+        pl.cx = q.x
+        pl.cy = q.y
+        pl.crumpledAt = simT
+        ink.destroyBody(pl.body)
+        events.burst(pl.cx, pl.cy, 8, 1.6f, Tok.GRAPHITE)
+        events.sound(Sfx.SQUASH)
+        if (label != null) {
+            score += PLANE_POINTS
+            happyUntil = simT + HAPPY_S
+            events.pop(pl.cx, pl.cy - 1f, label, Tok.ACCENT)
         }
     }
 
@@ -2123,6 +2208,12 @@ class GameSim(
         const val POWER_S = 9f
         const val HIGHLIGHT_R = 1.1f
         const val SWIPE_S = 1.6f
+        /** Paper planes: size, speed (a flight's and a dive's), where a flight starts ahead of its mark, points. */
+        const val PLANE_R = 0.28f
+        const val PLANE_SPEED = 4f
+        const val PLANE_DIVE = 4.5f
+        const val PLANE_START = 16f
+        const val PLANE_POINTS = 50
         /** A beam that crushed something crumbles this long after. */
         const val CRUMBLE_S = 0.8f
         /** A beetle eats the rope or spring under it in this long. */

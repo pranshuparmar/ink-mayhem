@@ -74,6 +74,9 @@ class GroundRect(
     var spikesUp = false
     /** Game data: part of a bonus page (far below the page; only counts while the runner is down there). */
     var bonus = false
+    /** Game data: a cloud (drawn puffy); a bouncy one is tagged as a spring. */
+    var cloud = false
+    var bouncy = false
 
     val right: Float get() = x + w
 }

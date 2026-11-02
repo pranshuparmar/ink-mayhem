@@ -24,8 +24,14 @@ class StageDef(
 
 /** Everything in a stage, in world metres (y down), before any physics exists. */
 class StageLayout {
-    /** [hidden]: only solid once a highlighter finds it; [bonus]: part of a bonus page far below. */
-    class Block(val x: Float, val top: Float, val w: Float, val depth: Float, val topR: Float = top, val hidden: Boolean = false, val bonus: Boolean = false) {
+    /**
+     * [hidden]: only solid once a highlighter finds it; [bonus]: part of a bonus page far below;
+     * [cloud]: drawn as a cloud, and [bouncy] ones launch the runner like a spring.
+     */
+    class Block(
+        val x: Float, val top: Float, val w: Float, val depth: Float, val topR: Float = top,
+        val hidden: Boolean = false, val bonus: Boolean = false, val cloud: Boolean = false, val bouncy: Boolean = false,
+    ) {
         val right: Float get() = x + w
     }
 
@@ -55,6 +61,9 @@ class StageLayout {
 
     /** A Blot standing on the ground at [x]; it paces between [x0] and [x1] (NaN: no limits). */
     class BlotSpec(val x: Float, val y: Float, val x0: Float, val x1: Float, val kind: Creature = Creature.BLOT)
+
+    /** A flight of [count] paper planes, [gap] apart, flying in at [up] metres above the ground once the runner passes [x]. */
+    class Flight(val x: Float, val count: Int, val gap: Float, val up: Float, val ground: Float)
 
     /** An inkwell at ([x], [y]) dropping to ([toX], [toY]; NaN: the page's ground there). */
     class WarpSpec(val x: Float, val y: Float, val toX: Float, val toY: Float, val hidden: Boolean, val exit: Boolean)
@@ -87,6 +96,7 @@ class StageLayout {
     val gates = ArrayList<GateSpec>()
     val arenas = ArrayList<ArenaSpec>()
     val warps = ArrayList<WarpSpec>()
+    val flights = ArrayList<Flight>()
     val solution = ArrayList<Stroke>()
 
     /** A bookmark: once passed, a retry starts 1 m past it. */
@@ -379,6 +389,19 @@ class StageBuilder(private val l: StageLayout) {
     /** An ink beetle on the ground at [x0]: it eats rope and spring bridges it crawls on. */
     fun beetle(x0: Float, patrol: Float = 0f) = blot(x0, patrol, Creature.BEETLE)
 
+    /** A cloud to roll on, [len] long with its top at [top]; a [bouncy] one launches you like a spring. */
+    fun cloud(x0: Float, top: Float, len: Float, bouncy: Boolean = false) {
+        l.blocks += StageLayout.Block(x0, top, len, CLOUD_THICK, cloud = true, bouncy = bouncy)
+    }
+
+    /**
+     * A flight of [count] paper planes at head height: once the runner passes [x0] they fly in from
+     * ahead. A spring's bounce through them crumples them; so does spring or beam ink in their way.
+     */
+    fun planes(x0: Float, count: Int = 3, gap: Float = 1.4f, up: Float = 0.55f) {
+        l.flights += StageLayout.Flight(x0, count, gap, up, ground(x0))
+    }
+
     /** A ledge (or a bridge over a gap) that's only there once a highlighter finds it. */
     fun hiddenLedge(x0: Float, top: Float, len: Float, thick: Float = LEDGE_THICK) {
         l.blocks += StageLayout.Block(x0, top, len, thick, hidden = true)
@@ -506,6 +529,8 @@ class StageBuilder(private val l: StageLayout) {
         /** A boss arena's length, and the Big Smudge's spiked roof height. */
         const val ARENA_LEN = 13f
         const val ARENA_ROOF = 8.2f
+        /** A cloud's thickness. */
+        const val CLOUD_THICK = 0.7f
         /** A bonus page lies this far below the page's ground. */
         const val BONUS_DROP = 55f
         /** Mid-band pressure for each ink, as the Endless bot uses. */
