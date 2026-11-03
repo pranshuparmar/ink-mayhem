@@ -1411,8 +1411,9 @@ class InkMayhemGame(
             if (sim.combo >= GameSim.COMBO_MAX) award(com.pranshuparmar.inkmayhem.game.Sticker.TOP_COMBO)
             if (ses.lives >= StageSession.MAX_LIVES) award(com.pranshuparmar.inkmayhem.game.Sticker.NINE_LIVES)
             val boss = sim.boss
+            // (not for the desktop's scripted play, which has no one to tap through it)
             if (sim.bossFight && boss != null && !faceOffSeen && ses.phase == StageSession.Phase.PLAY && !pauseCard.open &&
-                settings.stars(ses.stage.id) == 0
+                settings.stars(ses.stage.id) == 0 && !dev.autoplay
             ) {
                 faceOffSeen = true
                 faceOffFor = ses.stage
