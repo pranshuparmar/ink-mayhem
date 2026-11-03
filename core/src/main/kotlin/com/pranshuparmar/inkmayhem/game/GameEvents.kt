@@ -2,13 +2,13 @@ package com.pranshuparmar.inkmayhem.game
 
 import com.pranshuparmar.inkmayhem.render.Tok
 
-/** Every sound the POC synthesizes with WebAudio. */
+/** Every sound effect (synthesized by [com.pranshuparmar.inkmayhem.audio.SfxSynth]). */
 enum class Sfx {
-    ANCHOR, HOP, BOING, BOULDER_BOING, SNAP, ERASE, SPEED_UP, RUMBLE,
+    ANCHOR, HOP, BOING, BOULDER_BOING, SNAP, ERASE, RUMBLE,
     PICKUP, PICKUP_HIGH, FEATHERWEIGHT, CHIME, COMBO_LOST, DEATH,
     // stages (new): short original jingles
     STAGE_START, CHECKPOINT, CLEAR, ONE_UP, GAME_OVER, STAR,
-    // slice 1: a lost life, Blots, doodle boxes, the marker cap; star trails use [STAR_TRAIL] variants
+    // stages: a lost life, Blots, doodle boxes, the marker cap; star trails use [STAR_TRAIL] variants
     LIFE_LOST, SQUASH, POP, BOLD, SHRINK, STAR_TRAIL,
     // worlds: a gold star, a power-up wearing off, a boss hit and its defeat
     GOLD, POWER_END, BOSS_HIT, BOSS_DOWN,
@@ -47,7 +47,7 @@ interface GameEvents {
 
     fun died(death: Death) {}
 
-    /** A new run is being built (POC newRun clears particles and pops). */
+    /** A new run is being built: particles and pops are cleared. */
     fun runReset() {}
 
     /** Stages: the runner passed the midway bookmark. */

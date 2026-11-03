@@ -8,7 +8,7 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Particles, floating score pops and screen shake (POC burst / pop / shake). Pure cosmetics:
+ * Particles, floating score pops and screen shake. Pure cosmetics:
  * updated once per sim tick and pooled so bursts don't allocate.
  */
 class Fx {
@@ -37,7 +37,7 @@ class Fx {
 
     fun burst(x: Float, y: Float, n: Int, spread: Float, color: Tok, up: Float = Float.NaN) {
         val count = if (reducedMotion) min(n, 4) else n
-        // POC `up || spread * 0.5`: 0 is falsy in JS, so an explicit 0 still gets the default kick.
+        // an upward kick of 0 means the default (half the spread)
         val kick = if (up.isNaN() || up == 0f) spread * 0.5f else up
         repeat(count) {
             val a = rnd.nextFloat() * 2f * PI.toFloat()
@@ -63,7 +63,7 @@ class Fx {
         if (!reducedMotion) shake = max(shake, amount)
     }
 
-    /** Called once per tick with the tick's dt (not slowed by the death time scale, like the POC). */
+    /** Called once per tick with the tick's dt (not slowed by the death time scale). */
     fun update(dt: Float) {
         var i = pops.size - 1
         while (i >= 0) {

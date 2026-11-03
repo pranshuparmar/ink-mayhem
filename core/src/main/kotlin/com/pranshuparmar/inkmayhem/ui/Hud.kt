@@ -13,13 +13,13 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * POC .hud: score with the ×combo chip and "N m · best X" on the left; ink meter and the settings
- * button on the right. In a stage the second line is "WORLD 1-1" with the lives and stars, and a progress
- * line runs underneath with the checkpoint and the flag. Text is cached and rebuilt only when the
+ * The stage HUD: score with the ×combo chip on the left, "WORLD 1-1" with the lives and stars
+ * under it; ink meter and the pause button on the right; a progress line underneath with the
+ * checkpoint and the flag. Text is cached and rebuilt only when the
  * numbers change.
  */
 class Hud {
-    /** The right-hand cluster (meter + button) swallows pen-downs, as in the POC. */
+    /** The right-hand cluster (meter + button) swallows pen-downs. */
     val rightArea = Box()
     /** Settings on the stage list; in a stage it is the pause button. */
     val settingsButton = Box()
@@ -31,8 +31,6 @@ class Hud {
     private var bestText = "0 m · best 0"
     private var comboText = "×1"
     private var lastScore = -1
-    private var lastDist = -1
-    private var lastBest = -1
     private var lastCombo = 0
     private var bump = 0f
     private var stageId: String? = null
@@ -49,21 +47,19 @@ class Hud {
     private var scoreW = 0f
 
     /** [lives] ≥ 0 in a stage (shown with the stage id and the [stars] towards a life), −1 outside one. */
-    fun update(dt: Float, sim: GameSim, best: Int, reducedMotion: Boolean, lives: Int = -1, stars: Int = 0, goldEver: Int = 0) {
+    fun update(dt: Float, sim: GameSim, reducedMotion: Boolean, lives: Int = -1, stars: Int = 0, goldEver: Int = 0) {
         goldRun = sim.stageRun?.goldMask ?: 0
         this.goldEver = goldEver
         val sc = floor(sim.score).toInt()
-        val d = floor(sim.dist).toInt()
-        val shownBest = max(best, sc)
         val id = sim.stage?.id
         if (id != stageId) {
             stageId = id
             lastScore = -1
         }
-        if (sc != lastScore || d != lastDist || shownBest != lastBest) {
+        if (sc != lastScore) {
             scoreText = Format.thousands(sc)
-            bestText = if (id != null) "WORLD $id" else "$d m · best ${Format.thousands(shownBest)}".uppercase()
-            lastScore = sc; lastDist = d; lastBest = shownBest
+            bestText = if (id != null) "WORLD $id" else ""
+            lastScore = sc
         }
         if (lives != lastLives) {
             livesText = "× $lives"
@@ -129,7 +125,7 @@ class Hud {
 
     private var goldX = 0f
 
-    /** Chip scale for the "bump" when the combo grows (CSS .bump: 1.25 with a 0.15 s transition). */
+    /** Chip scale for the "bump" when the combo grows (1.25, easing over 0.15 s). */
     private fun chipScale(): Float {
         if (bump <= 0f) return 1f
         val t = BUMP_S - bump

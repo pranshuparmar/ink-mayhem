@@ -10,8 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Verified POC behaviours involving the runner and the boulder, on the real game tick. Scenario
- * parameters match reference/harness/scenarios.js, where each one passes on Planck.js.
+ * Behaviours involving the runner and the boulder, on the real game tick.
  */
 class RunnerBehaviourTest {
 

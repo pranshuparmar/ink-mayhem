@@ -38,21 +38,101 @@ class TutorialTest {
     }
 
     private fun onGround(x0: Float, x1: Float, ink: Ink) {
-        val p = InkBot.PRESSURE.getValue(ink)
+        val p = StageBuilder.PRESSURE.getValue(ink)
         line(x0, x1, Tutorial.LEVEL - (Ink.thickness(p) / 2f + 0.04f), p)
     }
 
     /** Edge to edge at ground level, the way the bot (and most players) bridge a gap. */
-    private fun bridge(x0: Float, x1: Float, ink: Ink) = line(x0, x1, Tutorial.LEVEL - 0.05f, InkBot.PRESSURE.getValue(ink))
+    private fun bridge(x0: Float, x1: Float, ink: Ink) = line(x0, x1, Tutorial.LEVEL - 0.05f, StageBuilder.PRESSURE.getValue(ink))
 
     private fun waitForNext(lesson: Lesson) = run(Tutorial.PASS_PAUSE + 0.5f) { tut.lesson == lesson && tut.phase == Phase.TRYING }
 
+    /** One of the touch lesson's lines along its guide, settling at raw pressure [raw]. */
+    private fun touch(raw: Float, x0: Float = Tutorial.TOUCH_X0, x1: Float = Tutorial.TOUCH_X1, p: Float = 0.45f) {
+        val n = ((x1 - x0) / 0.05f + 1e-3f).toInt() + 1
+        for (i in 0 until n) {
+            t += 1.0 / 240
+            if (i == 0) tut.penDown(5, x0 + i * 0.05f, Tutorial.LEVEL - 0.3f, p, false, t) else tut.penMove(5, x0 + i * 0.05f, Tutorial.LEVEL - 0.3f, p, t)
+        }
+        tut.penUp(5, raw)
+    }
+
     @Test
-    fun `the tutorial starts with the rope lesson, its guide showing`() {
+    fun `the tutorial starts with the touch lesson, asking for a light line`() {
         tut.start()
-        assertEquals(Lesson.ROPE, tut.lesson)
+        assertEquals(Lesson.TOUCH, tut.lesson)
+        assertEquals(0, tut.touchStep)
         assertTrue(tut.showGuide)
         assertEquals(Ink.ROPE, tut.guideInk)
+    }
+
+    @Test
+    fun `light, normal and hard lines tune the pen and pass the touch lesson`() {
+        tut.start()
+        touch(0.05f)
+        assertEquals(1, tut.touchStep)
+        assertEquals(Ink.SPRING, tut.guideInk)
+        touch(0.12f)
+        assertEquals(2, tut.touchStep)
+        touch(0.3f)
+        assertEquals(Phase.PASSED, tut.phase, tut.feedback)
+        val cal = tut.calibration!!
+        assertEquals(Ink.ROPE, Ink.of(cal.normalize(0.05f)))
+        assertEquals(Ink.SPRING, Ink.of(cal.normalize(0.12f)))
+        assertEquals(Ink.BEAM, Ink.of(cal.normalize(0.3f)))
+        waitForNext(Lesson.ROPE)
+        assertEquals(Lesson.ROPE, tut.lesson)
+        assertEquals(null, sim.forcedInk)
+    }
+
+    @Test
+    fun `each touch line is the ink it asks for, whatever the pressure, and is wiped`() {
+        tut.start()
+        touch(0.05f, p = 0.9f)
+        assertEquals(Ink.ROPE, sim.lastStrokeInk)
+        assertTrue(sim.ink.strokes.isEmpty())
+        touch(0.12f, p = 0.1f)
+        assertEquals(Ink.SPRING, sim.lastStrokeInk)
+    }
+
+    @Test
+    fun `a touch line no harder than the last is asked for again`() {
+        tut.start()
+        touch(0.1f)
+        touch(0.1f)
+        assertEquals(1, tut.touchStep)
+        assertTrue(!tut.good && tut.feedback.isNotEmpty())
+    }
+
+    @Test
+    fun `a short touch line is asked for again`() {
+        tut.start()
+        touch(0.05f, x1 = Tutorial.TOUCH_X0 + 1f)
+        assertEquals(0, tut.touchStep)
+        assertTrue(!tut.good && tut.feedback.isNotEmpty())
+    }
+
+    @Test
+    fun `a pen that can't tell its pressures apart moves on untuned after a few tries`() {
+        tut.start()
+        touch(0.1f)
+        repeat(Tutorial.TOUCH_RETRIES) { touch(0.1f) }
+        assertEquals(1, tut.touchStep)
+        touch(0.1f)
+        assertEquals(2, tut.touchStep)
+        touch(0.1f)
+        assertEquals(Phase.PASSED, tut.phase)
+        assertEquals(null, tut.calibration)
+    }
+
+    @Test
+    fun `the runner waits through the touch lesson`() {
+        tut.start()
+        val x = sim.runner.body.position.x
+        touch(0.05f)
+        run(3f)
+        assertEquals(x, sim.runner.body.position.x, 0.05f)
+        assertTrue(!tut.running)
     }
 
     @Test
@@ -123,7 +203,7 @@ class TutorialTest {
     @Test
     fun `a beam drawn above the gap is wiped instead of letting the runner fall`() {
         tut.start(Lesson.BEAM.ordinal)
-        line(0f, Tutorial.BEAM_GAP, Tutorial.LEVEL - 3f, InkBot.PRESSURE.getValue(Ink.BEAM))
+        line(0f, Tutorial.BEAM_GAP, Tutorial.LEVEL - 3f, StageBuilder.PRESSURE.getValue(Ink.BEAM))
         assertTrue(sim.ink.strokes.isEmpty())
         run(3f)
         assertTrue(sim.runnerHeld)
@@ -202,6 +282,10 @@ class TutorialTest {
     @Test
     fun `playing every lesson right finishes the tutorial`() {
         tut.start()
+        touch(0.05f)
+        touch(0.12f)
+        touch(0.3f)
+        waitForNext(Lesson.ROPE)
         bridge(0f, Tutorial.ROPE_GAP, Ink.ROPE)
         run(5f) { tut.phase != Phase.TRYING }
         waitForNext(Lesson.SPRING)

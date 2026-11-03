@@ -30,8 +30,8 @@ import java.util.zip.Deflater
  * keys 1 / 2 / 3 give light / normal / hard pressure and the right button is the side button.
  *
  * Options: --landscape, --size WxH (dp), --density D, --dark, --reduced-motion,
- *          --autoplay (the correct-ink bot plays), --wrong-ink TUNNEL=SPRING, --seed N, --settings,
- *          --calibration, --skip-calibration, --tutorial LESSON (1-based), --skip-tutorial,
+ *          --autoplay (each stage's scripted solution plays), --wrong-ink TUNNEL=SPRING, --seed N, --settings,
+ *          --calibration, --tutorial LESSON (1-based),
  *          --stage 1-2 (with --autoplay its solution plays), --select, --pause-at seconds, --ending,
  *          --credits, --faces (the runner's expressions), --speed N,
  *          --rotate-after seconds, --demo-draw, --demo-tune LINES (with --calibration),

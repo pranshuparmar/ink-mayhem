@@ -171,10 +171,10 @@ class StageSessionTest {
     }
 
     @Test
-    fun `a pen-down after a stage death never turns the stage into an Endless run`() {
+    fun `a pen-down after a stage death draws nothing and leaves the restart to the session`() {
         session.start(mini(trap = true))
         run(60f) { session.phase == Phase.DYING }
-        sim.realTime += 1.0 // past Endless's restart delay
+        sim.realTime += 1.0
         sim.penDown(4, 0f, 0f, 0.4f, erase = false, t = 99.0)
         assertEquals(GameState.DEAD, sim.state)
         assertNotNull(sim.stage)

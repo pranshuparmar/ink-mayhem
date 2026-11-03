@@ -9,7 +9,7 @@ import com.pranshuparmar.inkmayhem.render.Text
 import com.pranshuparmar.inkmayhem.render.Tok
 
 /**
- * POC #gauge: a 12 × 150 dp bar on the left edge, rope / spring / beam bands bottom-up sized by
+ * The pressure gauge: a 12 × 150 dp bar on the left edge, rope / spring / beam bands bottom-up sized by
  * the pressure thresholds, with a marker at the live pressure. Fades in only while drawing.
  */
 class PressureGauge {

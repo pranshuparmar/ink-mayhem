@@ -1,10 +1,9 @@
 package com.pranshuparmar.inkmayhem.ui
 
 /**
- * The POC toast: one message at a time, hidden 2.2 s after the latest show, and a repeat of the
- * same message within 3 s is ignored unless forced. Opacity eases over 0.2 s like the CSS
- * transition, so replacing a visible message just swaps the text. Delayed toasts replace the
- * POC's setTimeout calls.
+ * Toasts: one message at a time, hidden 2.2 s after the latest show, and a repeat of the same
+ * message within 3 s is ignored unless forced. Opacity eases over 0.2 s, so replacing a visible
+ * message just swaps the text. A toast can also be scheduled for later.
  */
 class Toast {
     var message: String = ""

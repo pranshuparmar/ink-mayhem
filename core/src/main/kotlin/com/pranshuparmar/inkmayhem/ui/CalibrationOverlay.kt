@@ -18,7 +18,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 
 /**
- * Tuning the pen (the POC asked for a signature): the player draws a rope (light), a spring
+ * Tuning the pen: the player draws a rope (light), a spring
  * (normal) and a beam (hard) along a guide, the way they'll draw in play, and each line sets
  * where their own pressure changes ink. A last free-drawing step colours their ink live and
  * lights up each kind as they find it, so they can check it before Done. Runs on first launch

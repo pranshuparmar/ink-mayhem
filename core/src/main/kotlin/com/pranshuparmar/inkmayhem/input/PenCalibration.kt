@@ -36,7 +36,7 @@ class PenCalibration(val ropeEdge: Float, val springEdge: Float, val top: Float)
             return PenCalibration(r, s, beam + (beam - s))
         }
 
-        /** The POC's one-number calibration (that raw pressure lands at 0.45): a straight line. */
+        /** A one-number calibration (that raw pressure lands at 0.45): a straight line. */
         fun linear(cal: Float): PenCalibration {
             val unit = cal / Pressure.TARGET // raw pressure that maps to 1
             return PenCalibration(Ink.ROPE_MAX * unit, Ink.SPRING_MAX * unit, unit)
@@ -87,7 +87,8 @@ class PenTuning {
     }
 
     companion object {
-        private fun heavier(m: Float, before: Float, minStep: Float): Boolean =
+        /** Whether a line at raw pressure [m] is pressed enough harder than one at [before]. */
+        fun heavier(m: Float, before: Float, minStep: Float): Boolean =
             (m >= before * MIN_RATIO && m - before >= minStep) || (m >= SATURATED && m > before)
 
         /** Whether three raw pressures rise enough apart, as the tuning steps require, to tune from. */

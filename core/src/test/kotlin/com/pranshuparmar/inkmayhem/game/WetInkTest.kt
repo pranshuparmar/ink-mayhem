@@ -49,7 +49,7 @@ class WetInkTest {
     fun `the runner crosses a gap on a stroke that is still being drawn`() {
         val sb = Sandbox(gap = 4.5f, runnerX = -6f, speed = 4.7f)
         try {
-            val p = InkBot.PRESSURE.getValue(Ink.ROPE)
+            val p = StageBuilder.PRESSURE.getValue(Ink.ROPE)
             // the pen starts at the edge just as the runner gets there, and stays down
             val pen = Held(sb, -0.4f, 4.9f, groundY(p), p, startAt = -0.9f, liftAt = 7f)
             var crossedHeld = false
@@ -69,7 +69,7 @@ class WetInkTest {
     fun `lifting the pen with the runner on the ink builds the real stroke under it`() {
         val sb = Sandbox(gap = 4.5f, runnerX = -6f, speed = 4.7f)
         try {
-            val p = InkBot.PRESSURE.getValue(Ink.ROPE)
+            val p = StageBuilder.PRESSURE.getValue(Ink.ROPE)
             val pen = Held(sb, -0.4f, 4.9f, groundY(p), p, startAt = -1.2f, liftAt = 2f)
             var wetSeen = 0
             sb.run(4f) {
@@ -90,7 +90,7 @@ class WetInkTest {
     fun `a held rope is no stronger than a finished one past 6_8 m`() {
         val sb = Sandbox(gap = 9f, runnerX = -6f, speed = 4.7f)
         try {
-            val p = InkBot.PRESSURE.getValue(Ink.ROPE)
+            val p = StageBuilder.PRESSURE.getValue(Ink.ROPE)
             val pen = Held(sb, -0.4f, 9.4f, groundY(p), p, startAt = -2.5f, liftAt = 100f)
             sb.run(5f) { pen.tick() }
             assertEquals("Fell in", sb.sim.death?.reason)
@@ -104,7 +104,7 @@ class WetInkTest {
     fun `a wet spring bounces the runner`() {
         val sb = Sandbox(gap = 4.5f, runnerX = -12f, speed = 4.7f)
         try {
-            val p = InkBot.PRESSURE.getValue(Ink.SPRING)
+            val p = StageBuilder.PRESSURE.getValue(Ink.SPRING)
             val pen = Held(sb, -6f, -5.2f, groundY(p), p, startAt = -9f, liftAt = 100f)
             var bouncedHeld = false
             sb.run(3f) {
@@ -121,7 +121,7 @@ class WetInkTest {
     fun `boulders fall through wet ink`() {
         val sb = Sandbox(gap = 4.5f, runnerX = -40f, speed = 3.4f)
         try {
-            val p = InkBot.PRESSURE.getValue(Ink.BEAM)
+            val p = StageBuilder.PRESSURE.getValue(Ink.BEAM)
             val pen = Held(sb, -0.4f, 4.9f, groundY(p), p, startAt = -100f, liftAt = 100f, penSpeed = 60f)
             repeat(60) { pen.tick() }
             assertTrue(sb.sim.ink.wetPieces > 0)
@@ -138,7 +138,7 @@ class WetInkTest {
         val sb = Sandbox(gap = 4.5f, runnerX = -6f, speed = 4.7f)
         try {
             sb.sim.hazards += Hazard(HazardType.GAP_M, 0f, 4.5f)
-            val p = InkBot.PRESSURE.getValue(Ink.ROPE)
+            val p = StageBuilder.PRESSURE.getValue(Ink.ROPE)
             val pen = Held(sb, -0.4f, 4.9f, groundY(p), p, startAt = -1f, liftAt = 100f)
             sb.run(4f) { pen.tick() }
             assertTrue(sb.runnerX > 6f && !pen.lifted, "runner at ${sb.runnerX}, pen lifted: ${pen.lifted}")
@@ -152,7 +152,7 @@ class WetInkTest {
     fun `ink begun in mid-air isn't solid while it's drawn`() {
         val sb = Sandbox(gap = 4.5f, runnerX = -6f, speed = 4.7f)
         try {
-            val p = InkBot.PRESSURE.getValue(Ink.BEAM)
+            val p = StageBuilder.PRESSURE.getValue(Ink.BEAM)
             val pen = Held(sb, 0.5f, 4f, Sandbox.LEVEL - 2f, p, startAt = -100f, liftAt = 100f, penSpeed = 30f)
             repeat(30) { pen.tick() }
             assertEquals(0, sb.sim.ink.wetPieces)
@@ -167,7 +167,7 @@ class WetInkTest {
         val sb = Sandbox(gap = 8f, runnerX = -6f, speed = 5f)
         try {
             sb.sim.hazards += Hazard(HazardType.GAP_L, 0f, 8f)
-            val p = InkBot.PRESSURE.getValue(Ink.ROPE)
+            val p = StageBuilder.PRESSURE.getValue(Ink.ROPE)
             val pen = Held(sb, -0.4f, 5.6f, groundY(p), p, startAt = -2f, liftAt = 100f, penSpeed = 12f, yEnd = Sandbox.LEVEL - 2.4f)
             sb.run(5f) { pen.tick() }
             assertTrue(sb.events.pops.none { it.startsWith("Clean") || it.startsWith("Featherweight") }, "pops: ${sb.events.pops}")

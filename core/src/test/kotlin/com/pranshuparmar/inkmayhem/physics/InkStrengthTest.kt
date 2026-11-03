@@ -7,9 +7,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Verified POC behaviours: what each ink holds across a 5 m gap. Crates are 0.5 m and dropped 2 m
- * onto the bridge (the setup that reproduces these results on the POC's Planck.js engine; see
- * reference/harness). Each case runs at light, middle and heavy pressure within the band.
+ * What each ink holds across a 5 m gap. Crates are 0.5 m and dropped 2 m onto the bridge. Each
+ * case runs at light, middle and heavy pressure within the band.
  */
 class InkStrengthTest {
 

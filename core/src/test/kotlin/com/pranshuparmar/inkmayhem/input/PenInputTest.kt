@@ -51,7 +51,7 @@ class PenInputTest {
     }
 
     @Test
-    fun `the one-number calibration is the POC's straight line`() {
+    fun `a one-number calibration is a straight line`() {
         // natural writing pressure (the calibration) lands mid-spring
         assertEquals(0.45f, PenCalibration.linear(0.5f).normalize(0.5f), 1e-5f)
         assertEquals(0.45f, PenCalibration.DEFAULT.normalize(0.32f), 1e-5f) // never tuned

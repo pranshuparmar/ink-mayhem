@@ -20,15 +20,15 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Port of the POC's InkCore: strokes become chains of Box2D bodies whose joints break under load.
- * World units are metres with y pointing down and gravity (0, +10), exactly as in the POC.
+ * The ink physics: strokes become chains of Box2D bodies whose joints break under load.
+ * World units are metres with y pointing down and gravity (0, +10).
  */
 class InkPhysics(
     private val anchorR: Float = ANCHOR_R,
     private val cullY: Float = CULL_Y,
     /**
      * The game's rule: a stroke end hooks only where its ink touches a surface (half its
-     * thickness plus [CONTACT]). Off, ends hook anywhere within [anchorR] of one, like the POC.
+     * thickness plus [CONTACT]). Off, ends hook anywhere within [anchorR] of one.
      */
     private val contactAnchors: Boolean = false,
 ) : Disposable {
@@ -39,7 +39,7 @@ class InkPhysics(
     /** Snap events since the caller last drained them. */
     val events = ArrayDeque<SnapEvent>()
 
-    private val joints = ArrayList<JointInfo>() // creation order; iterated newest first like Planck's list
+    private val joints = ArrayList<JointInfo>() // creation order; iterated newest first
     private var nextId = 1
     private val box = PolygonShape()
     private val circle = CircleShape()
@@ -201,7 +201,7 @@ class InkPhysics(
 
     /**
      * Builds a stroke from raw points ([xs], [ys], [ps] of length [n], normalized pressure).
-     * Returns null for strokes shorter than 0.15 m, like the POC.
+     * Returns null for strokes shorter than 0.15 m.
      */
     fun buildStroke(xs: FloatArray, ys: FloatArray, ps: FloatArray, n: Int): Stroke? {
         if (n < 2 || strokeLength(xs, ys, n) < 0.15f) return null

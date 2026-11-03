@@ -1,6 +1,6 @@
 package com.pranshuparmar.inkmayhem.input
 
-/** What a sample means. HOVER_EXIT and CANCEL extend the brief's HOVER | DOWN | MOVE | UP so the core knows when the nib left. */
+/** What a sample means. HOVER_EXIT and CANCEL extend HOVER | DOWN | MOVE | UP so the core knows when the nib left. */
 enum class PenPhase { HOVER, HOVER_EXIT, DOWN, MOVE, UP, CANCEL }
 
 enum class ToolType {

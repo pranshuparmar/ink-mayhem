@@ -49,7 +49,7 @@ class InputLogTest {
         r.sample(sample(PenPhase.DOWN, 0.1f, 0.0761234f))
         r.event("stroke kept")
         r.sample(sample(PenPhase.UP, Float.MIN_VALUE, 1e-7f))
-        r.probe("ENDLESS RUN 1.5 20.25 0 1")
+        r.probe("1-1 RUN 1.5 20.25 0 1")
         r.pause()
         r.resume()
         r.back()
@@ -72,7 +72,7 @@ class InputLogTest {
         assertEquals(1.0000000001, f.now)
         assertEquals(2, f.samples.size, "an event between samples doesn't end the frame")
         assertEquals(listOf("stroke kept"), f.events)
-        assertEquals("ENDLESS RUN 1.5 20.25 0 1", f.probe)
+        assertEquals("1-1 RUN 1.5 20.25 0 1", f.probe)
         val a = f.samples[0]
         assertEquals(PenPhase.DOWN, a.phase)
         assertEquals(ToolType.STYLUS, a.toolType)

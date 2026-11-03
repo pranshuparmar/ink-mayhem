@@ -1,14 +1,20 @@
 package com.pranshuparmar.inkmayhem.game
 
 import com.pranshuparmar.inkmayhem.fastEach
+import com.pranshuparmar.inkmayhem.input.PenCalibration
+import com.pranshuparmar.inkmayhem.input.PenTuning
 import com.pranshuparmar.inkmayhem.physics.Ink
 import com.pranshuparmar.inkmayhem.physics.Stroke
+import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 
 /**
- * The first-run tutorial: four short lessons on hand-built terrain, played with the real sim and
- * pen input (how pressure picks the ink is taught by tuning the pen, just before). A dotted guide
- * shows where to draw; the runner waits until the player has drawn a stroke that does the job and
+ * The tutorial: five short lessons on hand-built terrain, played with the real sim and pen input.
+ * The first learns the player's touch: three lines along the same guide, light, normal and hard,
+ * whose pressures tune the pen ([calibration]), so the lessons after it (rope, spring, beam and
+ * erasing) and the game read the player's pressure the same way. In those, a dotted guide shows
+ * where to draw; the runner waits until the player has drawn a stroke that does the job and
  * lifted the pen (a stray stroke is wiped with a hint), then runs. The lesson passes when the
  * runner gets through the right way, and on a failure it says what went wrong and sets the scene
  * up again.
@@ -18,6 +24,12 @@ import kotlin.math.max
 class Tutorial(val sim: GameSim) {
 
     enum class Lesson(val title: String, val body: String, val waiting: String) {
+        /** Its title and body change with each of the three lines: see [Tutorial.title] and [Tutorial.body]. */
+        TOUCH(
+            "Your touch",
+            "",
+            "Lift the pen at the end of the dots.",
+        ),
         ROPE(
             "Light touch: rope",
             "Bridge the gap along the dotted line, lightly, from edge to edge. Rope costs almost no ink.",
@@ -47,6 +59,24 @@ class Tutorial(val sim: GameSim) {
     val lesson: Lesson get() = Lesson.entries[lessonIndex]
     val lessonCount: Int get() = Lesson.entries.size
 
+    /** The touch lesson's next line: 0 light, 1 normal, 2 hard. */
+    var touchStep = 0
+        private set
+    /** Raw settled pressure of the light, normal and hard lines (NaN: not measured, a finger or a mouse). */
+    private val touchRaw = FloatArray(3)
+    /** Lines in a row that weren't pressed harder than the one before; after a few, it moves on anyway. */
+    private var touchMisses = 0
+    /**
+     * The pen tuning learnt from the touch lesson, once its three lines rose from light to hard;
+     * null before then, or if they never did (a pen that can't tell, after a few tries).
+     */
+    var calibration: PenCalibration? = null
+        private set
+
+    /** What the card's title and body say now. */
+    val title: String get() = if (lesson == Lesson.TOUCH) TOUCH_TITLES[touchStep] else lesson.title
+    val body: String get() = if (lesson == Lesson.TOUCH) TOUCH_BODIES[touchStep] else lesson.body
+
     var phase = Phase.TRYING
         private set
     /** What just happened, for the card: empty, praise ([good]) or a hint. */
@@ -68,6 +98,8 @@ class Tutorial(val sim: GameSim) {
 
     private var phaseT = 0f
     private var released = false
+    /** The runner is on its way (the stroke is down); a lesson's scene waits until then. */
+    val running: Boolean get() = released
     /** Times the runner got through with heavier ink than the lesson teaches. */
     private var heavyPasses = 0
     private var post: Stroke? = null
@@ -94,6 +126,15 @@ class Tutorial(val sim: GameSim) {
         if (feedback.isNotEmpty() && good) feedback = ""
         showGuide = true
         when (lesson) {
+            Lesson.TOUCH -> {
+                scene(listOf(ground(-40f, 80f)), runnerX = -2.5f, focus = (TOUCH_X0 + TOUCH_X1) / 2f)
+                touchStep = 0
+                touchMisses = 0
+                calibration = null
+                touchRaw.fill(Float.NaN)
+                setGuide(TOUCH_X0, LEVEL - 0.05f, TOUCH_X1, LEVEL - 0.05f, Ink.ROPE)
+                sim.forcedInk = Ink.ROPE
+            }
             Lesson.ROPE -> {
                 scene(listOf(ground(-40f, 40f), ground(ROPE_GAP, 60f)), runnerX = -2.5f, focus = ROPE_GAP / 2f)
                 sim.hazards += Hazard(HazardType.GAP_S, 0f, ROPE_GAP)
@@ -127,7 +168,7 @@ class Tutorial(val sim: GameSim) {
 
     private fun scene(rects: List<FloatArray>, runnerX: Float, focus: Float) {
         sim.loadSandbox(rects, runnerX)
-        sim.speedOverride = SPEED
+        sim.runSpeed = SPEED
         sim.unlimitedInk = true
         sim.runnerHeld = true
         sim.camFocusX = focus
@@ -156,21 +197,87 @@ class Tutorial(val sim: GameSim) {
 
     fun penMove(pointer: Int, x: Float, y: Float, n: Float, t: Double) = sim.penMove(pointer, x, y, n, t)
 
-    fun penUp(pointer: Int) {
+    /**
+     * Pen-up. [raw] is the raw pressure the stroke settled at (NaN if it wasn't drawn by a pen):
+     * the touch lesson learns from it.
+     */
+    fun penUp(pointer: Int, raw: Float = Float.NaN) {
         val before = sim.ink.strokes.size
         sim.penUp(pointer)
+        if (lesson == Lesson.TOUCH) {
+            touchLine(if (sim.ink.strokes.size > before) sim.ink.strokes.last() else null, raw)
+            return
+        }
         // a stroke that can't do this lesson's job is wiped, and the runner keeps waiting
         if (phase != Phase.TRYING || released || lesson == Lesson.ERASE) return
         if (sim.ink.strokes.size <= before) return
         val s = sim.ink.strokes.last()
         if (!fitsLesson(s)) {
-            val c = (s.x0 + s.x1) / 2f
-            sim.events.burst(c, LEVEL - 1f, 10, 2f, com.pranshuparmar.inkmayhem.render.Tok.MUTED)
-            sim.ink.removeStroke(s)
+            wipe(s)
             hint(MISSED[lesson.ordinal])
         } else if (!good && feedback.isNotEmpty()) {
             feedback = ""
         }
+    }
+
+    /**
+     * One of the touch lesson's lines: it has to follow most of the guide, and the normal and hard
+     * ones have to press harder than the line before (by the pen-tuning rule). Each accepted line
+     * is wiped and the next asked for; the third tunes the pen, if all three were measured.
+     */
+    private fun touchLine(s: Stroke?, raw: Float) {
+        if (phase != Phase.TRYING) return
+        if (s != null) wipe(s)
+        if (s == null || !followsGuide(s)) {
+            hint("Follow the dots from one end to the other.")
+            return
+        }
+        val i = touchStep
+        if (!raw.isNaN() && i > 0 && !touchRaw[i - 1].isNaN() &&
+            !PenTuning.heavier(raw, touchRaw[i - 1], if (i == 1) PenTuning.MIN_STEP_SPRING else PenTuning.MIN_STEP_BEAM)
+        ) {
+            if (++touchMisses <= TOUCH_RETRIES) {
+                hint(if (i == 1) "That felt as light as the first. Press the way you write this time." else "Not much harder than the last one. Press hard this time.")
+                return
+            }
+            // a pen that can't tell them apart: move on, untuned
+            touchRaw.fill(Float.NaN)
+        } else {
+            touchRaw[i] = raw
+        }
+        touchMisses = 0
+        if (i < 2) {
+            touchStep = i + 1
+            val next = if (i == 0) Ink.SPRING else Ink.BEAM
+            guideInk = next
+            sim.forcedInk = next
+            feedback = if (i == 0) "Light: that’s rope." else "Normal: that’s a spring."
+            good = true
+            return
+        }
+        calibration = if (touchRaw.none { it.isNaN() } && PenTuning.rising(touchRaw[0], touchRaw[1], touchRaw[2])) {
+            PenCalibration.fromLines(touchRaw[0], touchRaw[1], touchRaw[2])
+        } else {
+            null
+        }
+        sim.forcedInk = null
+        showGuide = false
+        pass(if (calibration != null) "Hard: that’s a beam. Now I know your touch!" else "Thanks! Let’s try the inks.")
+    }
+
+    /** A line that runs along most of the guide, near it. */
+    private fun followsGuide(s: Stroke): Boolean {
+        val len = guide[2] - guide[0]
+        if (min(s.x1, guide[2]) - max(s.x0, guide[0]) < len * PenTuning.MIN_LENGTH) return false
+        var far = 0f
+        s.segs.fastEach { far = max(far, max(abs(it.ay - guide[1]), abs(it.by - guide[1]))) }
+        return far < TOUCH_REACH
+    }
+
+    /** Wipes a stroke off the page with a puff. */
+    private fun wipe(s: Stroke) {
+        sim.events.burst((s.x0 + s.x1) / 2f, LEVEL - 0.5f, 10, 2f, com.pranshuparmar.inkmayhem.render.Tok.MUTED)
+        sim.ink.removeStroke(s)
     }
 
     /**
@@ -185,7 +292,7 @@ class Tutorial(val sim: GameSim) {
             Lesson.ROPE -> nearGround && s.x0 <= EDGE_SLACK && s.x1 >= ROPE_GAP - EDGE_SLACK
             Lesson.BEAM -> nearGround && s.x0 <= EDGE_SLACK && s.x1 >= BEAM_GAP - EDGE_SLACK
             Lesson.SPRING -> nearGround && s.x1 < -0.3f && s.x0 > -6f
-            Lesson.ERASE -> true
+            Lesson.TOUCH, Lesson.ERASE -> true
         }
     }
 
@@ -235,6 +342,7 @@ class Tutorial(val sim: GameSim) {
             }
         }
         when (lesson) {
+            Lesson.TOUCH -> Unit
             Lesson.ROPE -> if (rx > ROPE_GAP + 1.2f) {
                 val heavy = heaviestInk()
                 if (heavy > Ink.ROPE.weight && heavyPasses < HEAVY_RETRIES) {
@@ -258,6 +366,7 @@ class Tutorial(val sim: GameSim) {
     }
 
     private fun shouldRelease(): Boolean = when (lesson) {
+        Lesson.TOUCH -> false
         Lesson.ERASE -> post.let { it != null && it !in sim.ink.strokes }
         else -> sim.drawing == null && sim.ink.strokes.isNotEmpty()
     }
@@ -326,7 +435,21 @@ class Tutorial(val sim: GameSim) {
         private const val EDGE_SLACK = 0.8f
         /** ...and comes within this of the ground somewhere. */
         private const val REACH = 1.2f
+        /** The touch lesson's guide: a line on the ground ahead of the waiting runner. */
+        const val TOUCH_X0 = 0.5f
+        const val TOUCH_X1 = 5.5f
+        /** A touch line has to stay within this of the guide... */
+        private const val TOUCH_REACH = 1.5f
+        /** ...and after this many lines that weren't harder than the last, it is taken anyway. */
+        const val TOUCH_RETRIES = 2
+        private val TOUCH_TITLES = arrayOf("Your touch: light", "Your touch: normal", "Your touch: hard")
+        private val TOUCH_BODIES = arrayOf(
+            "First, show me your touch. Draw along the dots with a light touch, as light as you like.",
+            "Now along the dots again, pressing the way you write.",
+            "And once more, pressing hard.",
+        )
         private val MISSED = arrayOf(
+            "",
             "That one missed. Start on the near edge and end on the far one, along the dots.",
             "That one missed. Draw on the dotted mark, on the ground before the wall.",
             "That one missed. Start on the near edge and end on the far one, along the dots.",

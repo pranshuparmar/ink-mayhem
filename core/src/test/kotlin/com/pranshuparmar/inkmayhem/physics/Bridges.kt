@@ -1,8 +1,7 @@
 package com.pranshuparmar.inkmayhem.physics
 
 /**
- * Test scenarios shared by the physics tests. Each mirrors a function in
- * reference/harness (bridge.js), which runs the same setup on the POC's Planck.js engine.
+ * Test scenarios shared by the physics tests.
  */
 object Bridges {
     const val DT = 1f / 60f
@@ -28,7 +27,7 @@ object Bridges {
     class CrateResult(val held: Boolean, val crateY: Float, val snaps: Int, val anchors: Int, val bodies: Int)
 
     /**
-     * bridge.js: ground on both sides of a [gap], a straight stroke from 0.4 m before the gap to
+     * Ground on both sides of a [gap], a straight stroke from 0.4 m before the gap to
      * 0.4 m past it resting just above ground level, one second to settle, then a crate of [size]
      * and [mass] dropped from [drop] metres above the sagged middle, watched for five seconds.
      */

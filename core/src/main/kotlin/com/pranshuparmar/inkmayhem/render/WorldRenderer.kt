@@ -19,7 +19,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Draws the notebook page and everything on it, following the POC's render() order. World
+ * Draws the notebook page and everything on it, back to front. World
  * shapes use a y-down camera in metres; world text is placed through the dp UI camera.
  */
 class WorldRenderer(
@@ -56,7 +56,7 @@ class WorldRenderer(
     var hoverY = 0f
 
     /**
-     * Interpolated camera of the last frame without shake: pen input maps through this (POC toWorld).
+     * Interpolated camera of the last frame without shake: pen input maps through this.
      * Set here each frame; a replay may put it back to a recorded value.
      */
     var camX = 0f
@@ -131,7 +131,7 @@ class WorldRenderer(
                 }
             }
         }
-        // (the POC's fixed red margin line is left out: it read as a line chasing the runner)
+        // (no fixed red margin line: it read as a line chasing the runner)
         shapes.end()
         if (pageOnly) return
         persona.update(sim, dt, remarks, fx.reducedMotion)
@@ -295,7 +295,7 @@ class WorldRenderer(
         }
         text.batch.end()
 
-        // hover nib shadow: placed with the unshaken camera, drawn in the shaking world (POC)
+        // hover nib shadow: placed with the unshaken camera, drawn in the shaking world
         if (hoverOn && sim.drawing == null && sim.erasingPointer < 0 && sim.state == GameState.RUN) {
             val mx = hoverX / scale + camX
             val my = hoverY / scale + camY
@@ -726,7 +726,7 @@ class WorldRenderer(
         // one ink for the whole stroke: the one it is heading for, thicker or thinner within it
         val kind = sim.drawingInk ?: return
         shapes.color(if (d.goldNib) pal[Tok.STAR] else if (d.chalk) pal[Tok.PAPER_WHITE] else inkColor(pal, kind, tint), alpha)
-        for (i in 1 until n) { // segments only, like the POC: a single point draws nothing
+        for (i in 1 until n) { // segments only: a single point draws nothing
             val p = Ink.clampTo((d.ps[i] + d.ps[i - 1]) / 2f, kind)
             shapes.capsule(d.xs[i - 1], d.ys[i - 1], d.xs[i], d.ys[i], Ink.thickness(p))
         }
@@ -1279,7 +1279,7 @@ class WorldRenderer(
         private const val MAX_PLACED = 8
         private val CRACK = floatArrayOf(-0.3f, -0.2f, 0.1f, 0.25f, 0.4f, 0.05f)
 
-        /** Unit teardrop from the POC's two cubic Béziers, tessellated once. */
+        /** Unit teardrop from two cubic Béziers, tessellated once. */
         private val DROP_SHAPE: FloatArray = run {
             val pts = ArrayList<Float>()
             fun bez(p0x: Float, p0y: Float, c1x: Float, c1y: Float, c2x: Float, c2y: Float, p1x: Float, p1y: Float) {

@@ -13,7 +13,7 @@ interface Platform {
     /** Pen samples produced by the platform input thread, drained by the core on the GL thread. */
     val penQueue: PenQueue
 
-    /** Pixels per dp (CSS px in the POC). Safe-area insets come from Gdx.graphics.getSafeInset*. */
+    /** Pixels per dp. Safe-area insets come from Gdx.graphics.getSafeInset*. */
     val density: Float
 
     /** Short label for the pen readout, e.g. "Android 16 · SM-S938B". */

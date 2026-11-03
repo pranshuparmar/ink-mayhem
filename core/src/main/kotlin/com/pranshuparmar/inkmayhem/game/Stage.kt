@@ -14,7 +14,7 @@ class StageDef(
     val number: Int,
     val name: String,
     val theme: Theme,
-    /** Run speed in m/s for the whole stage (Endless ramps 3.4 → 6). */
+    /** Run speed in m/s for the whole stage. */
     val speed: Float,
     private val build: StageBuilder.() -> Unit,
 ) {
@@ -222,7 +222,7 @@ class StageBuilder(private val l: StageLayout) {
 
     // --------------------------------------------------------------- set pieces
 
-    /** A spiked ceiling over a gap, like Endless's tunnel: rope underneath, never a spring. */
+    /** A spiked ceiling over a gap: rope underneath, never a spring. */
     fun tunnel(gapLen: Float, overhang: Float = 3.5f): StageBuilder {
         l.rocks += StageLayout.Rock(x - overhang, gapLen + 2f * overhang, level - 2.1f, spiked = true)
         return gap(gapLen, HazardType.TUNNEL)
@@ -566,7 +566,7 @@ class StageBuilder(private val l: StageLayout) {
         l.solution += StageLayout.Stroke(minOf(x0, x1) - lead, xs, ys, ink)
     }
 
-    /** A bridge from one edge to another, just under the surface like the Endless bot draws it. */
+    /** A bridge from one edge to another, just under the surface. */
     fun bridge(x0: Float, y0: Float, x1: Float, y1: Float, ink: Ink, lead: Float = 8f) =
         solve(x0, y0 - 0.05f, x1, y1 - 0.05f, ink, lead)
 
@@ -625,7 +625,7 @@ class StageBuilder(private val l: StageLayout) {
         const val POOL_DOWN = 1.5f
         /** A bonus page lies this far below the page's ground. */
         const val BONUS_DROP = 55f
-        /** Mid-band pressure for each ink, as the Endless bot uses. */
+        /** Mid-band pressure for each ink, for scripted strokes (stage solutions, bots and tests). */
         val PRESSURE = mapOf(Ink.ROPE to 0.2f, Ink.SPRING to 0.47f, Ink.BEAM to 0.8f)
     }
 }

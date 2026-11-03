@@ -4,9 +4,8 @@ import com.pranshuparmar.inkmayhem.physics.Ink
 import com.pranshuparmar.inkmayhem.physics.TestNatives
 
 /**
- * Drives [GameSim] in sandbox mode the way reference/harness/runner.js drives the POC engine:
- * ground ends at x = 0, a gap, ground again; strokes go through the real pen-input path.
- * Ground level is 20 (the game's start level) instead of the harness's 0.
+ * Drives [GameSim] in sandbox mode: ground ends at x = 0, a gap, ground again; strokes go
+ * through the real pen-input path. Ground level is 20.
  */
 class Sandbox(gap: Float, runnerX: Float, speed: Float, farLength: Float = 80f) {
     val events = RecordingEvents()
@@ -15,10 +14,10 @@ class Sandbox(gap: Float, runnerX: Float, speed: Float, farLength: Float = 80f) 
 
     init {
         sim.loadSandbox(listOf(floatArrayOf(-60f, LEVEL, 60f), floatArrayOf(gap, LEVEL, farLength)), runnerX)
-        sim.speedOverride = speed
+        sim.runSpeed = speed
     }
 
-    /** A straight stroke at constant normalized pressure, sampled every 5 cm like the harness. */
+    /** A straight stroke at constant normalized pressure, sampled every 5 cm. */
     fun line(x0: Float, x1: Float, y: Float, p: Float, pointer: Int = 7) {
         val n = ((x1 - x0) / 0.05f + 1e-3f).toInt() + 1
         for (i in 0 until n) {
@@ -42,7 +41,7 @@ class Sandbox(gap: Float, runnerX: Float, speed: Float, farLength: Float = 80f) 
 
     fun penUp(pointer: Int = 7) = sim.penUp(pointer)
 
-    /** A stroke lying on the ground (harness default): 0.4 m past each edge, just above the surface. */
+    /** A stroke lying on the ground: 0.4 m past each edge, just above the surface. */
     fun groundLine(x0: Float, x1: Float, p: Float) = line(x0, x1, LEVEL - (Ink.thickness(p) / 2f + 0.04f), p)
 
     fun boulder(x: Float, vx: Float): Boulder = sim.spawnBoulder(x, LEVEL - GameSim.BOULDER_R - 0.05f, vx)

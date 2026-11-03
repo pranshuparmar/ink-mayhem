@@ -64,8 +64,7 @@ class GroundRect(
     var triggered = false
     /**
      * Stages: a flush neighbour covers this side edge from its top ([edgeLTo]/[edgeRTo]) down
-     * to its bottom ([edgeLFrom]/[edgeRFrom]); only the rest is drawn. NaN draws the whole edge,
-     * as Endless does.
+     * to its bottom ([edgeLFrom]/[edgeRFrom]); only the rest is drawn. NaN draws the whole edge.
      */
     var edgeLTo = Float.NaN
     var edgeLFrom = Float.NaN
@@ -141,7 +140,7 @@ class Segment(
 
 enum class JointKind { ROPE, SPRING, BEAM, ANCHOR }
 
-/** Breakable-joint bookkeeping (POC joint user data). */
+/** Breakable-joint bookkeeping. */
 class JointInfo(
     var strength: Float,
     val t: Float,

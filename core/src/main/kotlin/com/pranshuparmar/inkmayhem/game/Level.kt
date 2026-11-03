@@ -11,7 +11,7 @@ enum class HazardType(val par: Ink?) {
 /** A stretch to judge once the runner passes x1 + 0.6. Stages may set their own [par]. */
 class Hazard(val type: HazardType, val x0: Float, val x1: Float, val par: Ink = type.par!!) {
     var done = false
-    /** Position in a stage's hazard list (−1 in Endless), for its stars. */
+    /** Position in a stage's hazard list (−1 in the tutorial's sandbox), for its stars. */
     var index = -1
 }
 
@@ -280,15 +280,13 @@ class Swipe(val xs: FloatArray, val ys: FloatArray, val n: Int, val at: Float)
  */
 class Warp(val x: Float, val y: Float, val toX: Float, val toY: Float, var hidden: Boolean, val exit: Boolean)
 
-/** Why a run ended; picks the death-card tips. */
+/** What killed the runner (the tutorial picks its hint from it). */
 enum class DeathKind { FELL, BOULDER, SPIKED, STUCK, BLOT, BOSS, ERASER, PLANE, BEETLE, TIDE, POOL }
 
+/** A death: why, what killed it, and the score and distance when it happened. */
 class Death(
     val reason: String,
     val kind: DeathKind,
     val score: Int,
     val distance: Int,
-    val isBest: Boolean,
-    val best: Int,
-    val tip: String,
 )

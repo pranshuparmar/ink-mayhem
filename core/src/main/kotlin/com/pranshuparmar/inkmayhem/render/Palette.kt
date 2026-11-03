@@ -2,10 +2,10 @@ package com.pranshuparmar.inkmayhem.render
 
 import com.badlogic.gdx.graphics.Color
 
-/** Colour tokens from the POC's CSS custom properties. */
+/** Colour tokens, per theme. */
 enum class Tok {
     PAPER, RULE, MARGIN, INK, GRAPHITE, ROCK, DROP, UI, UI_FG, MUTED, LINE, ACCENT, ACCENT_FG, ROPE, SPRING, BEAM, SHADOW,
-    /** Slice 1: Blots (violet ink, never the runner's) and stars (gold, never a spring's amber). */
+    /** Blots (violet ink, never the runner's) and stars (gold, never a spring's amber). */
     BLOT, STAR,
     /** Worlds: Erasers' pink rubber, beetles' shells, paper (planes, the Airliner). */
     ERASER, BEETLE, PAPER_WHITE,

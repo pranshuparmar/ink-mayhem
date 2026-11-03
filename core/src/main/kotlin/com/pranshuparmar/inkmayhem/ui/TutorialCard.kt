@@ -14,11 +14,13 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Dot presents the How to play lessons: it steps out of the lesson's runner (a plain dot is left
- * rolling) to the top of the screen, and the lesson card is its speech balloon: progress, the
- * lesson's title and instruction, a feedback line and a Skip button. Dot looks at the guide (or
- * at the pen while it draws), worries at a hint or a miss and is delighted when a lesson
- * passes. The game swallows pen-downs on the balloon and on Dot, so nobody draws under them.
+ * Dot presents the How to play lessons: the lesson card is its speech balloon at the top of the
+ * screen (progress, the lesson's title and instruction, a feedback line and, unless the lessons
+ * are a must, a Skip button). Dot steps out of the lesson's runner to say each thing (a plain dot
+ * is left on the page meanwhile), looking at the guide, worried at a hint or a miss, delighted
+ * when a lesson passes; and it dives back into the runner while the player draws and while the
+ * runner rolls, so the one on the page has its face then. The game swallows pen-downs on the
+ * balloon and on Dot, so nobody draws under them.
  */
 class TutorialCard(private val fonts: Fonts) {
     /** The balloon. */
@@ -29,7 +31,7 @@ class TutorialCard(private val fonts: Fonts) {
     val press = Press()
     private val body = Flow(21f)
     private val feedback = Flow(18f)
-    private var bodyFor: Tutorial.Lesson? = null
+    private var bodyFor: String? = null
     private var feedbackFor: String? = null
     private var feedbackTone = Tok.MUTED
     private var stepText = ""
@@ -40,6 +42,14 @@ class TutorialCard(private val fonts: Fonts) {
     private var drawer: BuddyDrawer? = null
     private var shownAt = Double.NaN
     private var lastNow = Double.NaN
+    /** Out beside the balloon (or on its way), or in the runner (or on its way back), since [modeAt]. */
+    private var out = true
+    private var modeAt = Double.NaN
+    /** Whether the Skip button shows (the first launch's lessons are a must). */
+    var skippable = true
+    /** Dot has just landed back in the runner: the game splashes ink there (see [consumeLanded]). */
+    private var landed = false
+    private var landing = false
     private var seatX = 0f
     private var seatY = 0f
     /** Where the lesson's runner is on screen (dp), for Dot to step out of. */
@@ -55,14 +65,28 @@ class TutorialCard(private val fonts: Fonts) {
     /** The tutorial has started: Dot steps out. */
     fun begin(now: Double) {
         shownAt = now
+        modeAt = now
+        out = true
+        landed = false
+        landing = false
         lastLesson = -1
         face.hush()
     }
 
+    /** Whether Dot is out of the runner (or on its way out or back in): the runner is drawn as a plain dot. */
+    val dotOut: Boolean get() = out || lastNow.isNaN() || lastNow - modeAt < IN_S
+
+    /** True once each time Dot lands back in the runner. */
+    fun consumeLanded(): Boolean {
+        val l = landed
+        landed = false
+        return l
+    }
+
     fun layout(text: Text, f: Frame, t: Tutorial) {
-        if (bodyFor != t.lesson) {
-            bodyFor = t.lesson
-            body.setText({ fonts.get(Face.UI, 14.5f) }, Tok.MUTED, t.lesson.body)
+        if (bodyFor != t.body) {
+            bodyFor = t.body
+            body.setText({ fonts.get(Face.UI, 14.5f) }, Tok.MUTED, t.body)
             stepText = "LESSON ${t.lessonIndex + 1} OF ${t.lessonCount}"
         }
         val msg = t.feedback.ifEmpty { t.lesson.waiting }
@@ -79,7 +103,7 @@ class TutorialCard(private val fonts: Fonts) {
         val x0 = max(f.padL, (f.wDp - dotW - w) / 2f + (f.padL - f.padR) / 2f)
         val inner = w - 32f
         titleSize = TITLE_SIZE
-        while (titleSize > TITLE_MIN && text.width(fonts.get(Face.HAND_BOLD, titleSize), t.lesson.title) > inner) titleSize -= 2f
+        while (titleSize > TITLE_MIN && text.width(fonts.get(Face.HAND_BOLD, titleSize), t.title) > inner) titleSize -= 2f
         feedback.layout(text, inner)
         val h = 14f + 16f + 4f + 32f + 6f + body.layout(text, inner) + 8f + FEEDBACK_H + 12f
         box.set(x0 + dotW, f.safeT + 10f, w, h)
@@ -87,7 +111,7 @@ class TutorialCard(private val fonts: Fonts) {
         seatY = box.y + R + 10f
         dotBox.set(seatX - R, seatY - R * 1.3f, R * 2f, R * 2.4f)
         val skipW = text.width(fonts.get(Face.UI_BOLD, 13f), SKIP) + 22f
-        skip.set(box.right - 12f - skipW, box.y + 10f, skipW, 30f)
+        if (skippable) skip.set(box.right - 12f - skipW, box.y + 10f, skipW, 30f) else skip.set(0f, 0f, 0f, 0f)
     }
 
     private fun feedbackTop() = box.bottom - 12f - FEEDBACK_H
@@ -107,11 +131,34 @@ class TutorialCard(private val fonts: Fonts) {
                 Tutorial.Phase.TRYING -> if (t.feedback.isNotEmpty() && !t.good) Expr.WORRIED else Expr.CURIOUS
             },
         )
-        // stepping out of the runner: rising, growing, its shadow on the page below
-        val u = if (reduced) 1f else ease(((now - shownAt) / OUT_S).toFloat().coerceIn(0f, 1f))
+        // out to talk; back into the runner while the player draws and while it rolls
+        val wantOut = t.phase != Tutorial.Phase.TRYING || (!t.running && t.sim.drawing == null)
+        if (modeAt.isNaN()) modeAt = now
+        if (wantOut != out) {
+            out = wantOut
+            modeAt = now
+            landing = !out
+        }
+        val k = ((now - modeAt) / if (out) OUT_S else IN_S).toFloat().coerceIn(0f, 1f)
+        if (landing && k >= 1f) {
+            landing = false
+            landed = true
+        }
+        // u: 0 in the runner, 1 out beside the balloon (stepping out it rises, grows and casts a shadow)
+        val u = when {
+            reduced -> if (out) 1f else 0f
+            out -> ease(k)
+            else -> 1f - ease(k)
+        }
+        val ba = if (reduced) 1f else (((now - shownAt) - 0.25).toFloat() / 0.2f).coerceIn(0f, 1f)
+        if (u <= 0f) {
+            if (ba > 0f) balloonShapes(shapes, pal, box, ba, tailLeft = true, tailY = seatY - 4f, tipX = seatX + R, tailA = 0f)
+            if (ba > 0f && skippable) Widgets.button(shapes, pal, skip, primary = false, enabled = true, pressed = press.isPressed(skip))
+            return
+        }
         val r = fromR + (R - fromR) * u
         val x = fromX + (seatX - fromX) * u
-        val y = fromY + (seatY - fromY) * u - if (reduced) 0f else 50f * kotlin.math.sin(u * PI_F)
+        val y = fromY + (seatY - fromY) * u - if (reduced || !out) 0f else 50f * kotlin.math.sin(u * PI_F)
         if (lookX.isNaN()) {
             face.lookX = 0f
             face.lookY = 0.05f
@@ -123,11 +170,10 @@ class TutorialCard(private val fonts: Fonts) {
         shapes.color(pal[Tok.SHADOW], 0.5f * u).ellipse(x + 10f * u, y + r * 1.15f + 16f * u, r * (0.9f + 0.3f * u), r * 0.28f)
         val d = drawer ?: BuddyDrawer(shapes).also { drawer = it }
         d.draw(pal, face, x, y, r, 1f, max(1f, r / 30f))
-        // the balloon, once it's out
-        val ba = if (reduced) 1f else (((now - shownAt) - 0.25).toFloat() / 0.2f).coerceIn(0f, 1f)
+        // the balloon, its tail to Dot while it's beside it
         if (ba <= 0f) return
-        balloonShapes(shapes, pal, box, ba, tailLeft = true, tailY = seatY - 4f, tipX = seatX + R)
-        Widgets.button(shapes, pal, skip, primary = false, enabled = true, pressed = press.isPressed(skip))
+        balloonShapes(shapes, pal, box, ba, tailLeft = true, tailY = seatY - 4f, tipX = seatX + R, tailA = ba * u * u)
+        if (skippable) Widgets.button(shapes, pal, skip, primary = false, enabled = true, pressed = press.isPressed(skip))
     }
 
     private fun ease(u: Float) = 1f - (1f - u) * (1f - u) * (1f - u)
@@ -139,10 +185,10 @@ class TutorialCard(private val fonts: Fonts) {
         var y = box.y + 14f
         text.line(fonts.get(Face.MONO_MEDIUM, 11f), stepText, x, y, 16f, pal[Tok.MUTED], ba)
         y += 16f + 4f
-        text.line(fonts.get(Face.HAND_BOLD, titleSize), t.lesson.title, x, y, 32f, pal[Tok.INK], ba)
+        text.line(fonts.get(Face.HAND_BOLD, titleSize), t.title, x, y, 32f, pal[Tok.INK], ba)
         y += 32f + 6f
         body.draw(text, pal, x, y, ba)
-        Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 13f), pal, skip, SKIP, primary = false, enabled = true)
+        if (skippable) Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 13f), pal, skip, SKIP, primary = false, enabled = true)
         feedback.draw(text, pal, x, feedbackTop() + (FEEDBACK_H - feedback.height) / 2f, ba)
     }
 
@@ -160,6 +206,7 @@ class TutorialCard(private val fonts: Fonts) {
         /** Dot's radius beside the balloon, and how long it takes to step out. */
         private const val R = 26f
         private const val OUT_S = 0.45
+        private const val IN_S = 0.35
         private const val PI_F = kotlin.math.PI.toFloat()
     }
 }

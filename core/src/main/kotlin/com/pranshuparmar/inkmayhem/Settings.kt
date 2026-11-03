@@ -31,7 +31,7 @@ class Settings(private val prefs: Preferences) : StageStore {
         else -> if (prefs.getBoolean(oldSwitch, true)) 1f else 0f
     }
 
-    /** "Colour ink by type": rope green, spring amber, beam red. On by default (the POC's was off). */
+    /** "Colour ink by type": rope green, spring amber, beam red. On by default. */
     var tint: Boolean = prefs.getBoolean("tint", true)
         set(v) { field = v; put { putBoolean("tint", v) } }
 
@@ -64,7 +64,7 @@ class Settings(private val prefs: Preferences) : StageStore {
 
     /**
      * The player's pen tuning (from their rope, spring and beam lines), or null if they never
-     * tuned it. Older installs kept one number ("cal", the POC's signature median): that still
+     * tuned it. Early builds kept one number ("cal", a signature's median pressure): that still
      * works, as a straight-line mapping, until they tune again.
      */
     var calibration: PenCalibration? = when {
@@ -90,9 +90,6 @@ class Settings(private val prefs: Preferences) : StageStore {
     /** Whether pen tuning has been done or skipped (an old one-number calibration doesn't count). */
     var penTuned: Boolean = calibration != null && prefs.contains("cal.rope")
         private set
-
-    var best: Int = prefs.getInteger("best", 0)
-        set(v) { field = v; put { putInteger("best", v) } }
 
     // ---- stage results: best stars and score per stage (never lowered) ----
 

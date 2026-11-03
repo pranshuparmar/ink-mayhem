@@ -9,7 +9,7 @@ import kotlin.math.exp
 
 /**
  * Plays the synthesized sound effects. The pen scratch is a looped band-passed noise whose volume
- * and pitch glide towards their targets like the POC's setTargetAtTime (0.03 s / 0.05 s).
+ * and pitch glide towards their targets (time constants 0.03 s / 0.05 s).
  */
 class Audio(private val settings: Settings) : Disposable {
     /** What the game wants from the music this frame. */
@@ -62,7 +62,7 @@ class Audio(private val settings: Settings) : Disposable {
         s?.play(settings.soundVolume)
     }
 
-    /** POC setScratch(vol, p): pitch follows pressure (1800 + (1 − p) × 2600 Hz). */
+    /** The scratch while drawing: pitch follows pressure (1800 + (1 − p) × 2600 Hz). */
     fun scratch(vol: Float, p: Float) {
         targetVolume = vol * settings.soundVolume
         targetFreq = 1800f + (1f - p.coerceIn(0f, 1f)) * 2600f

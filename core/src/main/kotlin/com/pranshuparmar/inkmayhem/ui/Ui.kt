@@ -21,7 +21,7 @@ class Box(var x: Float = 0f, var y: Float = 0f, var w: Float = 0f, var h: Float 
 }
 
 /**
- * Word-wrapped rich text (the POC's inline <b>/<span> runs) with CSS-style line height. Layout is
+ * Word-wrapped rich text (runs of bold and coloured words) with CSS-style line height. Layout is
  * cached per width so drawing a static card every frame doesn't allocate.
  */
 class Flow(private val lineHeight: Float) {
@@ -104,7 +104,7 @@ class Flow(private val lineHeight: Float) {
 }
 
 object Widgets {
-    /** POC .card: rounded, bordered, with a soft drop shadow (0 10px 36px). */
+    /** A card: rounded, bordered, with a soft drop shadow (0 10 dp, 36 dp blur). */
     fun card(shapes: Shapes, pal: Palette, b: Box, radius: Float = 18f, topOnly: Boolean = false, alpha: Float = 1f) {
         val shadow = pal[Tok.SHADOW]
         for (i in 6 downTo 1) {
@@ -126,7 +126,7 @@ object Widgets {
         }
     }
 
-    /** POC .row button: 42 dp tall, radius 10; primary is accent-filled. */
+    /** A button: 42 dp tall, radius 10; primary is accent-filled. */
     private val mixed = Color()
 
     /** CSS opacity on a whole element over the card: pre-mix instead of stacking translucent shapes. */

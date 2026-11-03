@@ -14,8 +14,8 @@ import com.pranshuparmar.inkmayhem.render.Tok
 import kotlin.math.roundToInt
 
 /**
- * The "Pen readout" (POC #debug): tool type, raw → normalized pressure, buttons, tilt, hover and
- * event rates. Text is rebuilt at most five times a second, like the POC's 200 ms interval.
+ * The "Pen readout": tool type, raw → normalized pressure, buttons, tilt, hover and event
+ * rates. Text is rebuilt at most five times a second.
  */
 class DebugOverlay {
     private val lines = ArrayList<String>()

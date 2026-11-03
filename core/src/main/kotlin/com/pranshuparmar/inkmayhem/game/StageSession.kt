@@ -14,7 +14,7 @@ interface StageStore {
 
 /**
  * Playing stages: lives, the intro before each try, retries from the checkpoint, game over and
- * the clear tally with stars. Runs [sim] (a sim of its own, never the Endless one).
+ * the clear tally with stars. Runs [sim], a sim of its own.
  *
  * A death costs a life and restarts from the last checkpoint. With no lives left it is game
  * over: "Try again" restarts the stage with [START_LIVES]. Lives carry on into the next stage

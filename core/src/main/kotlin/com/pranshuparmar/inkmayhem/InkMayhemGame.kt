@@ -116,7 +116,7 @@ class InkMayhemGame(
 
     /**
      * Which part of the game is on screen; the tutorial overlays any of them. The game opens on
-     * the title screen; there is no Endless.
+     * the title screen.
      */
     private enum class Screen { TITLE, SELECT, STAGE, ENDING }
     private var screen = Screen.TITLE
@@ -142,8 +142,10 @@ class InkMayhemGame(
     private var explainedFor: Any? = null
     /** When Dot steps off the title to say hello on the very first launch (−1: not due). */
     private var welcomeAt = -1.0
-    /** The lessons were chosen in the welcome: when they end, the game starts. */
-    private var playAfterTutorial = false
+    /** The first launch's lessons: they can't be skipped, and when they end the game starts. */
+    private var firstLessons = false
+    /** The pen tuning a touch lesson already gave the settings. */
+    private var lessonTuning: PenCalibration? = null
     private val runnerAt = FloatArray(3)
     /** When the screen last changed: the new one fades in from the paper. */
     private var fadeAt = -10.0
@@ -202,7 +204,7 @@ class InkMayhemGame(
         density = platform.density
         fonts = Fonts(density)
         audio = Audio(settings)
-        sim = GameSim(seed = worldSeed, events = Events(saveBest = true), best = settings.best)
+        sim = GameSim(seed = worldSeed, events = Events())
         world = WorldRenderer(shapes, text, fonts)
         tutorialCard = TutorialCard(fonts)
         selectCard = StageSelectCard(fonts, settings)
@@ -267,6 +269,7 @@ class InkMayhemGame(
             calibration.open -> calibration.skip()
             sheet.open -> sheet.hide()
             dotHelper.open -> dotHelper.dismiss(clock)
+            tutorial != null && firstLessons -> toast.show(FINISH_LESSONS, clock, force = true)
             tutorial != null -> endTutorial(finished = false)
             screen == Screen.TITLE -> Gdx.app.exit()
             screen == Screen.SELECT || screen == Screen.ENDING -> showTitle()
@@ -364,7 +367,7 @@ class InkMayhemGame(
         hDp = height / density
         uiCam.setToOrtho(true, wDp, hDp)
         uiCam.update()
-        // POC: clamp(min(W, H) / 12, 22, 64). A portrait screen also has to show MIN_VIEW_W across,
+        // a twelfth of the short side, within 22..64 dp a metre. A portrait screen also has to show MIN_VIEW_W across,
         // or the runner sees too little of what's coming (and of a boulder behind).
         scale = min(min(wDp, hDp) / 12f, wDp / MIN_VIEW_W).coerceIn(22f, 64f)
         sim.scale = scale
@@ -381,7 +384,7 @@ class InkMayhemGame(
             it.scale = scale
             it.setViewport(wDp / scale, hDp / scale)
         }
-        if (!sized && sim.state == GameState.TITLE) sim.newRun() // frame the start with the real viewport
+        if (!sized && sim.state == GameState.TITLE) sim.blankPage() // frame the page with the real viewport
         sized = true
         warmFonts()
     }
@@ -506,7 +509,7 @@ class InkMayhemGame(
         readout.update(now)
         toast.update(now, reduced)
         val ses = session
-        if (tutorial == null) hud.update(dt, ses?.sim ?: sim, settings.best, reduced, ses?.lives ?: -1, ses?.stars ?: 0, goldEver)
+        if (tutorial == null) hud.update(dt, ses?.sim ?: sim, reduced, ses?.lives ?: -1, ses?.stars ?: 0, goldEver)
         gauge.update(dt, active.drawing != null, reduced)
         // load the tunes this screen may need before it needs them (a boss's during the stage's intro)
         val tuneStage = session?.stage
@@ -583,7 +586,7 @@ class InkMayhemGame(
                     toast.show(FINGER_TOAST, now)
                     return
                 }
-                // POC: the hover nib is only cleared by pen-downs during a run (not the start/restart tap)
+                // the hover nib is only cleared by pen-downs during a run
                 if (active.state == GameState.RUN) world.hoverOn = false
                 val erase = s.toolType == ToolType.ERASER || (s.buttons and (PenButtons.SIDE or PenButtons.SECONDARY)) != 0
                 if (tut != null) tut.penDown(s.pointerId, wx, wy, n, erase, time) else active.penDown(s.pointerId, wx, wy, n, erase, time)
@@ -623,7 +626,18 @@ class InkMayhemGame(
                 }
                 val note = if (recorder != null) strokeNote(s.pointerId) else null
                 val wasDrawing = active.drawing?.pointer == s.pointerId
-                if (tut != null) tut.penUp(s.pointerId) else active.penUp(s.pointerId)
+                if (tut != null) {
+                    // the touch lesson learns the player's pressure from the raw pressure each line settled at
+                    tut.penUp(s.pointerId, if (wasDrawing && strokeByPen) rawSteady.finish(Float.NaN) else Float.NaN)
+                    val cal = tut.calibration
+                    if (cal != null && cal !== lessonTuning) {
+                        lessonTuning = cal
+                        settings.calibration = cal
+                        log { "pen tuned by the touch lesson: $cal" }
+                    }
+                } else {
+                    active.penUp(s.pointerId)
+                }
                 if (note != null) log { "$note -> ${active.lastStrokeInk?.label ?: "nothing"}" }
                 val gate = active.lastGate
                 if (wasDrawing && gate != null && tut == null && strokeByPen) learnGate(gate.ink, rawSteady.finish(Float.NaN))
@@ -786,7 +800,7 @@ class InkMayhemGame(
         welcomeAt = -1.0
         goldEver = settings.gold(def.id)
         session?.sim?.dispose()
-        val ss = GameSim(seed = 1, events = Events(saveBest = false), vwMetres = wDp / scale, vhMetres = hDp / scale)
+        val ss = GameSim(seed = 1, events = Events(), vwMetres = wDp / scale, vhMetres = hDp / scale)
         ss.scale = scale
         ss.tint = settings.tint
         ss.gateTuning = !settings.penTuned
@@ -871,15 +885,7 @@ class InkMayhemGame(
             PenPhase.UP, PenPhase.CANCEL -> {
                 if (s.pointerId != dotHelper.press.pointer) return false
                 val hit = dotHelper.press.up(s.pointerId, dotHelper.targetAt(x, y) ?: dotHelper)
-                if (s.phase == PenPhase.UP && hit != null && hit !== dotHelper.balloon) {
-                    when {
-                        hit === dotHelper.altButton -> dotHelper.choose(clock, alt = true)
-                        hit === dotHelper.button -> dotHelper.next(clock)
-                        // a choice is only answered by its buttons
-                        dotHelper.choosing -> Unit
-                        else -> dotHelper.next(clock)
-                    }
-                }
+                if (s.phase == PenPhase.UP && hit != null && hit !== dotHelper.balloon) dotHelper.next(clock)
                 return true
             }
             else -> return s.pointerId == dotHelper.press.pointer
@@ -938,16 +944,11 @@ class InkMayhemGame(
                 welcomeAt = -1.0
                 dotHelper.targetX = Float.NaN
                 dotHelper.show(clock, WELCOME, titleCard.dotX, titleCard.dotY, com.pranshuparmar.inkmayhem.ui.TitleCard.BUDDY_R, modal = true)
-                dotHelper.onFinished = { settings.metDot = true }
-                // the welcome ends with a choice: a lesson first, or straight into 1-1
-                dotHelper.onChoice = { teach ->
-                    log { "first launch: ${if (teach) "the lessons first" else "straight in"}" }
-                    if (teach) {
-                        playAfterTutorial = true
-                        startTutorial(0)
-                    } else {
-                        (nextStage() ?: Stages.ALL.first()).let(::startStage)
-                    }
+                // then the lessons, starting with the player's touch: a must on the first launch, so
+                // the game and the player agree on light, normal and hard before the first stage
+                dotHelper.onFinished = {
+                    log("first launch: the lessons")
+                    startTutorial(0, firstLaunch = true)
                 }
                 audio.play(Sfx.POP)
                 log("Dot says hello")
@@ -1156,15 +1157,19 @@ class InkMayhemGame(
 
     // ---------------------------------------------------------------------------------- tutorial
 
-    private fun startTutorial(lesson: Int) {
+    /** [firstLaunch]: the lessons after Dot's welcome, which can't be skipped and lead into 1-1. */
+    private fun startTutorial(lesson: Int, firstLaunch: Boolean = false) {
         dotHelper.hide()
+        firstLessons = firstLaunch
+        lessonTuning = null
+        tutorialCard.skippable = !firstLaunch
         welcomeAt = -1.0
         tutorial?.sim?.dispose()
         // the tutorial replaces whatever was being played
         if (screen == Screen.STAGE) endStage()
         afterTutorial = if (screen == Screen.TITLE) Screen.TITLE else Screen.SELECT
         fadeAt = clock
-        val ts = GameSim(seed = 1, events = Events(saveBest = false), vwMetres = wDp / scale, vhMetres = hDp / scale)
+        val ts = GameSim(seed = 1, events = Events(), vwMetres = wDp / scale, vhMetres = hDp / scale)
         ts.scale = scale
         ts.tint = true
         val t = Tutorial(ts)
@@ -1204,8 +1209,9 @@ class InkMayhemGame(
         audio.scratch(0f, 0.5f)
         fx.clear()
         when {
-            playAfterTutorial -> {
-                playAfterTutorial = false
+            firstLessons -> {
+                firstLessons = false
+                settings.metDot = true
                 (nextStage() ?: Stages.ALL.first()).let(::startStage)
             }
             afterTutorial == Screen.TITLE -> showTitle()
@@ -1245,11 +1251,11 @@ class InkMayhemGame(
 
     // ------------------------------------------------------------------------------------ events
 
-    /** [saveBest] is off for the tutorial's sim, whose "runs" mustn't touch the best score. */
-    private inner class Events(private val saveBest: Boolean) : GameEvents {
+    /** What the sims (a stage's, the tutorial's, the menus' page) tell the game. */
+    private inner class Events : GameEvents {
         override fun sound(sfx: Sfx, variant: Int) {
-            // in a stage the lost-life jingle tells a death; the POC's thud would clash with it
-            if (sfx == Sfx.DEATH && !saveBest && session != null && tutorial == null) return
+            // in a stage the lost-life jingle tells a death; the death thud would clash with it
+            if (sfx == Sfx.DEATH && session != null && tutorial == null) return
             audio.play(sfx, variant)
         }
         override fun scratch(volume: Float, pressure: Float) = audio.scratch(volume, pressure)
@@ -1280,7 +1286,6 @@ class InkMayhemGame(
 
         override fun died(death: Death) {
             log { "died ${death.kind.name}: ${death.reason}" }
-            if (saveBest && death.isBest) settings.best = death.best
         }
 
         override fun runReset() = fx.clear()
@@ -1326,12 +1331,16 @@ class InkMayhemGame(
         }
         // the tutorial always colours ink by type: that's what it teaches
         // Dot is out presenting the lessons, or helping in a stage: the runner on the page is a plain dot
-        world.dotOut = tut != null || (dotHelper.visible && screen == Screen.STAGE)
+        world.dotOut = (tut != null && tutorialCard.dotOut) || (dotHelper.visible && screen == Screen.STAGE)
         if (tut != null) {
             val r = runnerOnScreen(tut.sim)
             tutorialCard.fromX = r[0]
             tutorialCard.fromY = r[1]
             tutorialCard.fromR = r[2]
+            if (tutorialCard.consumeLanded()) {
+                val p = tut.sim.runner.body.position
+                fx.burst(p.x, p.y, 12, 1.8f, Tok.INK)
+            }
             // Dot watches the pen while it draws, else the guide
             val d = tut.sim.drawing
             when {
@@ -1369,8 +1378,8 @@ class InkMayhemGame(
         val hudSim = ses?.sim ?: sim
         val ink = max(0f, hudSim.inkLeft - (hudSim.drawing?.cost ?: 0f))
         val drawing = active.drawing
-        // POC: live = drawing ? (drawing.ps ?? 0) : 0, so the marker drops to the bottom as the gauge fades.
-        // The marker is the stroke's steady pressure, so the lit band is the ink the stroke will be.
+        // The marker is the stroke's steady pressure, so the lit band is the ink the stroke will be;
+        // with nothing drawing it drops to the bottom as the gauge fades.
         val live = active.drawingPressure
         val gaugeLeft = safeL + 10f
         val gaugeTop = hDp * 0.3f
@@ -1680,8 +1689,8 @@ class InkMayhemGame(
             DotHelper.Page(null, "I roll along by myself. You draw the way ahead with your S Pen.", com.pranshuparmar.inkmayhem.render.Expr.CURIOUS, "Next", lookAtPlayer = true),
             DotHelper.Page(null, "How hard you press makes the ink: lightly for rope, normally for a spring, hard for a beam.", com.pranshuparmar.inkmayhem.render.Expr.CALM, "Next", lookAtPlayer = true),
             DotHelper.Page(
-                null, "A quick lesson first, or straight in? Either way, I'll stop and show you each new thing as we go.",
-                com.pranshuparmar.inkmayhem.render.Expr.PROUD, "Just play", lookAtPlayer = true, alt = "Teach me first",
+                null, "First, show me how you press, then a few quick lessons. It only takes a minute!",
+                com.pranshuparmar.inkmayhem.render.Expr.PROUD, "Let's go", lookAtPlayer = true,
             ),
         )
         /** The stage list's peek pans across its world at this many metres a second. */
@@ -1690,6 +1699,7 @@ class InkMayhemGame(
         private const val SCREEN_FADE_S = 0.3
         const val FIRST_STAR = "Stars! Every ${GameSim.STARS_PER_LIFE} is an extra life."
         const val READY_TOAST = "You’re ready. The lightest ink that works grows your combo."
+        const val FINISH_LESSONS = "Let’s finish the lessons first. Nearly there!"
         const val SNAP_BUZZ_MS = 12
         private const val TAG_W = 58f
         private const val TOAST_LINE = 19f

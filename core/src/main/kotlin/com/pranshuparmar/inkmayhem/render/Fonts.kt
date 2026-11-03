@@ -7,7 +7,7 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator
 import com.badlogic.gdx.utils.Disposable
 import com.badlogic.gdx.utils.LongMap
 
-/** The three bundled OFL families from the POC. */
+/** The three bundled OFL font families. */
 enum class Face(val file: String) {
     HAND("fonts/Kalam-Regular.ttf"),
     HAND_BOLD("fonts/Kalam-Bold.ttf"),
@@ -20,7 +20,7 @@ enum class Face(val file: String) {
 
 /**
  * Generates bitmap fonts with gdx-freetype at device pixel size and caches them. Fonts are
- * flipped for the y-down cameras and scaled back so callers think in dp (CSS px).
+ * flipped for the y-down cameras and scaled back so callers think in dp.
  */
 class Fonts(private var density: Float) : Disposable {
     private val generators = HashMap<Face, FreeTypeFontGenerator>()
@@ -67,7 +67,7 @@ class Fonts(private var density: Float) : Disposable {
     }
 
     companion object {
-        /** Everything the game writes, including the POC's typographic extras. */
+        /** Everything the game writes, including its typographic extras. */
         val TEXT = FreeTypeFontGenerator.DEFAULT_CHARS + "×·‘’“”…→—–°"
         const val DIGITS = "0123456789,.-+×mpts "
     }

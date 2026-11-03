@@ -25,25 +25,19 @@ import kotlin.random.Random
 enum class GameState { TITLE, RUN, DEAD, CLEAR }
 
 /**
- * The POC's game logic (everything in its IIFE except DOM, canvas and WebAudio): run lifecycle,
- * world generation, the fixed-step tick, drawing and erasing, scoring and deaths.
+ * The game's rules: a stage (or the tutorial's sandbox) built into the physics, the fixed-step
+ * tick, drawing and erasing, creatures, power-ups, bosses, scoring and deaths.
  *
  * World units are metres, y down. Input arrives in world coordinates with normalized pressure.
- * World generation draws from a seeded RNG; cosmetic randomness (tips, particle phases) uses a
- * separate one so it never perturbs the level.
+ * Cosmetic randomness (particle phases) comes from a seeded RNG, so a run replays the same.
  */
 class GameSim(
     seed: Long = Random.nextLong(),
     var events: GameEvents = GameEvents.None,
-    /** Best score so far (persisted by the caller via [GameEvents.died]). */
-    var best: Int = 0,
     /** Initial viewport in metres (W / SCALE, H / SCALE); see [setViewport]. */
     vwMetres: Float = 12f,
     vhMetres: Float = 26f,
 ) {
-    var seed: Long = seed
-        private set
-    private var gen = Random(seed)
     private val fx = Random(seed xor 0x5DEECE66DL)
 
     var state = GameState.TITLE
@@ -59,7 +53,7 @@ class GameSim(
     val drops = ArrayList<Drop>()
     val notes = ArrayList<Note>()
     val boulders = ArrayList<Boulder>()
-    /** Stage pieces (empty in Endless): floor and ceiling spike strips, lifts and seesaws. */
+    /** Stage pieces: floor and ceiling spike strips, lifts and seesaws. */
     val spikeStrips = ArrayList<com.pranshuparmar.inkmayhem.physics.GroundRect>()
     val lifts = ArrayList<Lift>()
     val seesaws = ArrayList<Seesaw>()
@@ -87,12 +81,9 @@ class GameSim(
     /** The hitter's downward speed as it touched (after the step, a heavy target has stopped it). */
     private val blotHitVy = com.badlogic.gdx.utils.FloatArray(4)
 
+    /** Where the next sandbox ground piece starts, and the ground level being built at. */
     private var genX = 0f
     private var level = 20f
-    private var nSec = 0
-    private var lastHazard: HazardType? = null
-    private var boulderCd = 0
-    private val poolWeights = FloatArray(POOL.size)
 
     /** Camera top-left in metres. */
     val cam = Vector2()
@@ -116,13 +107,10 @@ class GameSim(
         private set
     var simT = 0f
         private set
-    /** Real-time clock (seconds) maintained by the caller, for the restart delay. */
+    /** Real-time clock (seconds) maintained by the caller, for timing the clear and pulsing guides. */
     var realTime = 0.0
-    var deadAt = 0.0
-        private set
     var death: Death? = null
         private set
-    private var nextSpeedNote = 100f
     var snaps = 0
         private set
     /** Spring bounces of the runner this run. */
@@ -223,7 +211,7 @@ class GameSim(
 
     // ---------------------------------------------------------------- stages
 
-    /** The stage being played, or null in Endless (and the tutorial). */
+    /** The stage being played, or null in the tutorial's sandbox and the menus' blank page. */
     var stage: StageDef? = null
         private set
     /** Progress through the current stage attempt, kept across checkpoint retries. */
@@ -283,8 +271,11 @@ class GameSim(
     /** The ink the stroke being drawn will be, or null. */
     val drawingInk: Ink? get() = drawing?.let { inkOf(it, drawingPressure) }
 
-    /** A stroke's ink at steady pressure [p]: a tuning gate's own while the pen is untuned. */
-    private fun inkOf(d: Drawing, p: Float): Ink = d.forced?.ink ?: Ink.of(p)
+    /** A stroke's ink at steady pressure [p]: a tuning gate's own while the pen is untuned, or [forcedInk]. */
+    private fun inkOf(d: Drawing, p: Float): Ink = d.forced?.ink ?: forcedInk ?: Ink.of(p)
+
+    /** Every stroke is this ink whatever its pressure (the tutorial's touch lesson); null: by pressure. */
+    var forcedInk: Ink? = null
 
     /** Whether the pen's current end of the stroke being drawn touches a surface and would hook. */
     val tipHooks: Boolean
@@ -336,35 +327,25 @@ class GameSim(
         var chalk = false
     }
 
-    val difficulty: Float get() = (dist / 600f).coerceIn(0f, 1f)
-    val runSpeed: Float get() = if (speedOverride.isNaN()) 3.4f + 2.6f * difficulty else speedOverride
-
-    /** Sandbox only: a fixed run speed instead of the distance-based one. */
-    var speedOverride = Float.NaN
-    private var generating = true
+    /** The runner's cruising speed in m/s: the stage's, or the sandbox's. */
+    var runSpeed = BASE_SPEED
 
     fun setViewport(vwMetres: Float, vhMetres: Float) {
         vw = vwMetres
         vh = vhMetres
     }
 
-    /** Reseeds world generation for the next [newRun] (tests and the desktop autoplay). */
-    fun reseed(newSeed: Long) {
-        seed = newSeed
-        gen = Random(newSeed)
-    }
-
     // ---------------------------------------------------------------- run lifecycle
 
-    fun newRun() {
+    /** A plain page with flat ground and a runner standing still: what the menus show behind them. */
+    fun blankPage() {
         resetWorld()
         stageRun = null
-        speedOverride = Float.NaN
-        generating = true
-        level = 20f; genX = -40f; nSec = 0; lastHazard = null; boulderCd = 0
+        runSpeed = BASE_SPEED
+        level = 20f; genX = -40f
         addGround(48f)
         spawnRunner(0f)
-        generate()
+        state = GameState.TITLE
     }
 
     private fun resetWorld() {
@@ -385,9 +366,9 @@ class GameSim(
         beetleOn.clear(); beetleOnStroke.clear(); runnerInk.fill(0)
         starsTaken = 0; squashed = 0; starStep = -1; lastStarT = -10f
         mood = Mood.CALM; bounceAt = -10f; happyUntil = -10f; ouchAt = -10f; lastGate = null
-        stage = null; runnerOnLift = 0
+        stage = null; runnerOnLift = 0; forcedInk = null
         combo = 1; score = 0.0; scoredDist = 0f; pendingDeath = null; boulderBounce.clear()
-        dist = 0f; inkLeft = INK_START; timeScale = 1f; simT = 0f; snaps = 0; bounces = 0; nextSpeedNote = 100f
+        dist = 0f; inkLeft = INK_START; timeScale = 1f; simT = 0f; snaps = 0; bounces = 0
         drawing = null; erasingPointer = -1; pendingBounce = false; death = null
     }
 
@@ -400,8 +381,8 @@ class GameSim(
     }
 
     /**
-     * Where the runner sits across the view: the POC's 28 %, or 22 % on a narrow (portrait) view so
-     * more of what's coming fits.
+     * Where the runner sits across the view: 28 %, or 22 % on a narrow (portrait) view so more of
+     * what's coming fits.
      */
     private val runnerFrac: Float get() = if (vw < NARROW_VIEW) 0.22f else 0.28f
 
@@ -430,7 +411,6 @@ class GameSim(
         val keep = stageRun?.takeIf { fromCheckpoint && it.def === def && it.checkpoint }
         val l = def.layout
         resetWorld()
-        generating = false
         stage = def
         for (b in l.blocks) {
             if (b.hidden) {
@@ -521,8 +501,7 @@ class GameSim(
         spawnRunner(sx)
         dist = sx
         scoredDist = sx
-        nextSpeedNote = Float.POSITIVE_INFINITY
-        speedOverride = def.speed
+        runSpeed = def.speed
         hazards.fastEach { if (it.x1 < sx) it.done = true }
         drops.fastEach { if (it.x < sx) it.taken = true }
         stars.fastEach { if (it.x < sx) it.taken = true }
@@ -540,13 +519,11 @@ class GameSim(
     }
 
     /**
-     * Sandbox for tests and tools: hand-built terrain instead of generated sections. Each rect is
-     * (x, top, width) of 40 m deep ground; the runner starts on the ground at [runnerX] and the
-     * run begins immediately.
+     * Sandbox for the tutorial and tests: hand-built terrain. Each rect is (x, top, width) of 40 m
+     * deep ground; the runner starts on the ground at [runnerX] and the run begins immediately.
      */
     fun loadSandbox(rects: List<FloatArray>, runnerX: Float) {
         resetWorld()
-        generating = false
         for (r in rects) {
             genX = r[0]
             level = r[1]
@@ -568,12 +545,6 @@ class GameSim(
         val body = ink.addBall(x, y, BOULDER_R, 2.5f, 1f, 0.02f, FixtureTag.BOULDER, bullet = false)
         body.setLinearVelocity(vx, 0f)
         return Boulder(body).also { boulders += it }
-    }
-
-    /** Abandons whatever is going on and shows a fresh level under the title card. */
-    fun toTitle() {
-        newRun()
-        state = GameState.TITLE
     }
 
     /** Jumps the camera to where it is heading (a new tutorial scene shouldn't pan in). */
@@ -598,43 +569,20 @@ class GameSim(
         return runnerX - vw * frac
     }
 
-    /** Starts the Endless run from the title card (its "Endless" button). */
-    fun begin() {
-        if (state == GameState.TITLE) startRun()
-    }
-
-    private fun startRun() {
-        if (state == GameState.TITLE) {
-            state = GameState.RUN
-            return
-        }
-        newRun()
-        state = GameState.RUN
-    }
-
     private fun die(why: String, kind: DeathKind) {
         if (state != GameState.RUN) return
         state = GameState.DEAD
-        deadAt = realTime
         events.shake(0.35f)
         events.sound(Sfx.DEATH)
         events.haptic(Haptic.DEATH)
-        val d = floor(dist).toInt()
-        val sc = floor(score).toInt()
-        val isBest = sc > best
-        if (isBest) best = sc
-        val tips = TIPS.getValue(kind)
-        death = Death(why, kind, sc, d, isBest, best, tips[fx.nextInt(tips.size)])
+        death = Death(why, kind, floor(score).toInt(), floor(dist).toInt())
         events.died(death!!)
         events.scratch(0f, 0.5f)
         drawing = null
         ink.clearWet()
     }
 
-    /** POC: a pen-down 0.7 s after dying restarts. */
-    val canRestart: Boolean get() = state == GameState.DEAD && realTime - deadAt > RESTART_DELAY
-
-    // ---------------------------------------------------------------- world generation
+    // ---------------------------------------------------------------- sandbox ground
 
     private fun addGround(len: Float): com.pranshuparmar.inkmayhem.physics.GroundRect {
         val r = ink.addRect(genX, level, len, 40f)
@@ -646,112 +594,6 @@ class GameSim(
 
     private fun note(text: String, dx: Float, dy: Float) {
         notes += Note(genX + dx, level - dy, text)
-    }
-
-    private fun placeDrops(x0: Float, len: Float) {
-        if (len < 4f) return
-        if (gen.nextFloat() < 0.6f) drops += Drop(x0 + 1.5f + gen.nextFloat() * (len - 3f), level - 0.75f, DROP_INK, false, fx.nextFloat() * 6f)
-        if (gen.nextFloat() < 0.22f) {
-            // the same draws either way, so a rock never changes the rest of the level
-            val d = Drop(x0 + 2f + gen.nextFloat() * (len - 4f), level - 4.2f, HIGH_DROP_INK, true, fx.nextFloat() * 6f)
-            if (!insideRock(d)) drops += d
-        }
-    }
-
-    /** A high drop over a tunnel would sit inside its rock, where nothing can reach it. */
-    private fun insideRock(d: Drop): Boolean {
-        ceilings.fastEach { c -> if (d.x > c.x - ROCK_CLEARANCE && d.x < c.right + ROCK_CLEARANCE && d.y < c.y + c.h + ROCK_CLEARANCE) return true }
-        return false
-    }
-
-    private fun rnd(a: Float, b: Float) = a + gen.nextFloat() * (b - a)
-
-    private fun hazard(type: HazardType, x0: Float, x1: Float) {
-        hazards += Hazard(type, x0, x1)
-    }
-
-    private fun genSection() {
-        val d = difficulty
-        val flatLen = max(4.5f, rnd(8f, 12f) - 4f * min(1f, genX / 700f))
-        // every hazard sits between flats
-        val x0 = genX
-        addGround(flatLen)
-        placeDrops(x0, flatLen)
-        var type: HazardType?
-        var text: String? = null
-        if (nSec < INTRO.size) {
-            type = INTRO[nSec].first
-            text = INTRO[nSec].second
-        } else {
-            poolWeights[0] = 1.6f                                  // gapS
-            poolWeights[1] = 2.6f                                  // gapM
-            poolWeights[2] = 2f + 1.5f * d                         // gapL
-            poolWeights[3] = 2.4f                                  // wall
-            poolWeights[4] = 1.8f + d                              // tunnel
-            poolWeights[5] = 1f                                    // drop
-            poolWeights[6] = if (boulderCd <= 0) 1.6f + d else 0f  // boulder
-            var tot = 0f
-            for (w in poolWeights) tot += w
-            var r = gen.nextFloat() * tot
-            type = null // float rounding can leave r > 0: the POC's undefined type, a plain flat
-            for (i in POOL.indices) {
-                r -= poolWeights[i]
-                if (r <= 0f) {
-                    type = POOL[i]
-                    break
-                }
-            }
-            if (type == lastHazard && type != HazardType.GAP_M) type = HazardType.GAP_M
-        }
-        if (type == HazardType.WALL && level < 11f) type = HazardType.DROP
-        if (type == HazardType.DROP && level > 27f) type = HazardType.WALL
-        if (text != null) {
-            note(text, -flatLen + 0.6f, if (type == HazardType.TUNNEL) 4.6f else 3.4f)
-            // the tunnel's rock covers the end of this flat: wrap the note in the room before it
-            if (type == HazardType.TUNNEL) notes[notes.size - 1].maxW = flatLen - TUNNEL_OVERHANG - 0.6f - 0.4f
-        }
-        boulderCd--
-        when (type) {
-            null -> Unit
-            HazardType.GAP_S -> gap(type, rnd(2.2f, 3.2f))
-            HazardType.GAP_M -> gap(type, rnd(4.2f, 5.8f))
-            HazardType.GAP_L -> gap(type, rnd(7.6f, 9.2f))
-            HazardType.WALL -> {
-                level -= rnd(2.1f, 2.8f)
-                hazard(HazardType.WALL, genX, genX + 1f)
-            }
-            HazardType.DROP -> level += rnd(1.6f, 2.6f)
-            HazardType.TUNNEL -> {
-                // A spiked ceiling over a gap: springs launch you into it. Only the underside is
-                // spiked, and the rock rises out of sight so nothing can bounce over it.
-                val w = rnd(3.8f, 5.2f)
-                val cx0 = genX - TUNNEL_OVERHANG
-                val cx1 = genX + w + TUNNEL_OVERHANG
-                addTunnelRock(cx0, cx1, level - 2.1f)
-                drops.removeAll { it.high && insideRock(it) }
-                gap(type, w)
-            }
-            HazardType.BOULDER -> {
-                // runway: the boulder spawns on it, 10 m behind the runner, and closes in
-                val r0 = genX
-                addGround(18f).boulderTrigger = r0 + 10.5f
-                gap(type, rnd(4.8f, 5.8f))
-                boulderCd = 3
-            }
-        }
-        lastHazard = type
-        nSec++
-    }
-
-    private fun gap(type: HazardType, w: Float) {
-        val x0 = genX
-        genX += w
-        hazard(type, x0, genX)
-    }
-
-    private fun generate() {
-        if (!generating) return
-        while (genX < cam.x + vw + 30f) genSection()
     }
 
     /** Deepest ground level within ±10 m of [x]. */
@@ -862,16 +704,11 @@ class GameSim(
     // ---------------------------------------------------------------- input (world coordinates)
 
     /**
-     * POC pointerdown on the canvas, after the finger check. [erase] = side button / eraser end.
-     * Starts the run from the title or (0.7 s after dying) restarts it; otherwise erases or begins
-     * a stroke. [n] is normalized pressure, [t] the sample time in seconds.
+     * A pen-down on the page (fingers never get here). [erase] = side button / eraser end: erases;
+     * otherwise begins a stroke. [n] is normalized pressure, [t] the sample time in seconds. After
+     * a death the stage restarts through its session.
      */
     fun penDown(pointer: Int, x: Float, y: Float, n: Float, erase: Boolean, t: Double) {
-        // (a stage restarts through its session, never into an Endless run)
-        if (stage == null && (state == GameState.TITLE || canRestart)) {
-            startRun()
-            return
-        }
         if (state != GameState.RUN) return
         if (drawing != null || erasingPointer >= 0) return
         if (erase) {
@@ -960,7 +797,7 @@ class GameSim(
 
     /**
      * Lays wet ink up to the newest point in pieces of at least [WET_STEP], so the runner can
-     * roll on a stroke while it is still being drawn (the POC built it only on pen-up). Only a
+     * roll on a stroke while it is still being drawn, not only once it's finished. Only a
      * stroke begun where it will be pinned is laid (one begun in mid-air falls when finished),
      * and rope past [ROPE_MAX_LEN] isn't, as the finished rope would give way there.
      */
@@ -1006,7 +843,7 @@ class GameSim(
             return
         }
         // one ink for the whole stroke, from the pressure it settled at (or the tuning gate's)
-        val kind = d.forced?.ink ?: Ink.of(steady.finish(d.smoothed))
+        val kind = d.forced?.ink ?: forcedInk ?: Ink.of(steady.finish(d.smoothed))
         val n = d.size
         val ps = d.ps
         // Flatten the pen-down and pen-up pressure ramps.
@@ -1193,7 +1030,7 @@ class GameSim(
 
     // ---------------------------------------------------------------- simulation
 
-    /** One fixed 1/60 s tick (POC tick(dt)). */
+    /** One fixed 1/60 s tick. */
     fun tick(dt: Float) {
         snapshot()
         val target = if (state == GameState.DEAD) 0.35f else 1f
@@ -1317,11 +1154,6 @@ class GameSim(
             val px = p.x
             val py = p.y
             dist = max(dist, px)
-            if (dist >= nextSpeedNote) {
-                events.toast("${nextSpeedNote.toInt()} m. Faster now.", force = true)
-                nextSpeedNote += 100f
-                events.sound(Sfx.SPEED_UP)
-            }
             // boulder triggers
             for (bi in blocks.indices) {
                 val b = blocks[bi]
@@ -1395,7 +1227,6 @@ class GameSim(
         val ty = p.y - vh * camRunnerY + if (staged) (rb.linearVelocity.y * 0.3f).coerceIn(-2f, 4f) else 0f
         cam.x += (tx - cam.x) * min(1f, dt * 4f)
         cam.y += (ty - cam.y) * min(1f, dt * if (staged) 4f else 2.5f)
-        if (state != GameState.TITLE) generate()
 
         runner.squash = max(0f, runner.squash - dt * 4f)
         drops.fastEach { it.t += dt }
@@ -1444,7 +1275,7 @@ class GameSim(
         return n >= 2 && d.startAnchored && tipHooks
     }
 
-    // ---------------------------------------------------------------- slice 1: stars, Blots, boxes, Bold
+    // ---------------------------------------------------------------- stars, Blots, boxes, Bold
 
     // ---------------------------------------------------------------- bosses
 
@@ -2275,7 +2106,7 @@ class GameSim(
         }
     }
 
-    /** POC tok[ev.kind] || tok.ink: anchors have no colour token of their own. */
+    /** The colour of a snap's particles: anchors have no colour of their own, so they use plain ink. */
     private fun snapColor(kind: JointKind) = when (kind) {
         JointKind.ROPE -> Tok.ROPE
         JointKind.SPRING -> Tok.SPRING
@@ -2285,7 +2116,7 @@ class GameSim(
 
     private var cullT = 0f
 
-    /** POC cull(dt): every 0.5 s, drop everything more than 25 m behind the camera. */
+    /** Every 0.5 s, drops everything more than 25 m behind the camera. */
     fun cull(dt: Float) {
         cullT += dt
         if (cullT < 0.5f) return
@@ -2319,7 +2150,7 @@ class GameSim(
 
     // Last, so every property above (notably the contact listener) is initialized first.
     init {
-        newRun()
+        blankPage()
     }
 
     companion object {
@@ -2329,7 +2160,7 @@ class GameSim(
         /** Stage lifts and seesaws. */
         const val LIFT_H = 0.5f
         const val LIFT_PAUSE = 0.8f
-        /** Stages: the most the drive torque brakes an over-speeding runner (Endless: 7). */
+        /** Stages: the most the drive torque brakes an over-speeding runner (in a boss arena or the sandbox: 7). */
         const val STAGE_BRAKE = 1.5f
         const val SEESAW_THICK = 0.3f
         /** Wet ink is laid in pieces at least this long (half a stroke segment). */
@@ -2338,7 +2169,6 @@ class GameSim(
         const val TUNNEL_OVERHANG = 3.5f
         const val ROCK_H = 40f
         const val SPIKE_DEPTH = 0.12f
-        private const val ROCK_CLEARANCE = 0.6f
         const val RUNNER_R = 0.4f
         /** A view narrower than this (metres) is a portrait one: the runner sits further left. */
         const val NARROW_VIEW = 18f
@@ -2350,8 +2180,9 @@ class GameSim(
         const val DROP_INK = 12f
         const val HIGH_DROP_INK = 25f
         const val COMBO_MAX = 9
-        const val RESTART_DELAY = 0.7
-        /** Slice 1. Stars: pickup radius, points, the streak window and its notes. */
+        /** The runner's speed (m/s) where nothing sets one. */
+        const val BASE_SPEED = 3.4f
+        /** Stars: pickup radius, points, the streak window and its notes. */
         const val STAR_R = 0.32f
         const val STAR_POINTS = 20
         const val STREAK_S = 0.9f
@@ -2446,50 +2277,5 @@ class GameSim(
         const val TIP_PAD = "Lay the spring flat on the ground, along the dotted line."
         const val OUT_OF_INK = "Out of ink. Grab the blue drops."
         const val TOO_LONG_FOR_ROPE = "Too long for rope. Press harder."
-
-        val INTRO = listOf(
-            HazardType.GAP_S to "Draw a bridge ahead of the runner.",
-            HazardType.GAP_M to "Light touch makes rope. Use the lightest ink that works to grow your combo.",
-            HazardType.WALL to "Write normally for a spring. Bounce over.",
-            HazardType.TUNNEL to "Low ceiling. Bouncing here is fatal. Rope it.",
-            HazardType.GAP_L to "Too far for rope. Press hard for a beam, or bounce across.",
-            HazardType.BOULDER to "Boulder behind! Rope drops it. Springs and beams carry it after you.",
-        )
-
-        private val POOL = arrayOf(
-            HazardType.GAP_S, HazardType.GAP_M, HazardType.GAP_L, HazardType.WALL,
-            HazardType.TUNNEL, HazardType.DROP, HazardType.BOULDER,
-        )
-
-        val TIPS = mapOf(
-            DeathKind.FELL to listOf(
-                "Long gaps need a beam: press hard.",
-                "Write normally on the near edge to bounce across.",
-                "Draw ahead of the runner, not under it.",
-            ),
-            DeathKind.BOULDER to listOf(
-                "Rope is too weak for the boulder. Let it fall through.",
-                "Springs launch the boulder after you. Use rope.",
-                "Beams carry the boulder too. Use light ink.",
-            ),
-            DeathKind.SPIKED to listOf(
-                "Under a low ceiling, springs are fatal. Rope it.",
-                "A flat rope under a ceiling is all you need.",
-            ),
-            DeathKind.STUCK to listOf(
-                "Thick beams make walls. Erase with the side button.",
-                "A spring in front of a wall bounces you over.",
-            ),
-            DeathKind.BLOT to listOf(
-                "Bounce on Blots: a spring just before one.",
-                "Drop a beam on a Blot from above.",
-            ),
-            DeathKind.BOSS to listOf("Watch what hurts it, and spring clear of it."),
-            DeathKind.ERASER to listOf("A beam wall stops an Eraser. Rope over a gap drops it."),
-            DeathKind.PLANE to listOf("A beam roof stops paper planes. Or spring over them."),
-            DeathKind.BEETLE to listOf("Beetles can't bite beams. Race them, or bounce on them."),
-            DeathKind.TIDE to listOf("Keep moving: the tide never stops.", "Draw ahead: every stall lets the tide catch up."),
-            DeathKind.POOL to listOf("Ink pools swallow ink too. Keep bridges tight, above the ink.", "A beam doesn't sag into the pool."),
-        )
     }
 }

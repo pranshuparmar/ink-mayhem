@@ -11,7 +11,7 @@ import com.pranshuparmar.inkmayhem.render.Text
 import com.pranshuparmar.inkmayhem.render.Tok
 
 /**
- * POC #sheet: a bottom sheet of rows (volume sliders, then checkboxes) with "How to play",
+ * Settings: a bottom sheet of rows (volume sliders, then checkboxes) with "How to play",
  * "Tune your pen" and "Done".
  */
 class SettingsSheet(

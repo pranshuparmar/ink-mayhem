@@ -13,8 +13,8 @@ class HookTest {
     @AfterEach
     fun dispose() = sb.sim.dispose()
 
-    private val rope = InkBot.PRESSURE.getValue(Ink.ROPE)
-    private val beam = InkBot.PRESSURE.getValue(Ink.BEAM)
+    private val rope = StageBuilder.PRESSURE.getValue(Ink.ROPE)
+    private val beam = StageBuilder.PRESSURE.getValue(Ink.BEAM)
 
     @Test
     fun `a bridge drawn on the edges hooks at both ends`() {
@@ -25,7 +25,7 @@ class HookTest {
     @Test
     fun `a rope drawn above the edges isn't held, and falls`() {
         sb.sim.runnerHeld = true
-        sb.line(-0.3f, 3.5f, Sandbox.LEVEL - 0.45f, rope) // the POC's reach would have hooked it
+        sb.line(-0.3f, 3.5f, Sandbox.LEVEL - 0.45f, rope) // a looser reach (any ground within anchorR) would have hooked it
         val s = sb.sim.ink.strokes.last()
         assertEquals(0, s.anchors.size)
         val y0 = s.segs[s.segs.size / 2].group!!.body!!.position.y

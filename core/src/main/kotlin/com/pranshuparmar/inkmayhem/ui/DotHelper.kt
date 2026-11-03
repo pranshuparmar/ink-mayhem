@@ -18,16 +18,17 @@ import kotlin.math.sin
  * Dot's speech balloon in [b]: a rounded card outlined in ink, its tail at height [tailY]
  * reaching to [tipX] (Dot's edge), on its left side when [tailLeft].
  */
-internal fun balloonShapes(shapes: Shapes, pal: Palette, b: Box, a: Float, tailLeft: Boolean, tailY: Float, tipX: Float) {
+internal fun balloonShapes(shapes: Shapes, pal: Palette, b: Box, a: Float, tailLeft: Boolean, tailY: Float, tipX: Float, tailA: Float = a) {
     shapes.color(pal[Tok.SHADOW], 0.5f * a).roundRect(b.x + 2f, b.y + 4f, b.w, b.h, 16f)
     shapes.color(pal[Tok.INK], a).roundRect(b.x - 2f, b.y - 2f, b.w + 4f, b.h + 4f, 18f)
     shapes.color(pal[Tok.UI], a).roundRect(b.x, b.y, b.w, b.h, 16f)
+    if (tailA <= 0f) return
     if (tailLeft) {
-        shapes.color(pal[Tok.INK], a).triangle(b.x - 1f, tailY - 10f, b.x - 1f, tailY + 8f, tipX + 4f, tailY)
-        shapes.color(pal[Tok.UI], a).triangle(b.x + 1.5f, tailY - 7.5f, b.x + 1.5f, tailY + 5.5f, tipX + 8f, tailY)
+        shapes.color(pal[Tok.INK], tailA).triangle(b.x - 1f, tailY - 10f, b.x - 1f, tailY + 8f, tipX + 4f, tailY)
+        shapes.color(pal[Tok.UI], tailA).triangle(b.x + 1.5f, tailY - 7.5f, b.x + 1.5f, tailY + 5.5f, tipX + 8f, tailY)
     } else {
-        shapes.color(pal[Tok.INK], a).triangle(b.right + 1f, tailY - 10f, b.right + 1f, tailY + 8f, tipX - 4f, tailY)
-        shapes.color(pal[Tok.UI], a).triangle(b.right - 1.5f, tailY - 7.5f, b.right - 1.5f, tailY + 5.5f, tipX - 8f, tailY)
+        shapes.color(pal[Tok.INK], tailA).triangle(b.right + 1f, tailY - 10f, b.right + 1f, tailY + 8f, tipX - 4f, tailY)
+        shapes.color(pal[Tok.UI], tailA).triangle(b.right - 1.5f, tailY - 7.5f, b.right - 1.5f, tailY + 5.5f, tipX - 8f, tailY)
     }
 }
 
@@ -41,11 +42,7 @@ internal fun balloonShapes(shapes: Shapes, pal: Palette, b: Box, a: Float, tailL
  */
 class DotHelper(private val fonts: Fonts) {
     /** One balloonful: an optional handwritten note, what Dot says, its face, and its button. */
-    class Page(
-        val note: String?, val say: String, val expr: Expr, val button: String = "Got it", val lookAtPlayer: Boolean = false,
-        /** A second choice beside the button (the last page only): picking it calls [onChoice] with true. */
-        val alt: String? = null,
-    )
+    class Page(val note: String?, val say: String, val expr: Expr, val button: String = "Got it", val lookAtPlayer: Boolean = false)
 
     private enum class Mode { HIDDEN, OUT, IN }
 
@@ -69,10 +66,6 @@ class DotHelper(private val fonts: Fonts) {
     private val face = BuddyState()
     private var drawer: BuddyDrawer? = null
     val button = Box()
-    /** The second choice on a page that has one. */
-    val altButton = Box()
-    /** Called when a page with two choices is answered: true for [Page.alt], false for its button. */
-    var onChoice: ((alt: Boolean) -> Unit)? = null
     val balloon = Box()
     private val dot = Box()
     val press = Press()
@@ -122,25 +115,12 @@ class DotHelper(private val fonts: Fonts) {
         mode = Mode.IN
         modeAt = now
         press.cancel()
-        onChoice = null
         onFinished?.invoke()
         onFinished = null
     }
 
-    /** Whether the page on show asks for a choice (only its buttons answer it). */
-    val choosing: Boolean get() = open && pages.getOrNull(page)?.alt != null
-
-    /** One of a choice page's buttons: [alt] for the second. Dot goes back in and [onChoice] hears which. */
-    fun choose(now: Double, alt: Boolean) {
-        val c = onChoice
-        onChoice = null
-        dismiss(now)
-        c?.invoke(alt)
-    }
-
     /** The next page, or back in after the last. */
     fun next(now: Double) {
-        if (pages.getOrNull(page)?.alt != null) return choose(now, alt = false)
         if (page < pages.size - 1) {
             page++
             face.set(pages[page].expr)
@@ -158,7 +138,6 @@ class DotHelper(private val fonts: Fonts) {
     fun targetAt(x: Float, y: Float): Any? = when {
         !open -> null
         button.contains(x, y) -> button
-        pages.getOrNull(page)?.alt != null && altButton.contains(x, y) -> altButton
         dot.contains(x, y) -> dot
         balloon.contains(x, y) -> balloon
         else -> null
@@ -207,15 +186,7 @@ class DotHelper(private val fonts: Fonts) {
             balloon.set(seatX - R - 18f - bw, top, bw, bh)
         }
         seatY = top + R + 6f
-        // a choice page: the button for its main choice, the other left of it, sized to their words
-        val btnW = if (p.alt != null) text.width(fonts.get(Face.UI_BOLD, 14f), p.button) + 28f else BUTTON_W
-        button.set(balloon.right - 14f - btnW, balloon.bottom - 12f - 36f, btnW, 36f)
-        if (p.alt != null) {
-            val aw = text.width(fonts.get(Face.UI_BOLD, 14f), p.alt) + 28f
-            altButton.set(button.x - 8f - aw, button.y, aw, 36f)
-        } else {
-            altButton.set(0f, 0f, 0f, 0f)
-        }
+        button.set(balloon.right - 14f - BUTTON_W, balloon.bottom - 12f - 36f, BUTTON_W, 36f)
         dot.set(seatX - R, seatY - R * 1.3f, R * 2f, R * 2.4f)
     }
 
@@ -300,7 +271,6 @@ class DotHelper(private val fonts: Fonts) {
         // the balloon, its tail to Dot
         balloonShapes(shapes, pal, balloon, ba, onLeft, seatY - 4f, if (onLeft) seatX + R else seatX - R)
         Widgets.button(shapes, pal, button, primary = true, enabled = true, pressed = press.isPressed(button))
-        if (p.alt != null) Widgets.button(shapes, pal, altButton, primary = false, enabled = true, pressed = press.isPressed(altButton))
     }
 
     fun drawText(text: Text, pal: Palette, now: Double) {
@@ -318,7 +288,6 @@ class DotHelper(private val fonts: Fonts) {
         }
         text.draw(fonts.get(Face.UI_BOLD, 15f), p.say, x, y, pal[Tok.UI_FG], ba, Align.left, w)
         Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 14f), pal, button, p.button, primary = true, enabled = true)
-        if (p.alt != null) Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 14f), pal, altButton, p.alt, primary = false, enabled = true)
         // its name on the first page of a welcome
         if (modal && page == 0) {
             text.line(fonts.get(Face.MONO_BOLD, 10.5f), "DOT", seatX, seatY + R * 1.25f, 14f, pal[Tok.MUTED], ba, Align.center)

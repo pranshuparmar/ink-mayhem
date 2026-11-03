@@ -9,7 +9,7 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Offline re-creation of the POC's WebAudio sounds as 16-bit mono PCM. Deterministic (seeded
+ * The game's sound effects, synthesized offline as 16-bit mono PCM. Deterministic (seeded
  * noise), so the committed WAVs can be regenerated and checked byte for byte.
  */
 object SfxSynth {
@@ -18,7 +18,7 @@ object SfxSynth {
     enum class Wave { SINE, SQUARE, TRIANGLE, SAWTOOTH }
 
     /**
-     * POC tone(): an oscillator whose frequency ramps exponentially from [freq] to [freq] × [slide]
+     * A tone: an oscillator whose frequency ramps exponentially from [freq] to [freq] × [slide]
      * and whose gain ramps exponentially from [vol] to 0.0005 over [dur]; stopped at dur + 0.03 s.
      */
     fun tone(freq: Double, dur: Double, wave: Wave, vol: Double, slide: Double = 1.0): FloatArray {
@@ -43,7 +43,7 @@ object SfxSynth {
         return out
     }
 
-    /** POC crack(): white noise through a high-pass at [hp] Hz, gain ramping from [vol] to 0.0005 over 0.09 s. */
+    /** A crack: white noise through a high-pass at [hp] Hz, gain ramping from [vol] to 0.0005 over 0.09 s. */
     fun crack(vol: Double, hp: Double, seed: Int): FloatArray {
         val n = (0.1 * RATE).roundToInt()
         val rnd = Random(seed)
@@ -58,7 +58,7 @@ object SfxSynth {
 
     /**
      * The pen-scratch loop: one second of noise band-passed at [SCRATCH_CENTER] Hz (Q 0.9), scaled by
-     * [SCRATCH_REF] so the playback volume maps 0..1 onto the POC's gain range. Filtered twice so the
+     * [SCRATCH_REF] so the playback volume maps 0..1 onto the scratch's gain range. Filtered twice so the
      * filter state at the loop point is continuous.
      */
     fun scratchLoop(seed: Int): FloatArray {
@@ -74,7 +74,7 @@ object SfxSynth {
 
     /** Base frequency of the scratch loop; playback pitch = target frequency / this. */
     const val SCRATCH_CENTER = 3000.0
-    /** Peak POC scratch gain (0.09 × 1.5); the loop is pre-scaled by it so volume 1 = that gain. */
+    /** Peak scratch gain (0.09 × 1.5); the loop is pre-scaled by it so volume 1 = that gain. */
     const val SCRATCH_REF = 0.135f
 
     /** RBJ biquad, as WebAudio's BiquadFilterNode. */
@@ -111,7 +111,7 @@ object SfxSynth {
 
     /** File names (without .wav) the game loads. */
     val NAMES: List<String> = listOf(
-        "anchor", "hop", "boing", "boulder_boing", "snap", "erase", "speed_up", "rumble", "pickup", "pickup_high",
+        "anchor", "hop", "boing", "boulder_boing", "snap", "erase", "rumble", "pickup", "pickup_high",
         "featherweight", "combo_lost", "death", "scratch",
         "stage_start", "checkpoint", "clear", "one_up", "game_over", "star", "life_lost", "squash", "pop", "bold", "shrink",
         "gold", "power_end", "boss_hit", "boss_down",
@@ -170,7 +170,6 @@ object SfxSynth {
         "boulder_boing" to tone(150.0, 0.3, Wave.SINE, 0.14, 2.2),
         "snap" to crack(0.22, 900.0, seed = 1),
         "erase" to crack(0.08, 3000.0, seed = 2),
-        "speed_up" to tone(660.0, 0.12, Wave.SINE, 0.08, 1.5),
         "rumble" to tone(90.0, 0.5, Wave.SAWTOOTH, 0.06, 0.8),
         "pickup" to tone(784.0, 0.12, Wave.SINE, 0.1, 1.25),
         "pickup_high" to tone(990.0, 0.12, Wave.SINE, 0.1, 1.25),

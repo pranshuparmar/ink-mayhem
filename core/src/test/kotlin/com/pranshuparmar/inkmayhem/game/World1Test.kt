@@ -8,8 +8,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** Slice 1: star trails, Blots, doodle boxes and Bold, the face, and the first page's tuning gates. */
-class Slice1Test {
+/** World 1: star trails, Blots, doodle boxes and Bold, the face, and the first page's tuning gates. */
+class World1Test {
     private fun stage(build: StageBuilder.() -> Unit) = StageDef(9, 9, "Test", Theme.PAGE, 3.4f, build)
 
     private fun <T> playing(p: StagePlay, block: (StagePlay) -> T): T = try {

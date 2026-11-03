@@ -5,7 +5,6 @@ import com.pranshuparmar.inkmayhem.physics.TestNatives
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
-import org.junit.jupiter.params.provider.ValueSource
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -83,33 +82,8 @@ class TunnelTest {
         }
     }
 
-    @ParameterizedTest(name = "seed {0}")
-    @ValueSource(longs = [1, 7, 42, 2026, 31337, 5, 11, 99])
-    fun `no drop is generated inside a tunnel rock and the tunnel note fits before it`(seed: Long) {
-        val sim = GameSim(seed = seed, vwMetres = 12f, vhMetres = 26.7f)
-        try {
-            sim.penDown(0, 0f, 0f, 0.45f, erase = false, t = 0.0)
-            // generation follows the camera; nothing is culled, so the whole stretch stays
-            while (sim.cam.x < 1500f) {
-                sim.cam.x += 20f
-                sim.tick(0f)
-            }
-            assertTrue(sim.ceilings.size > 5, "only ${sim.ceilings.size} tunnels")
-            for (c in sim.ceilings) for (d in sim.drops) {
-                val inside = d.x > c.x - 0.5f && d.x < c.right + 0.5f && d.y < c.y + c.h
-                assertTrue(!inside, "drop at (${d.x}, ${d.y}) inside the rock ${c.x}..${c.right}")
-            }
-            val note = sim.notes.first { it.text == GameSim.INTRO[3].second }
-            val rock = sim.ceilings.first()
-            assertTrue(note.x + note.maxW < rock.x, "note ends at ${note.x + note.maxW}, rock at ${rock.x}")
-            assertTrue(note.maxW > 2.5f, "only ${note.maxW} m for the note")
-        } finally {
-            sim.dispose()
-        }
-    }
-
     companion object {
-        val INK_P = InkBot.PRESSURE
+        val INK_P = StageBuilder.PRESSURE
 
         init {
             TestNatives.ensure()
