@@ -265,7 +265,7 @@ under SoundPool's 1 MB.
 | Push to any branch other than `main`, pull request | `ci.yml`: `./gradlew lint test` | Pass or fail |
 | Push to `main` | `ci.yml`: `./gradlew lint test assembleDebug` | The debug APK as a workflow artifact, and on the [`latest-debug`](https://github.com/pranshuparmar/ink-mayhem/releases/tag/latest-debug) prerelease |
 | **Run workflow** on any branch | `ci.yml`, as for `main` | The debug APK as a workflow artifact |
-| Tag `v*` | `release.yml` | A signed release APK on a GitHub Release |
+| **Run workflow** on **Release** (manual only, from `main`) | `release.yml` | A `vX.Y.Z` tag and a GitHub Release with the signed APK |
 
 ### Debug signing
 
@@ -327,16 +327,21 @@ Release builds are signed in CI from four repository secrets. Never commit a key
 
 ### Cutting a release
 
-```sh
-git tag v1.0.0
-git push origin v1.0.0
-```
+Releases are made by hand, never automatically: on GitHub open **Actions → Release → Run
+workflow** (the GitHub mobile app has the same button), leave **Use workflow from** on `main`,
+and pick what to bump:
 
-The **Release** workflow checks the four secrets (naming any that are missing), runs lint and
-the tests, builds and signs the APK, verifies the signature, and publishes a GitHub Release for
-the tag with `ink-mayhem-1.0.0.apk` and generated notes.
+| Input | |
+|---|---|
+| **bump** | `patch` (1.0.0 → 1.0.1), `minor` (→ 1.1.0) or `major` (→ 2.0.0), from the last stable release. The first release is 1.0.0 whatever is picked |
+| **version** | or an exact version instead, such as `1.2.0` or `1.3.0-beta.1` (a `-suffix` makes it a prerelease); leave it empty to bump |
 
-- `versionName` is the tag without the `v` (`v1.2.3-beta.1` → `1.2.3-beta.1`, published as a
-  prerelease).
-- `versionCode` is `major × 1 000 000 + minor × 1 000 + patch`, so later tags always upgrade
-  (minor and patch stay below 1000). Debug builds from CI use the CI run number.
+The workflow checks the four signing secrets (naming any that are missing) and that the version
+isn't taken, runs lint and the tests, builds and signs the APK and verifies the signature. Only
+then does it create the `vX.Y.Z` tag on the commit it built and publish a GitHub Release with
+`ink-mayhem-X.Y.Z.apk` and generated notes, so a failed run leaves no tag behind.
+
+- `versionName` is the version (`1.2.3-beta.1` stays as it is).
+- `versionCode` is `major × 1 000 000 + minor × 1 000 + patch`, so later versions always upgrade
+  (minor and patch stay below 1000; a prerelease shares its version's code). Debug builds from CI
+  use the CI run number.
