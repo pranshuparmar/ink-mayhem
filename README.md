@@ -29,7 +29,7 @@ stroke to erase it (you get half its ink back). Hover to see where the nib will 
 ## What's in it
 
 - 📖 **25 hand-built stages in five worlds**: The Notebook, The Cellar, Up High, The Castle and
-  Midnight Ink. Each stage has lives, a checkpoint, a flag and up to three stars.
+  Midnight Ink. Each stage has lives, a checkpoint, the next page to reach and up to three stars.
 - 👾 **A page that fights back**: Blots to bounce on, Erasers that rub out your ink, paper planes,
   ink beetles that eat rope, rolling boulders, crumbling bricks, ink pools and a rising ink tide.
 - 👑 **A boss at the end of every world**, each beaten with something that world taught you.
@@ -64,7 +64,7 @@ Want the details? **[Read the full tour →](docs/FEATURES.md)**
   </tr>
   <tr>
     <td width="33%"><img src="media/shots/midnight.png" alt="A World 5 stage on a dark page with the ink tide rising behind" width="100%"><br><sub>Midnight Ink</sub></td>
-    <td width="33%"><img src="media/shots/boss.png" alt="A boss fight in a walled arena" width="100%"><br><sub>A boss fight</sub></td>
+    <td width="33%"><img src="media/shots/boss.png" alt="Dot stomping the Big Blot in its walled arena" width="100%"><br><sub>A boss fight</sub></td>
     <td width="33%"><img src="media/shots/stages.png" alt="The stage list for World 5 with stars and best scores" width="100%"><br><sub>The stage list</sub></td>
   </tr>
 </table>

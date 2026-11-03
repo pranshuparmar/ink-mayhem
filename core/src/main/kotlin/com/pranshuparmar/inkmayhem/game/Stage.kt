@@ -120,7 +120,7 @@ class StageLayout {
     /** The last checkpoint (the midway one), or NaN without any. */
     val checkpointX: Float get() = checkpoints.lastOrNull()?.x ?: Float.NaN
     var finishX = Float.NaN
-    /** The finish flag stands on this level. */
+    /** The finish (the next page) stands on this level. */
     var finishLevel = 0f
 
     /** Top of the highest solid surface of the page under [x] (blocks only, not hidden or bonus ones), or NaN over a gap. */
@@ -380,11 +380,18 @@ class StageBuilder(private val l: StageLayout) {
     /**
      * A boss arena [len] metres long from the cursor, with [kind] waiting at its far end: flat
      * ground, a wall that closes behind the runner, and a far wall that opens once it's beaten.
-     * The Big Smudge's has a spiked roof [ARENA_ROOF] up.
+     * It's a closed room, so the only way on is through the boss: a plain rock roof sits on the
+     * walls (out of reach of any bounce, but there to stop a climb over them), and the Big
+     * Smudge's roof is lower, [ARENA_ROOF] up, and spiked.
      */
     fun arena(kind: BossKind, len: Float = ARENA_LEN): StageBuilder {
         val roof = if (kind == BossKind.BIG_SMUDGE) level - ARENA_ROOF else Float.NaN
-        if (!roof.isNaN()) l.rocks += StageLayout.Rock(x, len, roof, spiked = true)
+        if (!roof.isNaN()) {
+            l.rocks += StageLayout.Rock(x, len, roof, spiked = true)
+        } else {
+            val w = GameSim.ARENA_WALL_W
+            l.rocks += StageLayout.Rock(x - w, len + 2f * w, level - GameSim.ARENA_WALL, spiked = false)
+        }
         l.arenas += StageLayout.ArenaSpec(x, x + len, level, kind, roof)
         return flat(len)
     }
@@ -549,7 +556,7 @@ class StageBuilder(private val l: StageLayout) {
         return this
     }
 
-    /** The finish flag at the cursor, then some ground to roll out on. */
+    /** The finish (the next page) at the cursor, then some ground to roll out on. */
     fun finish(runOut: Float = 16f): StageBuilder {
         l.finishX = x
         l.finishLevel = level

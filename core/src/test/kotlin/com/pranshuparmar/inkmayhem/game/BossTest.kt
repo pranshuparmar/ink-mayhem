@@ -44,6 +44,46 @@ class BossTest {
         }
     }
 
+    @ParameterizedTest
+    @EnumSource(BossKind::class)
+    fun `every arena is a closed room, walls and a roof with nothing over them`(kind: BossKind) {
+        val p = StagePlay(arenaStage(kind), solve = false)
+        try {
+            val a = p.sim.arenas.single()
+            val top = a.level - GameSim.ARENA_WALL
+            // a roof over the whole room, its underside no higher than the walls' tops (y points down)
+            val roofed = p.sim.ceilings.any { c -> c.x <= a.x0 + 1e-3f && c.right >= a.x1 - 1e-3f && c.y + c.h >= top - 1e-3f }
+            assertTrue(roofed, "no roof over the ${kind.title}'s arena")
+        } finally {
+            p.dispose()
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(BossKind::class)
+    fun `getting out of the arena without beating the boss doesn't clear the stage`(kind: BossKind) {
+        val p = StagePlay(arenaStage(kind), solve = false)
+        try {
+            var steps = 0
+            while (!p.sim.bossFight && p.sim.state == GameState.RUN && steps++ < 200) p.play(0.25f)
+            assertTrue(p.sim.bossFight, p.summary)
+            // however it got there: the runner past the far wall, rolling on towards the finish
+            val a = p.sim.arenas.single()
+            val body = p.sim.runner.body
+            body.setTransform(a.x1 + 3f, a.level - p.sim.runner.r - 0.05f, 0f)
+            body.setLinearVelocity(4f, 0f)
+            p.sim.runner.dir = 1
+            val st = p.play(8f) { }
+            assertTrue(st != GameState.CLEAR, "cleared with ${kind.title} still standing")
+            if (st == GameState.RUN) {
+                val x = p.sim.runner.body.position.x
+                assertTrue(x > a.x0 - 0.5f && x < a.x1 + 0.5f, "runner at $x, outside the arena ${a.x0}..${a.x1}")
+            }
+        } finally {
+            p.dispose()
+        }
+    }
+
     @Test
     fun `in an arena the runner rolls back and forth between the walls`() {
         // the Airliner flies too high to touch a runner on the ground

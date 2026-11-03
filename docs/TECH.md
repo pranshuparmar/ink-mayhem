@@ -89,7 +89,7 @@ World units are metres, y down, gravity 10.
 **The simulation.** `GameSim` is the game's rules: the runner, ink, creatures, power-ups,
 bosses, scoring and deaths, on a fixed 1/60 s tick (at most four per frame). Stages are written
 with a small builder (`StageBuilder`: flat, slope, gap, wall, climb, slide, lift, seesaw,
-creatures, items, checkpoint, flag…) into plain data (`StageLayout`), which `GameSim.loadStage`
+creatures, items, checkpoint, finish…) into plain data (`StageLayout`), which `GameSim.loadStage`
 turns into physics. A `StageSession` runs lives, intros, retries from the checkpoint, game over
 and the clear tally, each stage on its own `GameSim`. The tutorial runs on another, in sandbox
 mode (hand-built terrain), so nothing in the game loop needs a tutorial branch beyond choosing
@@ -160,7 +160,8 @@ survives them.
 - **The ink tide is a rubber band.** Its pace depends on how far behind it is: it settles 5 m
   behind a runner at full speed and catches one that stalls for about a second and a half, so a
   clean run sees it looming at the edge of the screen.
-- **Bosses are walkers in an arena**, each weak to one thing its world taught. The test bot
+- **Bosses are walkers in a closed arena**, each weak to one thing its world taught. Walls and a
+  roof seal the room and the finish waits for the win, so there is no way round a boss. The test bot
   can't script a fight by position, so it reacts to where the boss and its creatures are.
 - **Music as looping sounds.** Each tune is a seamless loop under 1 MB, played as a looping
   `Sound` rather than streamed `Music`, so it starts in sync and costs no decoder; only the

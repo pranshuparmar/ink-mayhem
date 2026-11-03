@@ -1040,7 +1040,7 @@ class GameSim(
         val rb = runner.body
 
         if (state == GameState.CLEAR) {
-            // past the flag the runner rolls to a stop
+            // past the finish the runner rolls to a stop
             val w = rb.angularVelocity
             rb.applyTorque((3f * (0f - w)).coerceIn(-7f, 7f), true)
             if (sdt > 0f) {
@@ -1295,6 +1295,14 @@ class GameSim(
             events.sound(Sfx.RUMBLE)
             events.shake(0.25f)
             events.burst(a.x0, a.level - 2f, 14, 3f, Tok.GRAPHITE)
+            return
+        }
+        // the only way on is through the boss: a runner that somehow got out goes back in
+        if (px > a.x1 + ARENA_WALL_W || px < a.x0 - ARENA_WALL_W || py < a.level - ARENA_WALL) {
+            runner.body.setTransform(a.mid, a.level - runner.r - 0.05f, 0f)
+            runner.body.setLinearVelocity(0f, 0f)
+            runner.body.angularVelocity = 0f
+            events.toast("No way round ${a.kind.title}. Beat it first!", force = true)
             return
         }
         if (runner.dir > 0 && px > a.x1 - runner.r - TURN_GAP) runner.dir = -1
@@ -2057,7 +2065,8 @@ class GameSim(
             run.save(this, next)
             events.checkpoint()
         }
-        if (state == GameState.RUN && px > l.finishX) {
+        // a stage with a boss only finishes once the boss is beaten
+        if (state == GameState.RUN && px > l.finishX && arenas.all { it.won }) {
             state = GameState.CLEAR
             clearedAt = realTime
             drawing = null

@@ -151,7 +151,7 @@ class StageSession(val sim: GameSim, private val store: StageStore) {
         const val RETRY_INTRO_S = 1.2f
         const val DYING_S = 1.6f
         const val CLEAR_DELAY = 1.0
-        /** Tally: points per unit of ink left at the flag. */
+        /** Tally: points per unit of ink left at the finish. */
         const val INK_BONUS = 10
 
         /** A stage can be played once the one before it has been cleared. */

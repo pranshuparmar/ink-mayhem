@@ -81,7 +81,7 @@ it's built, [Under the hood](TECH.md).
 
 `core/.../game/Stage.kt` (layout and builder), `World1.kt` … `World5.kt` (the stages),
 `Stages.kt` (the worlds in order), `StageSession.kt` (lives, retries, stars). Each stage runs on
-its own `GameSim`. Lengths are start to flag.
+its own `GameSim`. Lengths are start to finish.
 
 | Stage | Speed | Length | The idea |
 |---|---|---|---|
@@ -131,7 +131,7 @@ has three gold stars, all but 2-1 and 2-3 a heart, and every world's last stage 
 | Lift | 0.5 m thick kinematic platform in a 3 m slot; waits at the bottom until the runner lands on it, rises at 1.6 m/s to the top and stays. Riding it doesn't count as being stuck |
 | Seesaw | plank = gap + 0.6 m, 0.3 m thick, density 0.6, pinned 0.6 m above the ground at the gap's centre, resting on the near edge, angular damping 1.5 |
 | Checkpoint | a bookmark; the snapshot is taken 0.6 m past it (once the hazard just before is judged) and a retry starts 1 m past the last one passed, with at least 8 m of flat before the next hazard. One per stage, two in 1-1 |
-| Finish | a flag; past it the runner brakes to a stop |
+| Finish | the next page: a sheet of ruled paper 2.2 m wide and 3 m tall standing on the ground, its top corner folded over (0.65 m) and an arrow on it; its left edge is the line, and past it the runner brakes to a stop. A stage with a boss only finishes once the boss is beaten |
 | Heart | +1 life (max 9), pickup radius 0.85 m like drops |
 | Hint | a dotted guide in an ink's colour with an arrow and the ink's name 1.35 m above it; fades in from 12 m to 9 m before it and out over 0.5 s once passed. A tuning gate is a hint that also tunes |
 | High road | a 0.6 m ledge 3.2 m up, reached by a spring 2.6 m before it; a gold star and a heart sit on it |
@@ -149,7 +149,7 @@ has three gold stars, all but 2-1 and 2-3 a heart, and every world's last stage 
 | Ink pool | a gap whose ink surface lies 1.5 m below the ground (or below the lower side) |
 | Pool wall | a 2.5 m pool whose far bank is 2.4 m higher; a spring 0.2–1 m before the edge carries the runner over |
 | Tide | the ink tide rises once the runner passes its start and breaks at its end |
-| Arena | 13 m of flat ground with walls 12 m high at each end; the Big Smudge's has a spiked roof 8.2 m up |
+| Arena | 13 m of flat ground with walls 12 m high at each end and a plain rock roof on them, a closed room; the Big Smudge's roof is lower, 8.2 m up, and spiked. A runner that somehow gets out while the boss stands is put back in the middle |
 
 ### Stage rules
 
@@ -167,7 +167,7 @@ has three gold stars, all but 2-1 and 2-3 a heart, and every world's last stage 
 | Intro | 2.2 s (stage name and lives) before the first try, 1.2 s before a retry; the runner waits, and during a retry's intro ink can already go down |
 | Death | −1 life; after 1.6 s, retry from the checkpoint (or the start) with the score, combo, ink and hazard judgements the player had there |
 | Game over | no lives left: Try again restarts the stage with 3 lives |
-| Clear | 1 s after the flag: score + ink left × 10 = total |
+| Clear | 1 s after the finish: score + ink left × 10 = total |
 | Stars | 1 for clearing, 1 for no deaths in the stage, 1 for no hazard cleared with heavier ink than it needed |
 | Unlock | a stage opens once the one before has at least one star |
 
@@ -332,7 +332,7 @@ lesson passes, then happy. A pen-down on Dot or its balloon draws nothing.
 |---|---|
 | Title | what the game opens on: the name (64 dp, smaller if it and the runner beside it don't fit), "Draw the way ahead with your S Pen.", the three inks drawn with their pressures, then **Start** (nothing cleared yet) or **Play**, naming the first stage not yet cleared (with every stage cleared it opens the list), and **Stages**, **How to play**, **Settings**. Fades in over 0.5 s; Android back leaves the app |
 | Stage list | a **Menu** button at the top left goes back to the title, as does Android back. Every world's tab opens, locked or not (a padlock marks a locked world), to show its stage names; only open stages play. Opened from a stage it shows that stage's world |
-| World peek | behind the stage list, the tab's world: its finale stage, built but never stepped, without notes or the runner, panned at 2.6 m/s from start to flag and round again (a fade at the turn), its ground 84 % down a tall screen (under the card) or 70 % down a wide one; the page and palette are the world's (Midnight Ink's dark page), the veil over it 30 %, and the world's tune plays. Still with reduced motion |
+| World peek | behind the stage list, the tab's world: its finale stage, built but never stepped, without notes or the runner, panned at 2.6 m/s from start to finish and round again (a fade at the turn), its ground 84 % down a tall screen (under the card) or 70 % down a wide one; the page and palette are the world's (Midnight Ink's dark page), the veil over it 30 %, and the world's tune plays. Still with reduced motion |
 | Menus | the title screen and the ending show only the ruled paper; Ink Rush plays (the Music slider turns it down or off) |
 | Pause | the top-right button in a stage (two bars; ⋯ on the stage list), Android back, or leaving the app, during a stage's intro, play or a lost life's moment. A stroke being drawn is let go. The page dims; the card has the stage, **Resume**, **Restart** (the stage from the start, keeping the lives), **Settings** and **Stage list**. Android back on it resumes |
 | Countdown | Resume mid-play counts 3, 2, 1, 0.5 s each, with a rising chime; the stage, its music and the pen stay held until it ends. Resuming during an intro skips it |

@@ -15,7 +15,7 @@ import kotlin.math.min
 /**
  * The stage HUD: score with the ×combo chip on the left, "WORLD 1-1" with the lives and stars
  * under it; ink meter and the pause button on the right; a progress line underneath with the
- * checkpoint and the flag. Text is cached and rebuilt only when the
+ * checkpoint and the finish. Text is cached and rebuilt only when the
  * numbers change.
  */
 class Hud {
@@ -134,7 +134,7 @@ class Hud {
         return 1f + 0.25f * (up - down)
     }
 
-    /** The stage progress line under the HUD: start to flag, with the checkpoint and the runner. */
+    /** The stage progress line under the HUD: start to finish, with the checkpoint and the runner. */
     fun drawProgress(shapes: Shapes, pal: Palette, wDp: Float, sim: GameSim, safeRight: Float) {
         val l = sim.stage?.layout ?: return
         val x0 = left
@@ -150,8 +150,20 @@ class Hud {
             val cx = at(l.checkpoints[i].x)
             shapes.color(if (i <= reached) pal[Tok.ROPE] else pal[Tok.GRAPHITE]).rect(cx - 1f, y - 4f, 2f, 12f)
         }
-        shapes.color(pal[Tok.GRAPHITE]).rect(x1 - 1f, y - 10f, 2f, 14f)
-        shapes.color(pal[Tok.BEAM]).triangle(x1 + 1f, y - 10f, x1 + 11f, y - 6.5f, x1 + 1f, y - 3f)
+        // the finish: a little sheet with its corner folded, as on the page
+        val sx = x1 - 2f
+        val sy = y - 12f
+        shapes.color(pal[Tok.PAPER_WHITE]).rect(sx, sy + 4f, 10f, 10f)
+        shapes.rect(sx, sy, 6f, 4f)
+        shapes.triangle(sx + 6f, sy, sx + 6f, sy + 4f, sx + 10f, sy + 4f)
+        shapes.color(pal[Tok.GRAPHITE])
+        shapes.line(sx, sy + 14f, sx, sy, 1.5f)
+        shapes.line(sx, sy, sx + 6f, sy, 1.5f)
+        shapes.line(sx + 6f, sy, sx + 10f, sy + 4f, 1.5f)
+        shapes.line(sx + 10f, sy + 4f, sx + 10f, sy + 14f, 1.5f)
+        shapes.line(sx + 10f, sy + 14f, sx, sy + 14f, 1.5f)
+        shapes.line(sx + 6f, sy, sx + 6f, sy + 4f, 1.2f)
+        shapes.line(sx + 6f, sy + 4f, sx + 10f, sy + 4f, 1.2f)
         shapes.color(pal[Tok.INK]).circle(rx, y + 2f, 5f)
     }
 

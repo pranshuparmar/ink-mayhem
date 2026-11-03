@@ -589,8 +589,8 @@ class WorldRenderer(
     }
 
     /**
-     * The checkpoint bookmarks and the finish flag (with a little doodled castle past it). Poles
-     * draw [behind] the ground; flags in front.
+     * The checkpoint bookmarks and the finish, the next page. Poles and the page draw [behind]
+     * the ground; the bookmarks in front.
      */
     private fun drawFlags(sim: GameSim, pal: Palette, px: Float, behind: Boolean) {
         val l = sim.stage?.layout ?: return
@@ -610,46 +610,62 @@ class WorldRenderer(
                 shapes.triangle(x + 0.275f, y - 1.65f, x + 0.55f, y - 1.65f, x + 0.55f, y - 1.35f)
             }
         }
-        if (!l.finishX.isNaN()) {
-            val x = l.finishX
-            val y = l.finishLevel
-            if (behind) {
-                castle(x + 4f, y, pal, lw)
-                shapes.color(pal[Tok.GRAPHITE]).line(x, y, x, y - 3.4f, lw * 1.6f)
-                shapes.color(pal[Tok.GRAPHITE]).circle(x, y - 3.45f, 0.12f)
-            } else {
-                // a pennant, waving a little
-                val wave = sin(sim.simT * 4f) * 0.08f
-                shapes.color(pal[Tok.BEAM]).triangle(x, y - 3.3f, x + 1.2f, y - 2.95f + wave, x, y - 2.5f)
-            }
-        }
+        if (behind && !l.finishX.isNaN()) nextPage(l.finishX, l.finishLevel, sim.simT, pal, lw)
     }
 
-    /** A hand-drawn tower: walls, battlements and an arched door. */
-    private fun castle(x: Float, ground: Float, pal: Palette, lw: Float) {
-        val w = 2.6f
-        val h = 2.2f
-        val top = ground - h
-        shapes.color(pal[Tok.ROCK]).rect(x, top, w, h)
-        shapes.color(pal[Tok.GRAPHITE])
-        shapes.line(x, ground, x, top - 0.5f, lw)
-        shapes.line(x + w, ground, x + w, top - 0.5f, lw)
-        // battlements
-        var bx = x
-        var up = true
-        while (bx < x + w - 0.01f) {
-            val nx = min(x + w, bx + w / 5f)
-            val yy = if (up) top - 0.5f else top
-            shapes.color(pal[Tok.ROCK]).rect(bx, yy, nx - bx, top - yy + 0.01f)
-            shapes.color(pal[Tok.GRAPHITE]).line(bx, yy, nx, yy, lw)
-            if (nx < x + w - 0.01f) shapes.line(nx, top - 0.5f, nx, top, lw)
-            bx = nx
-            up = !up
+    /**
+     * The finish: the next page, a fresh sheet of ruled paper standing on the ground with its top
+     * corner folded over (the fold stirs a little) and a hand-drawn arrow on to it. Its left edge
+     * is the finish line.
+     */
+    private fun nextPage(x: Float, ground: Float, t: Float, pal: Palette, lw: Float) {
+        val w = PAGE_W
+        val f = PAGE_FOLD
+        val top = ground - PAGE_H
+        val x1 = x + w
+        val fx = x1 - f
+        val fy = top + f
+        // a soft shadow the sheet's own shape, then the sheet, its corner cut along the fold
+        val so = 0.14f
+        shapes.color(pal[Tok.SHADOW], 0.35f)
+        shapes.rect(x + so, fy + so, w, PAGE_H - f - so)
+        shapes.rect(x + so, top + so, w - f, f)
+        shapes.triangle(fx + so, top + so, fx + so, fy + so, x1 + so, fy + so)
+        shapes.color(pal[Tok.PAPER_WHITE])
+        shapes.rect(x, fy, w, PAGE_H - f)
+        shapes.rect(x, top, w - f, f)
+        shapes.triangle(fx, top, fx, fy, x1, fy)
+        // its ruled lines (stopping at the fold) and margin
+        shapes.color(pal[Tok.RULE])
+        var y = top + 0.5f
+        while (y < ground - 0.15f) {
+            val xe = if (y < fy) fx + (y - top) else x1
+            shapes.line(x + 0.08f, y, xe - 0.08f, y, lw * 0.7f)
+            y += PAGE_RULE
         }
-        // door
-        val dx = x + w / 2f
-        shapes.color(pal[Tok.GRAPHITE]).rect(dx - 0.4f, ground - 0.9f, 0.8f, 0.9f)
-        shapes.circle(dx, ground - 0.9f, 0.4f)
+        shapes.color(pal[Tok.MARGIN]).line(x + 0.42f, top + 0.06f, x + 0.42f, ground, lw * 0.8f)
+        // the outline: five edges, one of them the fold
+        shapes.color(pal[Tok.GRAPHITE])
+        shapes.line(x, ground, x, top, lw)
+        shapes.line(x, top, fx, top, lw)
+        shapes.line(fx, top, x1, fy, lw)
+        shapes.line(x1, fy, x1, ground, lw)
+        // the folded corner: the back of the sheet lying over its front
+        val stir = sin(t * 2.6f) * 0.05f
+        val tx = fx + stir
+        val ty = fy + stir
+        shapes.color(pal[Tok.PAPER_WHITE]).triangle(fx, top, x1, fy, tx, ty)
+        shapes.color(pal[Tok.SHADOW], 0.3f).triangle(fx, top, x1, fy, tx, ty)
+        shapes.color(pal[Tok.GRAPHITE])
+        shapes.line(fx, top, tx, ty, lw)
+        shapes.line(tx, ty, x1, fy, lw)
+        // on to the next page
+        val ay = top + PAGE_H * 0.58f
+        val aw = lw * 1.9f
+        shapes.color(pal[Tok.INK])
+        shapes.line(x + 0.62f, ay, x1 - 0.42f, ay, aw)
+        shapes.line(x1 - 0.42f, ay, x1 - 0.86f, ay - 0.36f, aw)
+        shapes.line(x1 - 0.42f, ay, x1 - 0.86f, ay + 0.36f, aw)
     }
 
     private fun drawDrops(sim: GameSim, pal: Palette, vx0: Float, vx1: Float, px: Float) {
@@ -1253,6 +1269,11 @@ class WorldRenderer(
 
     companion object {
         private const val PI_F = kotlin.math.PI.toFloat()
+        /** The finish's sheet: width, height, the folded corner's size and its line spacing (m). */
+        private const val PAGE_W = 2.2f
+        private const val PAGE_H = 3.0f
+        private const val PAGE_FOLD = 0.65f
+        private const val PAGE_RULE = 0.36f
         /** A broken tide fades out over this long. */
         private const val TIDE_DRAIN_S = 1.5f
         /** Speech bubbles stay below the HUD. */

@@ -64,7 +64,8 @@ built round one idea:
 - **A checkpoint** midway: a death costs a life and restarts there, with the score, ink and
   combo you had when you passed it. With no lives left it's game over: **Try again** restarts
   the stage with three.
-- **The flag** ends it. The clear card tallies the score plus ink left × 10, and awards up to
+- **The next page** ends it: a fresh sheet standing at the end of the stage, its corner folded.
+  Roll past it and the clear card tallies the score plus ink left × 10, and awards up to
   three stars.
 - **First runs teach.** On a world's first stage, until it has a star, Dot stops before each new
   thing and waits until you've drawn a stroke that will work.
@@ -135,7 +136,8 @@ shows which ones you have.
 
 ## Bosses
 
-Each world ends in a walled arena. The near wall closes behind Dot, which rolls back and forth
+Each world ends in an arena: a closed room with walls and a roof, so the only way on is through
+the boss. The near wall closes behind Dot, which rolls back and forth
 between the walls while the boss theme plays. Each boss is beaten with something its world
 taught:
 
