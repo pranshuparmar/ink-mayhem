@@ -94,8 +94,9 @@ class EndingCard(private val fonts: Fonts) {
         items += Item(Kind.HEAD, "MUSIC AND SOUND", h = 24f)
         items += Item(Kind.LINE, "Synthesized note by note for this game", h = 24f)
         items += Item(Kind.GAP, h = 22f)
-        items += Item(Kind.HEAD, "PLAYED WITH", h = 24f)
-        items += Item(Kind.LINE, "an S Pen, and your hand", h = 24f)
+        items += Item(Kind.HEAD, "STARRING", h = 24f)
+        items += Item(Kind.LINE, "Dot, a drop of ink", h = 24f)
+        items += Item(Kind.NOTE, "and your S Pen", h = 26f)
         items += Item(Kind.GAP, h = 70f)
         items += Item(Kind.TITLE, "Thanks for playing!", h = 52f)
         var y = 0f

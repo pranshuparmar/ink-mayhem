@@ -49,6 +49,8 @@ class WorldRenderer(
     var guideTok = Tok.ROPE
 
     /** Hover nib position in screen dp (set by the input router). */
+    /** Dot has stepped out of the page: the runner is drawn without its face, and notes and remarks wait. */
+    var dotOut = false
     var hoverOn = false
     var hoverX = 0f
     var hoverY = 0f
@@ -147,7 +149,7 @@ class WorldRenderer(
         val focusX = sim.pendingGate?.x1 ?: Float.POSITIVE_INFINITY
         for (ni in sim.notes.indices) {
             val n = sim.notes[ni]
-            if (n.x > vx1 + NOTE_EARLY || n.x > focusX) continue
+            if (dotOut || n.x > vx1 + NOTE_EARLY || n.x > focusX) continue
             val wrap = min(maxW, n.maxW * scale)
             text.layout.setText(noteFont, n.text, 0, n.text.length, pal[Tok.GRAPHITE], wrap, Align.left, true, null)
             val tw = text.layout.width
@@ -240,7 +242,7 @@ class WorldRenderer(
         // the runner's remark, in a speech bubble over its head (leaning back from where it's going)
         val ba = persona.state.bubbleAlpha
         val line = persona.state.bubble
-        if (ba > 0f && line != null) {
+        if (ba > 0f && line != null && !dotOut) {
             val run = sim.runner
             val hx = (run.prev.lerpX(alpha) - viewX) * scale
             val hy = (run.prev.lerpY(alpha) - run.r * 1.5f - viewY) * scale
@@ -799,7 +801,7 @@ class WorldRenderer(
         // just lost Bold: it blinks while nothing can hurt it
         val a = if (sim.simT < run.safeUntil && sin(sim.simT * 30f) > 0f) 0.35f else 1f
         // the character: upright whatever way the ball rolls, its face set by what's going on
-        buddy.draw(pal, persona.state, cx, cy, r, run.dir.toFloat(), px, a, extraSquash = sq * 0.5f, stretch = persona.stretch, bold = run.bold)
+        buddy.draw(pal, persona.state, cx, cy, r, run.dir.toFloat(), px, a, extraSquash = sq * 0.5f, stretch = persona.stretch, bold = run.bold, faceless = dotOut)
         // a timed power: a ring in its colour, the arc left showing the time left
         val pw = run.power
         if (pw != null) {

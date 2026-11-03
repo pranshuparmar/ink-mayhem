@@ -441,3 +441,28 @@ read, build and play, not to change, redistribute or sell), not on Google Play.
   cooldown, and chance on common events) because the paperclip's real lesson is that a
   helper who talks too much gets turned off; there's a setting for that anyway.
 - **Volume, not just on and off.** Sound and music became sliders; the old switches carry over.
+
+
+## 29. Dot: the runner, and the helper
+
+The owner named the runner Dot and asked for it to welcome players and to explain the
+first-run teaching itself, breaking the fourth wall the way the old Office assistant did.
+
+- **It steps out of the page, not onto a card.** At a teaching stop Dot rises off the paper
+  towards the player: it grows, its shadow falls on the page below, and the runner left behind
+  is a plain dot of ink until it dives back in with a splash. The speech balloon, the pointer
+  and the knock on the glass are drawn over the HUD, in the player's space, not the page's.
+- **It only comes out when the game is already waiting.** The paperclip was loved for its face
+  and hated for interrupting. Dot steps out only at a first-run stop, after a stroke that
+  missed, after a long wait, or on the first launch; never in live play. Drawing sends it back
+  in (the stroke still draws), and once a world's first stage is cleared its lessons don't
+  return.
+- **It says what the page already says, plus what to draw.** The stage's own note for the
+  obstacle (the last one before it) is quoted in the hand font, then a line for the gate's job
+  in plain words (rope, spring, beam, a beam dropped on an Eraser, no springs under spikes), so
+  the levels needed no new text. Page notes wait while it talks.
+- **The sim only asks; the game decides.** Missed strokes and long waits reach the game as a
+  `teach` event (a toast by default, so tests and the tutorial are unchanged); in a first-run
+  stage the game has Dot say it.
+- **Its corner keeps the drawing area clear.** Dot sits in the top corner whose balloon stays
+  clear of the guide (the right one in landscape, where the runner waits on the left).

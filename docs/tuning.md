@@ -491,10 +491,11 @@ ends it, back to the title or the stage list, wherever it was opened from.
 | Saves | stamped with a version (`saveVersion`, now 1). An unversioned save with no gold-star keys is from before the five worlds: its 1-2 to 1-4 results (then Cellar, Up High and Castle) are dropped |
 | Tunes | a stage's own tune and, if it has a boss, the boss's are loaded during its intro card, so the boss music starts the moment the arena closes; the menus keep Ink Rush loaded |
 
-## The runner's character
+## Dot, the runner's character
 
-`render/Buddy.kt` (the face and its drawer), `render/Persona.kt` (what drives it in a stage).
-Looks only: it reads the sim and never changes it.
+`render/Buddy.kt` (the face and its drawer), `render/Persona.kt` (what drives it in a stage),
+`ui/DotHelper.kt` (Dot stepping out of the page to help). The face and remarks are looks only:
+they read the sim and never change it.
 
 | | |
 |---|---|
@@ -504,7 +505,11 @@ Looks only: it reads the sim and never changes it.
 | Blinks | every 2.2 to 5.4 s, 0.16 s long |
 | Faces | hurt or dead: crossed-out eyes; scared (a boulder, or the tide within 6 m): wide eyes, sweat; 0.9 s after a squash: proud, with a wink; off a spring, rising: whee; dizzy after a bounce; waiting at a gate: curious, dozing (z's) after 7 s; while the pen draws: curious; in a boss fight: determined; at an edge: worried; on rope: wobbly; on a beam: proud; happy on a combo or with the Star nib; otherwise calm |
 | Looks at | the pen's tip while it draws, the gate's guide while it waits, the boss in a fight, back at a boulder or the tide, else the nearest awake creature (up to 8 m ahead) or gold star (5 m), else ahead |
-| Remarks | a speech bubble over its head, leaning away from where it's going and below the HUD, for 1.5 s + 0.04 s a letter; at most one every 4.5 s unless it matters (death, clear, gold star, a power-up, a boss starting or beaten, the tide). On a stage's start (80 %), a stomp (70 %), a bounce (35 %), a snap (60 %), a checkpoint (60 %), a hit on a boss (60 %), onto rope or a beam (20 %), an edge (20 %), and once at each gate it waits at. Off with "Runner's remarks"; never in the tutorial |
+| Remarks | a speech bubble over its head, leaning away from where it's going and below the HUD, for 1.5 s + 0.04 s a letter; at most one every 4.5 s unless it matters (death, clear, gold star, a power-up, a boss starting or beaten, the tide). On a stage's start (80 %), a stomp (70 %), a bounce (35 %), a snap (60 %), a checkpoint (60 %), a hit on a boss (60 %), onto rope or a beam (20 %) and an edge (20 %). Off with "Dot's remarks"; never in the tutorial, nor while Dot is out helping |
+| Helping | on a world's first stage (its first run), once the runner has stopped (under 0.3 m/s) at a gate it waits at, with nothing drawn, Dot steps out: 0.45 s from the runner up to a top corner below the HUD (the corner whose balloon stays 40 dp clear of the guide), growing to 30 dp across with its shadow falling on the page, the balloon fading in from 0.25 s. It says the stage's note for that gate (the last note within 30 m before it) and what to draw, with a dotted pointer to the guide, and looks at it. Once per gate per attempt. The runner on the page is a plain dot meanwhile, and notes wait |
+| Going back in | a pen-down anywhere but its balloon (the stroke goes on as normal), **Got it**, Android back, or the gate done, the runner moving on or the stage's play ending: 0.35 s back to the runner, then an ink splash |
+| Misses and waits | a stroke that wouldn't do the job is wiped and Dot steps out worried with why (the wipe's tip); 7 s waiting with nothing drawn and Dot knocks twice on the glass ("Hello? Draw along the dotted line...") unless it's already out explaining |
+| Welcome | the very first launch, 1 s after the title appears: Dot steps off the title (a plain dot left there) over a veil, looking at the player, in four pages (hello; it rolls, you draw; pressure makes the ink; tap Start), any tap moving on. Never again once seen (saved as `metDot`) |
 | Title | sat at the end of the name (it rolls in), looking about, at the pen when it hovers, pleased while a button is held; "Hi! Grab your S Pen." after 1.1 s, then a tip every 8.5 s; dozes after 30 s alone |
 | Pause | peeks over the top of the pause card with a line ("Take your time."), dozes after 6 s |
 | Ending | rolls along the line wide-mouthed, then "We did it!" and a wink |

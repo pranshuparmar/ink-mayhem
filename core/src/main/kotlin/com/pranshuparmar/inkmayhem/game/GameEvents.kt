@@ -27,6 +27,13 @@ interface GameEvents {
 
     fun toast(message: String, force: Boolean = false, delaySec: Float = 0f) {}
 
+    /**
+     * First-run teaching: a stroke that wouldn't do the job was wiped ([message] says why), or
+     * the runner has waited a while with nothing drawn ([idle]). The game has Dot step out and
+     * say it; by default it's a toast.
+     */
+    fun teach(message: String, idle: Boolean = false) = toast(message, true, 0f)
+
     /** Particle burst in world space; [up] is the extra upward kick (NaN = spread / 2). */
     fun burst(x: Float, y: Float, n: Int, spread: Float, color: Tok, up: Float = Float.NaN) {}
 

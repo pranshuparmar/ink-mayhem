@@ -45,6 +45,13 @@ class TitleCard(private val fonts: Fonts) {
     private var lastNow = Double.NaN
     private var tip = 0
     private var nextTip = 0.0
+    /** Dot has stepped off the title to say hello: what's left is just a dot, and it doesn't chatter. */
+    var dotOut = false
+    /** Where the title's Dot was last drawn (dp), for it to step out of and back into. */
+    var dotX = 0f
+        private set
+    var dotY = 0f
+        private set
     /** The pen's hover over the screen (dp), set by the game each frame. */
     var hoverOn = false
     var hoverX = 0f
@@ -121,7 +128,10 @@ class TitleCard(private val fonts: Fonts) {
         val by = top + TITLE_H - 26f - hop
         updateBuddy(now, reduced, bx, by)
         val d = drawer ?: BuddyDrawer(shapes).also { drawer = it }
-        d.draw(pal, buddy, bx, by, BUDDY_R, if (roll < 1f) 1f else -1f, 1f, a)
+        d.draw(pal, buddy, bx, by, BUDDY_R, if (roll < 1f) 1f else -1f, 1f, a, faceless = dotOut)
+        dotX = bx
+        dotY = by
+        if (dotOut) buddy.hush()
         val line = buddy.bubble
         if (line != null) {
             bubble.place(text, fonts.get(Face.HAND_BOLD, 16f), line, bx, by - BUDDY_R * 1.5f, -1f, 8f, cx * 2f - 8f, 6f, buddy.bubbleScale)
@@ -209,7 +219,7 @@ class TitleCard(private val fonts: Fonts) {
             buddy.lookX = -1f + 0.6f * sin(t * 0.7f)
             buddy.lookY = 0.4f + 0.5f * sin(t * 0.45f)
         }
-        if (now >= nextTip && e != Expr.SLEEPY) {
+        if (now >= nextTip && e != Expr.SLEEPY && !dotOut) {
             tip++
             buddy.say(if (tip == 0) GREETING else TIPS[(tip - 1) % TIPS.size], force = true)
             nextTip = now + TIP_EVERY_S
@@ -219,11 +229,11 @@ class TitleCard(private val fonts: Fonts) {
 
     companion object {
         const val TITLE = "Ink Mayhem"
-        private const val BUDDY_R = 17f
+        const val BUDDY_R = 17f
         private const val GREET_S = 1.1
         private const val TIP_EVERY_S = 8.5
         private const val DOZE_S = 30.0
-        private const val GREETING = "Hi! Grab your S Pen."
+        private const val GREETING = "Hi, I'm Dot! Grab your S Pen."
         private val TIPS = arrayOf(
             "Press lightly for rope.",
             "Write normally for a spring.",

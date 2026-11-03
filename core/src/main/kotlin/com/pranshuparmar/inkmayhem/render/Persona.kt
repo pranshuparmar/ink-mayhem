@@ -44,7 +44,6 @@ class Persona {
     private var simState = GameState.RUN
     private var held = true
     private var stompAt = -10f
-    private var saidAtGate: Any? = null
     private var pick = 0
 
     /** [remarks]: speech bubbles on (the setting). [still]: reduced motion. */
@@ -86,7 +85,6 @@ class Persona {
         onInk = null
         held = true
         stompAt = -10f
-        saidAtGate = null
         state.hush()
     }
 
@@ -224,11 +222,7 @@ class Persona {
         onInk = ink
         if (sim.mood == Mood.WORRIED && mood != Mood.WORRIED && chance(0.2f)) say(EDGE)
         mood = sim.mood
-        val wait = sim.waitingAt
-        if (wait != null && wait !== saidAtGate && wait.waitT > 1.2f && sim.drawing == null) {
-            saidAtGate = wait
-            say(GATE, force = true)
-        }
+        // (at a gate it waits at, Dot steps out of the page to explain instead)
     }
 
     private fun chance(p: Float): Boolean {
@@ -261,7 +255,6 @@ class Persona {
         private val ROPE = arrayOf("Wobbly...", "Steady...")
         private val BEAM = arrayOf("Solid!", "Nice and sturdy.")
         private val EDGE = arrayOf("Uh-oh...", "Um...")
-        private val GATE = arrayOf("Your turn!", "Draw me a way?", "After you!")
         private val POWER_LINES = mapOf(
             ItemKind.HIGHLIGHTER to "Let's find stuff!",
             ItemKind.CHALK to "Floaty lines!",

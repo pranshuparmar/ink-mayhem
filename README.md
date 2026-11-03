@@ -47,12 +47,18 @@ The page fights back and pays out:
 - **Ink pools** swallow anything that touches them, ink included, so a bridge has to stay
   above them. The **ink tide** rises behind you and chases you: keep rolling and it hangs back,
   stall and it catches you.
-- The runner is a **character**: a blot of ink with googly eyes, eyebrows floating over them
-  and a face for every moment. It grins off a spring, wobbles on rope, struts on a beam, smirks
-  and winks after a stomp, sweats with a boulder or the tide behind, watches your pen while you
+- The runner is **Dot**, a drop of ink with googly eyes, eyebrows floating over them and a
+  face for every moment. Dot grins off a spring, wobbles on rope, struts on a beam, smirks and
+  winks after a stomp, sweats with a boulder or the tide behind, watches your pen while you
   draw, and dozes off if you keep it waiting. Now and then it says something in a speech bubble
-  (Settings → **Runner's remarks** turns that off). It greets you on the title screen with tips,
+  (Settings → **Dot's remarks** turns that off). It greets you on the title screen with tips,
   peeks over the pause screen, and is there at the end.
+- **Dot is your helper too.** On the very first launch it steps off the title screen to
+  introduce itself. On a world's first stage, when the runner stops at something new, Dot pops
+  out of the page towards you (leaving a plain dot of ink rolling below), sits in a corner clear
+  of where you'll draw, and explains: what's new, and exactly what to draw, with a dotted
+  pointer to the guide. Start drawing (or tap **Got it**) and it dives back in. A stroke that
+  wouldn't work brings it out worried with the fix; leave it waiting and it knocks on the glass.
 - **The end**: beat the Big Smudge and the page comes clean, your notebook is tallied (stages,
   stars, gold stars, scores) and the credits roll. **Credits** is also on the title screen.
 - **Music**: an original chiptune theme for each world and one for the boss fights; the

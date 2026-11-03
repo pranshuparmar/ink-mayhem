@@ -48,7 +48,7 @@ class SettingsSheet(
     private val options: List<Row> = buildList {
         add(sound)
         add(music)
-        add(Option("Runner's remarks", "Little speech bubbles now and then", { settings.remarks }, { settings.remarks = it }))
+        add(Option("Dot's remarks", "Little speech bubbles now and then", { settings.remarks }, { settings.remarks = it }))
         add(Option("Colour ink by type", "Rope green, spring amber, beam red", { settings.tint }, { settings.tint = it }))
         add(Option("Pen readout", "Pointer type, pressure, buttons, hover rate", { settings.penReadout }, { settings.penReadout = it }))
         add(Option("Haptics", "A short buzz on snaps and crashes", { settings.haptics }, { settings.haptics = it }))

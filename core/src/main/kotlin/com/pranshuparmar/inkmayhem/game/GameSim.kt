@@ -1046,7 +1046,7 @@ class GameSim(
                 if (!unlimitedInk) inkLeft = min(INK_MAX, inkLeft + s.cost)
                 events.burst((x0 + x1) / 2f, (d.ys[0] + d.ys[n - 1]) / 2f, 10, 2f, Tok.MUTED)
                 events.sound(Sfx.ERASE)
-                events.toast(tip, force = true)
+                events.teach(tip)
                 return
             }
             if (!g.crush) g.done = true
@@ -1229,7 +1229,7 @@ class GameSim(
                     wg.waitT += sdt
                     if (wg.waitT > NUDGE_S && !wg.nudged) {
                         wg.nudged = true
-                        events.toast(TIP_IDLE, force = true)
+                        events.teach(TIP_IDLE, idle = true)
                     }
                 }
             } else if (state == GameState.RUN && !runnerHeld) {

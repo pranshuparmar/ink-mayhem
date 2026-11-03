@@ -44,6 +44,7 @@ import com.pranshuparmar.inkmayhem.render.WorldRenderer
 import com.pranshuparmar.inkmayhem.ui.CalibrationOverlay
 import com.pranshuparmar.inkmayhem.ui.ClearCard
 import com.pranshuparmar.inkmayhem.ui.Countdown
+import com.pranshuparmar.inkmayhem.ui.DotHelper
 import com.pranshuparmar.inkmayhem.ui.EndingCard
 import com.pranshuparmar.inkmayhem.ui.PauseCard
 import com.pranshuparmar.inkmayhem.ui.TitleCard
@@ -134,6 +135,14 @@ class InkMayhemGame(
     private lateinit var countdown: Countdown
     /** After the Big Smudge: the finale and the credits (or the credits alone, from the title). */
     private lateinit var endingCard: EndingCard
+    /** Dot, stepping out of the page to teach (first-run stops, misses) and to say hello on the first launch. */
+    private lateinit var dotHelper: DotHelper
+    /** The gates Dot has explained this attempt (a retry builds a new world, and they're explained again). */
+    private val explained = HashSet<com.pranshuparmar.inkmayhem.game.Gate>()
+    private var explainedFor: Any? = null
+    /** When Dot steps off the title to say hello on the very first launch (−1: not due). */
+    private var welcomeAt = -1.0
+    private val runnerAt = FloatArray(3)
     /** When the screen last changed: the new one fades in from the paper. */
     private var fadeAt = -10.0
     private var lastPhase: StageSession.Phase? = null
@@ -202,6 +211,7 @@ class InkMayhemGame(
         pauseCard = PauseCard(fonts)
         countdown = Countdown(fonts)
         endingCard = EndingCard(fonts)
+        dotHelper = DotHelper(fonts)
         sheet = SettingsSheet(
             fonts, settings, platform.isDebugBuild,
             onRecalibrate = { calibration.show() },
@@ -254,6 +264,7 @@ class InkMayhemGame(
         when {
             calibration.open -> calibration.skip()
             sheet.open -> sheet.hide()
+            dotHelper.open -> dotHelper.dismiss(clock)
             tutorial != null -> endTutorial(finished = false)
             screen == Screen.TITLE -> Gdx.app.exit()
             screen == Screen.SELECT || screen == Screen.ENDING -> showTitle()
@@ -488,6 +499,7 @@ class InkMayhemGame(
             }
         }
         if (dev.autoplay && tutorial == null) autoplay()
+        updateDot()
 
         readout.update(now)
         toast.update(now, reduced)
@@ -537,6 +549,7 @@ class InkMayhemGame(
             sheet.onSample(s, x, y)
             return
         }
+        if (dotHelper.open && tutorial == null && dotSample(s, x, y)) return
         val wx = world.camX + x / scale
         val wy = world.camY + y / scale
         val time = s.timeNanos / 1e9
@@ -766,6 +779,8 @@ class InkMayhemGame(
     private var goldEver = 0
 
     private fun startStage(def: StageDef) {
+        dotHelper.hide()
+        welcomeAt = -1.0
         goldEver = settings.gold(def.id)
         session?.sim?.dispose()
         val ss = GameSim(seed = 1, events = Events(saveBest = false), vwMetres = wDp / scale, vhMetres = hDp / scale)
@@ -824,13 +839,148 @@ class InkMayhemGame(
         fadeAt = clock
         pauseCard.hide()
         countdown.cancel()
+        dotHelper.hide()
         titleCard.show(nextStage(), fresh = Stages.ALL.none { settings.stars(it.id) > 0 }, clock)
+        // the very first launch: Dot steps off the title to say hello
+        welcomeAt = if (!settings.metDot && dev.ending == null && !dev.faces) clock + WELCOME_DELAY else -1.0
         fx.clear()
         toast.clear()
     }
 
+    // ---------------------------------------------------------------------------------------- Dot
+
+    /**
+     * Dot's taps while it's out: its button (or Dot itself) moves it on; in a welcome any tap
+     * does; a tap on its balloon does nothing. Anywhere else in a stage sends it back in and the
+     * pen goes on to draw. Returns true when Dot took the sample.
+     */
+    private fun dotSample(s: PenSample, x: Float, y: Float): Boolean {
+        when (s.phase) {
+            PenPhase.DOWN -> {
+                val t = dotHelper.targetAt(x, y)
+                if (t != null || dotHelper.modal) {
+                    dotHelper.press.down(s.pointerId, t ?: dotHelper)
+                    return true
+                }
+                dotHelper.dismiss(clock)
+                return false
+            }
+            PenPhase.UP, PenPhase.CANCEL -> {
+                if (s.pointerId != dotHelper.press.pointer) return false
+                val hit = dotHelper.press.up(s.pointerId, dotHelper.targetAt(x, y) ?: dotHelper)
+                if (s.phase == PenPhase.UP && hit != null && hit !== dotHelper.balloon) dotHelper.next(clock)
+                return true
+            }
+            else -> return s.pointerId == dotHelper.press.pointer
+        }
+    }
+
+    /** The runner on screen (dp): x, y and radius, into [runnerAt]. */
+    private fun runnerOnScreen(sim: GameSim): FloatArray {
+        val a = (acc / STEP).coerceIn(0f, 1f)
+        runnerAt[0] = (sim.runner.prev.lerpX(a) - world.camX) * scale
+        runnerAt[1] = (sim.runner.prev.lerpY(a) - world.camY) * scale
+        runnerAt[2] = sim.runner.r * scale
+        return runnerAt
+    }
+
+    /**
+     * Each frame: in a first-run stage Dot steps out when the runner has stopped at something
+     * new it hasn't explained, and goes back in once that's dealt with; on the title it says
+     * hello on the first launch.
+     */
+    private fun updateDot() {
+        val ses = session
+        if (screen == Screen.STAGE && ses != null && tutorial == null) {
+            val sim = ses.sim
+            if (sim.ink !== explainedFor) {
+                explainedFor = sim.ink
+                explained.clear()
+                dotHelper.hide()
+            }
+            val r = runnerOnScreen(sim)
+            dotHelper.follow(r[0], r[1], r[2])
+            val wg = sim.waitingAt
+            if (wg != null) {
+                dotHelper.targetX = ((wg.gx0 + wg.gx1) / 2f - world.camX) * scale
+                dotHelper.targetY = (min(wg.gy0, wg.gy1) - world.camY) * scale
+            } else {
+                dotHelper.targetX = Float.NaN
+            }
+            val still = kotlin.math.abs(sim.runner.body.linearVelocity.x) < 0.3f
+            if (ses.phase == StageSession.Phase.PLAY && sim.learning && wg != null && !wg.done && wg !in explained &&
+                sim.drawing == null && still && !pauseCard.open && !sheet.open && !countdown.running
+            ) {
+                explained += wg
+                dotHelper.show(clock, listOf(explainPage(wg, sim)), r[0], r[1], r[2])
+                audio.play(Sfx.POP)
+                log { "Dot explains ${wg.label}" }
+            }
+            if (dotHelper.open && !dotHelper.modal && (wg == null || wg.done || ses.phase != StageSession.Phase.PLAY)) dotHelper.dismiss(clock)
+            if (dotHelper.consumeLanded()) {
+                val p = sim.runner.body.position
+                fx.burst(p.x, p.y, 12, 1.8f, Tok.INK)
+            }
+        } else if (screen == Screen.TITLE && tutorial == null) {
+            dotHelper.follow(titleCard.dotX, titleCard.dotY, com.pranshuparmar.inkmayhem.ui.TitleCard.BUDDY_R)
+            if (welcomeAt > 0.0 && clock >= welcomeAt && !sheet.open && !calibration.open) {
+                welcomeAt = -1.0
+                dotHelper.targetX = Float.NaN
+                dotHelper.show(clock, WELCOME, titleCard.dotX, titleCard.dotY, com.pranshuparmar.inkmayhem.ui.TitleCard.BUDDY_R, modal = true)
+                dotHelper.onFinished = { settings.metDot = true }
+                audio.play(Sfx.POP)
+                log("Dot says hello")
+            }
+            dotHelper.consumeLanded()
+        } else if (dotHelper.visible) {
+            dotHelper.hide()
+        }
+    }
+
+    /** What Dot says at a gate: the stage's note for it (if there's one just before), and exactly what to draw. */
+    private fun explainPage(g: com.pranshuparmar.inkmayhem.game.Gate, sim: GameSim): DotHelper.Page {
+        var note: String? = null
+        var best = Float.NEGATIVE_INFINITY
+        sim.notes.forEach { n -> if (n.x <= g.x1 && n.x >= g.x0 - 30f && n.x > best) { best = n.x; note = n.text } }
+        val say = when {
+            g.crush -> "Press hard and draw a line above it. A falling beam squashes it."
+            g.needs == Ink.ROPE -> "Only rope will do here: press lightly along the green dots."
+            g.needs == Ink.BEAM -> "Press hard along the red dots. Beetles can't bite a beam."
+            g.forbid == Ink.SPRING -> "No springs here, I'd bounce into the spikes! Press lightly along the dots: rope."
+            g.label != g.ink.label -> "Draw along the dots, from edge to edge."
+            g.ink == Ink.ROPE -> "Press lightly and follow the green dots, from edge to edge."
+            g.ink == Ink.SPRING -> "Write normally along the amber dots, flat on the ground. I'll bounce!"
+            else -> "Press hard and follow the red dots, from edge to edge."
+        }
+        return DotHelper.Page(note, say, com.pranshuparmar.inkmayhem.render.Expr.CURIOUS)
+    }
+
+    /** First-run teaching from the sim (a stroke that missed, or a long wait): Dot steps out to say it. */
+    private fun dotTeach(message: String, idle: Boolean) {
+        val ses = session ?: return
+        // already out explaining: the explanation stands
+        if (idle && dotHelper.open) return
+        val r = runnerOnScreen(ses.sim)
+        val face = if (idle) com.pranshuparmar.inkmayhem.render.Expr.CURIOUS else com.pranshuparmar.inkmayhem.render.Expr.WORRIED
+        dotHelper.show(clock, listOf(DotHelper.Page(null, if (idle) "Hello? $message" else message, face)), r[0], r[1], r[2])
+        if (idle) {
+            dotHelper.knock(clock)
+            audio.play(Sfx.HOP)
+        } else {
+            audio.play(Sfx.POP)
+        }
+    }
+
+    private fun drawDot(now: Double, reduced: Boolean, hudBottom: Float) {
+        if (!dotHelper.visible) return
+        dotHelper.layout(text, frame, hudBottom)
+        pass({ dotHelper.drawShapes(shapes, pal, frame, now, reduced) }, { dotHelper.drawText(text, pal, now) })
+    }
+
     /** The finale after the last stage, with the player's totals ([finale]), or just the credits. */
     private fun showEnding(finale: Boolean) {
+        dotHelper.hide()
+        welcomeAt = -1.0
         if (screen == Screen.STAGE) {
             session?.sim?.dispose()
             session = null
@@ -979,6 +1129,8 @@ class InkMayhemGame(
     // ---------------------------------------------------------------------------------- tutorial
 
     private fun startTutorial(lesson: Int) {
+        dotHelper.hide()
+        welcomeAt = -1.0
         tutorial?.sim?.dispose()
         // the tutorial replaces whatever was being played
         if (screen == Screen.STAGE) endStage()
@@ -1069,6 +1221,12 @@ class InkMayhemGame(
             if (delaySec > 0f) toast.showLater(message, clock, delaySec.toDouble(), force) else toast.show(message, clock, force)
         }
 
+        override fun teach(message: String, idle: Boolean) {
+            val ses = session
+            if (tutorial == null && screen == Screen.STAGE && ses != null && ses.sim.learning) dotTeach(message, idle)
+            else toast.show(message, clock, force = true)
+        }
+
         override fun burst(x: Float, y: Float, n: Int, spread: Float, color: Tok, up: Float) = fx.burst(x, y, n, spread, color, up)
 
         override fun pop(x: Float, y: Float, text: String, color: Tok) = fx.pop(x, y, text, color)
@@ -1131,6 +1289,8 @@ class InkMayhemGame(
             world.guideTok = when (tut.guideInk) { Ink.ROPE -> Tok.ROPE; Ink.SPRING -> Tok.SPRING; Ink.BEAM -> Tok.BEAM }
         }
         // the tutorial always colours ink by type: that's what it teaches
+        world.dotOut = dotHelper.visible && screen == Screen.STAGE && tut == null
+        titleCard.dotOut = dotHelper.visible && screen == Screen.TITLE
         val menu = tut == null && screen != Screen.STAGE && !(screen == Screen.SELECT && preview != null)
         world.render(
             active, fx, pal, settings.tint || tut != null, uiCam, wDp, hDp, scale, density, (acc / STEP).coerceIn(0f, 1f),
@@ -1220,6 +1380,7 @@ class InkMayhemGame(
             titleCard.hoverY = world.hoverY
             titleCard.layout(text, frame)
             pass({ titleCard.drawShapes(shapes, pal, text, now, reduced) }, { titleCard.drawText(text, pal, now, reduced) })
+            drawDot(now, reduced, frame.safeT)
         } else if (tut == null && screen == Screen.ENDING) {
             endingCard.layout(frame)
             endingCard.layoutBubble(text, frame)
@@ -1229,6 +1390,7 @@ class InkMayhemGame(
             pass({ selectCard.drawShapes(shapes, pal, frame) }, { selectCard.drawText(text, pal) })
         } else if (tut == null && ses != null) {
             drawStageCards(ses)
+            drawDot(now, reduced, frame.safeT + DOT_BELOW_HUD)
             if (pauseCard.open) {
                 pauseCard.layout(frame)
                 pauseCard.remarks = settings.remarks
@@ -1448,6 +1610,16 @@ class InkMayhemGame(
         const val FINGER_TOAST = "Use the S Pen. Fingers don’t leave ink."
         const val TUNE_LATER = "For the best feel, tune your pen in settings."
         const val BOSS_MUSIC = "boss"
+        /** Dot steps out below the HUD (dp from the top of the safe area). */
+        private const val DOT_BELOW_HUD = 92f
+        /** On the very first launch Dot says hello this long after the title appears. */
+        private const val WELCOME_DELAY = 1.0
+        private val WELCOME = listOf(
+            DotHelper.Page(null, "Hi! I'm Dot, a drop of ink.", com.pranshuparmar.inkmayhem.render.Expr.HAPPY, "Next", lookAtPlayer = true),
+            DotHelper.Page(null, "I roll along by myself. You draw the way ahead with your S Pen.", com.pranshuparmar.inkmayhem.render.Expr.CURIOUS, "Next", lookAtPlayer = true),
+            DotHelper.Page(null, "How hard you press makes the ink: lightly for rope, normally for a spring, hard for a beam.", com.pranshuparmar.inkmayhem.render.Expr.CALM, "Next", lookAtPlayer = true),
+            DotHelper.Page(null, "Tap Start. I'll stop and show you each new thing as we go.", com.pranshuparmar.inkmayhem.render.Expr.PROUD, "Let's go", lookAtPlayer = true),
+        )
         /** The stage list's peek pans across its world at this many metres a second. */
         private const val PREVIEW_SPEED = 2.6f
         /** A new screen fades in from the paper over this long. */

@@ -46,9 +46,13 @@ class Settings(private val prefs: Preferences) : StageStore {
     var haptics: Boolean = prefs.getBoolean("haptics", true)
         set(v) { field = v; put { putBoolean("haptics", v) } }
 
-    /** The runner's remarks: little speech bubbles now and then. */
+    /** Dot's remarks: little speech bubbles now and then. */
     var remarks: Boolean = prefs.getBoolean("remarks", true)
         set(v) { field = v; put { putBoolean("remarks", v) } }
+
+    /** Dot has introduced itself (on the very first launch). */
+    var metDot: Boolean = prefs.getBoolean("metDot", false)
+        set(v) { field = v; put { putBoolean("metDot", v) } }
 
     /** Debug builds only: record each session's input for replays. On by default; read at launch. */
     var recordInput: Boolean = prefs.getBoolean(RECORD_INPUT, true)

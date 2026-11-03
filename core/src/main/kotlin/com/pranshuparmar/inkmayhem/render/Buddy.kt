@@ -195,7 +195,7 @@ class BuddyDrawer(private val shapes: Shapes) {
 
     fun draw(
         pal: Palette, s: BuddyState, cx: Float, cy: Float, r: Float, dir: Float, lw: Float, a: Float = 1f,
-        extraSquash: Float = 0f, stretch: Float = 0f, bold: Boolean = false,
+        extraSquash: Float = 0f, stretch: Float = 0f, bold: Boolean = false, faceless: Boolean = false,
     ) {
         val sq = (s.squash + extraSquash).coerceIn(0f, 0.6f)
         val sx = 1f + sq * 0.28f - stretch * 0.18f
@@ -207,6 +207,8 @@ class BuddyDrawer(private val shapes: Shapes) {
         shapes.color(ink, a).ellipse(cx, by, r * sx, r * sy)
         // a little ink pooled at the base, so it reads as a blot rather than a ball
         shapes.color(ink, a).ellipse(cx, by + r * sy * 0.82f, r * sx * 0.78f, r * sy * 0.22f)
+        // Dot has stepped out of the page: what's left rolling is just a dot of ink
+        if (faceless) return
 
         val fx = cx + dir * r * 0.14f * sx
         val ey = by - r * 0.5f * sy
