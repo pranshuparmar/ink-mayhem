@@ -220,7 +220,7 @@ class InkMayhemGame(
         sim = GameSim(seed = worldSeed, events = Events())
         world = WorldRenderer(shapes, text, fonts)
         tutorialCard = TutorialCard(fonts)
-        selectCard = StageSelectCard(fonts, settings)
+        selectCard = StageSelectCard(fonts, settings, unlockAll = platform.isDebugBuild)
         gameOverCard = GameOverCard(fonts)
         clearCard = ClearCard(fonts)
         stageIntro = StageIntro(fonts)

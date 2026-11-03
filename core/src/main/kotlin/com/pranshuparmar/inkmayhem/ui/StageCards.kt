@@ -45,7 +45,12 @@ internal fun drawGoldMarks(shapes: Shapes, pal: Palette, x: Float, cy: Float, r:
  * tab opens, locked or not, so its stages can be looked over (a padlock marks a locked world);
  * only open stages play.
  */
-class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
+class StageSelectCard(
+    private val fonts: Fonts,
+    private val store: StageStore,
+    /** Debug builds: every stage plays, cleared before it or not (for testing). */
+    private val unlockAll: Boolean = false,
+) {
     val box = Box()
     /** Picks up where the player left off: the next stage not yet cleared. */
     val play = Box()
@@ -70,7 +75,7 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
 
     fun refresh() {
         for (i in all.indices) {
-            open[i] = StageSession.unlocked(all[i], store)
+            open[i] = unlockAll || StageSession.unlocked(all[i], store)
             stars[i] = store.stars(all[i].id)
             gold[i] = store.gold(all[i].id)
             val best = store.best(all[i].id)

@@ -74,7 +74,8 @@ built round one idea:
   three stars.
 - **First runs teach.** On a world's first stage, until it has a star, Dot stops before each new
   thing and waits until you've drawn a stroke that will work.
-- A stage opens once the one before has at least one star.
+- A stage opens once the one before has at least one star. (Debug builds open every stage, for
+  testing.)
 
 ## The five worlds
 
