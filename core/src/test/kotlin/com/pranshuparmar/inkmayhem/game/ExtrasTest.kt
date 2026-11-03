@@ -188,6 +188,21 @@ class ExtrasTest {
         assertEquals(0L, s.stickers)
     }
 
+    @Test
+    fun `the theme follows the phone unless one is picked`() {
+        val prefs = MemoryPreferences()
+        val s = Settings(prefs)
+        assertEquals(Settings.THEME_AUTO, s.theme)
+        assertTrue(s.dark(systemDark = true))
+        assertFalse(s.dark(systemDark = false))
+        s.theme = Settings.THEME_DARK
+        assertTrue(Settings(prefs).dark(systemDark = false), "dark is kept")
+        s.theme = Settings.THEME_LIGHT
+        assertFalse(Settings(prefs).dark(systemDark = true))
+        s.theme = "purple"
+        assertEquals(Settings.THEME_AUTO, Settings(prefs).theme)
+    }
+
     // ---------------------------------------------------------------- the album
 
     @Test

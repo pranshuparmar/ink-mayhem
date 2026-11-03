@@ -54,6 +54,17 @@ class Settings(private val prefs: Preferences) : StageStore {
     var playCounts: Boolean = prefs.getBoolean("playCounts", true)
         set(v) { field = v; put { putBoolean("playCounts", v) } }
 
+    /** "Theme": [THEME_AUTO] follows the phone's dark mode; [THEME_LIGHT] or [THEME_DARK] fixes it. */
+    var theme: String = prefs.getString("theme", THEME_AUTO).let { if (it in THEMES) it else THEME_AUTO }
+        set(v) { field = if (v in THEMES) v else THEME_AUTO; put { putString("theme", field) } }
+
+    /** Whether the page is dark, given the phone's own [systemDark]. */
+    fun dark(systemDark: Boolean): Boolean = when (theme) {
+        THEME_LIGHT -> false
+        THEME_DARK -> true
+        else -> systemDark
+    }
+
     /** "Screen shake": crashes, stomps and boss hits shake the page. On by default. */
     var shake: Boolean = prefs.getBoolean("shake", true)
         set(v) { field = v; put { putBoolean("shake", v) } }
@@ -168,6 +179,10 @@ class Settings(private val prefs: Preferences) : StageStore {
 
     companion object {
         const val RECORD_INPUT = "recordInput"
+        const val THEME_AUTO = "auto"
+        const val THEME_LIGHT = "light"
+        const val THEME_DARK = "dark"
+        val THEMES = listOf(THEME_AUTO, THEME_LIGHT, THEME_DARK)
         /** The save's format: bump it (and teach [migrate] the step) whenever saved data changes meaning. */
         const val SAVE_VERSION = 1
         const val SAVE_VERSION_KEY = "saveVersion"

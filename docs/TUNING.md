@@ -348,6 +348,7 @@ lesson passes, then happy. A pen-down on Dot or its balloon draws nothing.
 | Jukebox | "Each world's own", or a tune: a world's once its boss has a star, the boss theme once any boss has; the pick plays on the menus, in stages and in boss fights |
 | Doodle mode | after the ending: Endless ink, Half speed (stages run at 0.5×), Always Bold, Highlighter (everything hidden shows from the start), Cloud chalk, Gold nib and Star nib held all run. While any is on, a "DOODLE MODE" tag in the bottom-left corner, and stars, bests, gold stars and stickers aren't kept |
 | Ink feel | on a stroke's pen-up: rope 8 ms at 60, a spring two 10 ms pulses at 120 (45 ms apart), a beam 30 ms at 230. Off with **Haptics**; nothing on the desktop |
+| Theme | Settings → **Theme**: Auto (the phone's dark mode, followed live), Light or Dark; saved as `theme`. Midnight Ink's page stays dark whatever is picked |
 | Volumes | Sound effects and Music sliders, 0 to 100 % in steps of 5 (snapping to off near the left); the music plays at 0.42 × its slider, effects at their slider. On/off switches saved by early builds carry over as 100 % or off |
 | Saves | stamped with a version (`saveVersion`, now 1). An unversioned save with no gold-star keys is from before the five worlds: its 1-2 to 1-4 results (then Cellar, Up High and Castle) are dropped |
 | Tunes | a stage's own tune and, if it has a boss, the boss's are loaded during its intro card, so the boss music starts the moment the arena closes; the menus keep Ink Rush loaded |

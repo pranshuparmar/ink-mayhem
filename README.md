@@ -98,7 +98,7 @@ learns your touch and runs five short lessons (about a minute) before the first 
 | Pause | The button at the top right, or Android back. Resuming counts you back in, 3‑2‑1 |
 | Menus | Tap with the pen or a finger |
 
-**Settings** has sound and music volume, Dot's remarks, ink colours, haptics, screen shake,
+**Settings** has sound and music volume, a light, dark or automatic theme, Dot's remarks, ink colours, haptics, screen shake,
 Dot's hints, anonymous play counts, **Tune your pen** (three lines to fit light, normal and hard
 to your hand again) and the How to play lessons. The **Notebook** on the title screen holds your
 stats, stickers, torn-out pages, the jukebox, Doodle mode and the credits.

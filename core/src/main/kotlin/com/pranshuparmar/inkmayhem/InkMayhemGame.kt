@@ -474,7 +474,7 @@ class InkMayhemGame(
         pal = when {
             screen == Screen.STAGE && session?.stage?.theme == com.pranshuparmar.inkmayhem.game.Theme.MIDNIGHT -> Palette.MIDNIGHT
             screen == Screen.SELECT && tutorial == null && Stages.WORLDS.firstOrNull { it.number == selectCard.world }?.theme == com.pranshuparmar.inkmayhem.game.Theme.MIDNIGHT -> Palette.MIDNIGHT
-            frames.dark -> Palette.DARK
+            settings.dark(frames.dark) -> Palette.DARK
             else -> Palette.LIGHT
         }
         val reduced = frames.reduced

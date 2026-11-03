@@ -187,7 +187,8 @@ Dot is the runner, and it has a personality:
 - **Pausing**: the button at the top right, Android back, or leaving the app. The pause card has
   **Resume** (counting you back in, 3‑2‑1), **Ask Dot**, **Restart**, **Settings**, **Stage
   list** and **Tear out this page**.
-- **Settings**: sound effects and music volume; Dot's remarks; colour ink by type (rope green,
+- **Settings**: sound effects and music volume; **Theme** (Auto follows the phone's dark mode,
+  or pick Light or Dark); Dot's remarks; colour ink by type (rope green,
   spring amber, beam red); haptics (each ink has its own feel as it goes down: a soft tick for
   rope, a double pulse for a spring, a thud for a beam, and a crackle when a joint snaps);
   **Screen shake**; **Dot's hints** (its first-run stops and its offer of dots when you're
@@ -195,7 +196,8 @@ Dot is the runner, and it has a personality:
   [Privacy](../README.md#privacy)); **Tune your pen**; **How to play**; and a **Pen readout**
   (tool type, raw and tuned pressure, buttons, tilt, hover and event rates) for checking the
   S Pen.
-- **Portrait and landscape**, light and dark mode (following the system), and reduced motion
+- **Portrait and landscape**, light and dark mode (following the system, or as picked under
+  **Theme**), and reduced motion
   (following the system's animation setting).
 
 ## Ask Dot
