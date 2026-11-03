@@ -167,7 +167,7 @@ Dot is the runner, and it has a personality:
 - **Remarks**: now and then a speech bubble: "Wheee!", "Not the tide!", "Shiny!". Rationed, and
   off with **Dot's remarks** in Settings.
 - **A helper**: on a world's first stage, when it stops at something new, Dot steps out of the
-  page towards you (leaving a plain dot of ink below), sits in a corner clear of where you'll
+  page towards you (leaving a dashed outline where it was), sits in a corner clear of where you'll
   draw, and explains what's new and exactly what to draw, with a pointer to the dotted guide.
   Start drawing (or tap **Got it**) and it dives back in. A stroke that wouldn't work brings it
   out worried with the fix; leave it waiting and it knocks on the glass.

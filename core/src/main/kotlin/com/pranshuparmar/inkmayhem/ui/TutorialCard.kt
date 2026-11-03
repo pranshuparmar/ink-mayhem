@@ -16,7 +16,7 @@ import kotlin.math.min
 /**
  * Dot presents the How to play lessons: the lesson card is its speech balloon at the top of the
  * screen (progress, the lesson's title and instruction, a feedback line and, unless the lessons
- * are a must, a Skip button). Dot steps out of the lesson's runner to say each thing (a plain dot
+ * are a must, a Skip button). Dot steps out of the lesson's runner to say each thing (a dashed outline
  * is left on the page meanwhile), looking at the guide, worried at a hint or a miss, delighted
  * when a lesson passes; and it dives back into the runner while the player draws and while the
  * runner rolls, so the one on the page has its face then. The game swallows pen-downs on the
@@ -73,7 +73,7 @@ class TutorialCard(private val fonts: Fonts) {
         face.hush()
     }
 
-    /** Whether Dot is out of the runner (or on its way out or back in): the runner is drawn as a plain dot. */
+    /** Whether Dot is out of the runner (or on its way out or back in): the runner is drawn as a dashed outline. */
     val dotOut: Boolean get() = out || lastNow.isNaN() || lastNow - modeAt < IN_S
 
     /** True once each time Dot lands back in the runner. */

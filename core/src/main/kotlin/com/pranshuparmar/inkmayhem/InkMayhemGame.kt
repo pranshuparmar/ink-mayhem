@@ -1674,7 +1674,7 @@ class InkMayhemGame(
             world.guideTok = when (tut.guideInk) { Ink.ROPE -> Tok.ROPE; Ink.SPRING -> Tok.SPRING; Ink.BEAM -> Tok.BEAM }
         }
         // the tutorial always colours ink by type: that's what it teaches
-        // Dot is out presenting the lessons, or helping in a stage: the runner on the page is a plain dot
+        // Dot is out presenting the lessons, or helping in a stage: the runner on the page is a dashed outline
         world.dotOut = (tut != null && tutorialCard.dotOut) || (dotHelper.visible && screen == Screen.STAGE)
         if (tut != null) {
             val r = runnerOnScreen(tut.sim)
