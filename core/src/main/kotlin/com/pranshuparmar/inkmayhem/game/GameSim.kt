@@ -596,7 +596,16 @@ class GameSim(
         }
         // and so does the ink tide, though less: there's drawing to do ahead
         tides.fastEach { t -> if (t.up && t.ebbAt.isNaN()) frac = max(frac, min(TIDE_FRAC, (runnerX - t.x + 1.2f) / vw)) }
-        return runnerX - vw * frac
+        var x = runnerX - vw * frac
+        // waiting at a first run's stop: its whole guide comes into view, however far ahead it is
+        // (a narrow screen that can't show both lets the runner slip off the left edge meanwhile)
+        val g = waitingAt
+        if (g != null) {
+            val left = min(g.gx0, g.gx1) - GATE_VIEW_MARGIN
+            val right = max(g.gx0, g.gx1) + GATE_VIEW_MARGIN
+            if (right > x + vw) x = min(right - vw, left)
+        }
+        return x
     }
 
     private fun die(why: String, kind: DeathKind) {
@@ -2312,6 +2321,8 @@ class GameSim(
         const val NUDGE_S = 7f
         /** A bridge's hook counts for a side if it is within this of that side's end of the guide. */
         const val EDGE_REACH = 0.9f
+        /** Room kept round a waited-at gate's guide when the camera brings it into view. */
+        const val GATE_VIEW_MARGIN = 0.8f
         const val TIP_IDLE = "Draw along the dotted line with the S Pen."
         const val TIP_BRIDGE = "That one fell. Start on the ground on this side and end on the ground on the far side."
         const val TIP_PAD = "Lay the spring flat on the ground, along the dotted line."

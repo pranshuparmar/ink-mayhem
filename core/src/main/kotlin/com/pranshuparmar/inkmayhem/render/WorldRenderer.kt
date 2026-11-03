@@ -862,9 +862,14 @@ class WorldRenderer(
         Ink.BEAM -> Tok.BEAM
     }
 
-    /** A hint fades in as the runner nears it and out once it is passed. */
+    /**
+     * A hint fades in as the runner nears it and out once it is passed; the one the runner is
+     * waiting at shows in full, however far ahead it is (a boulder's runway can stop the runner
+     * well short of the gap).
+     */
     private fun gateAlpha(sim: GameSim, g: com.pranshuparmar.inkmayhem.game.Gate): Float {
         if (g.passed) return (1f - (sim.simT - g.passedAt) / 0.5f).coerceIn(0f, 1f)
+        if (sim.waitingAt === g) return 1f
         val pending = sim.pendingGate
         if (pending != null && g.x0 > pending.x1) return 0f
         val ahead = g.gx0 - sim.runner.body.position.x

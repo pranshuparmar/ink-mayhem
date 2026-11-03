@@ -221,6 +221,7 @@ window:
 | The lessons: the touch lesson tunes the pen from rising lines (and moves on for a pen that can't tell them apart); each lesson passes with the right ink, fails with a hint with the wrong one; the whole tutorial plays through | `TutorialTest` |
 | Pen tuning and pressure mapping | `PenInputTest` |
 | Settings and save migration | `SettingsTest`, `SaveVersionTest` |
+| Every first-run stop's guide is all on screen while the runner waits there, in portrait (15 m) and landscape (26.7 m) | `GateViewTest` |
 | Doodle mode's switches (a stage still clears under them), stickers from the save and the lifetime numbers, the jukebox's unlocks, Ask Dot's choice of strokes, lifetime numbers kept, the album's names, order and pruning | `ExtrasTest` |
 | Play counts: nothing sent while off, once a visit, a new visit after 30 minutes away, clean URLs, never a throw | `PlayCountsTest` |
 | Recordings write and read back exactly | `InputLogTest` |
