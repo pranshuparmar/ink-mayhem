@@ -123,7 +123,7 @@ version (`saveVersion`); a change to what a saved value means bumps it and adds 
 - **Ask Dot** only draws: `WorldRenderer.hints` holds strokes of the stage's scripted solution
   (`StageLayout.solution`, the same the bot draws) and shows them as dotted lines.
 - **Doodle mode** is the one extra that changes a run. `GameSim.keptPowers` holds powers for the
-  whole run (`powered(kind)` is a pickup's power or a held one), `keepBold` keeps the runner Bold
+  whole run (`powered(kind)` is a pickup's power or a held one), `keepBold` keeps the runner a Glob
   through hits, `unlimitedInk` is the tutorial's free ink, and half speed scales the stage's
   time step. A doodling session records through a `StageStore` that keeps nothing.
 - **The boss face-off** (`ui/Moments.kt`) holds the stage the way the pause card does, so the sim

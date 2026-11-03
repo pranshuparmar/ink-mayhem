@@ -33,7 +33,7 @@ stroke to erase it (you get half its ink back). Hover to see where the nib will 
 - 👾 **A page that fights back**: Blots to bounce on, Erasers that rub out your ink, paper planes,
   ink beetles that eat rope, rolling boulders, crumbling bricks, ink pools and a rising ink tide.
 - 👑 **A boss at the end of every world**, each beaten with something that world taught you.
-- ✨ **Power-ups that change your ink**: the marker cap makes Dot Bold, the Highlighter finds
+- ✨ **Power-ups that change your ink**: the marker cap makes Dot a Glob, the Highlighter finds
   hidden things, Cloud chalk floats where you draw it, the Gold nib's ink is free and unbreakable,
   and the Star nib makes Dot untouchable.
 - ⭐ **Three hidden gold stars a stage**: at the top of a risky bounce, on a high road, down an
@@ -51,7 +51,7 @@ stroke to erase it (you get half its ink back). Hover to see where the nib will 
 - 📒 **Your Notebook**: lifetime stats, a book of 16 stickers to earn, the pages you tear out
   mid-stage and the result cards you share, and a jukebox that unlocks a world's tune when you
   beat its boss.
-- 🖍️ **Doodle mode**, once you've seen the ending: endless ink, half speed, always Bold, and every
+- 🖍️ **Doodle mode**, once you've seen the ending: endless ink, half speed, always a Glob, and every
   power-up held for as long as you like.
 
 Want the details? **[Read the full tour →](docs/FEATURES.md)**

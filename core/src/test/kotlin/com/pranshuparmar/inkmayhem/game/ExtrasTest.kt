@@ -36,14 +36,14 @@ class ExtrasTest {
         p.sim.loadStage(Stages.FIRST_PAGE, fromCheckpoint = false)
         p.sim.runnerHeld = false
         assertTrue(p.sim.unlimitedInk)
-        assertTrue(p.sim.runner.bold, "Bold from the start")
+        assertTrue(p.sim.runner.bold, "a Glob from the start")
         assertTrue(p.sim.powered(ItemKind.STAR_NIB))
         assertTrue(p.sim.powered(ItemKind.GOLD_NIB))
         assertFalse(p.sim.powered(ItemKind.CHALK))
         assertEquals(0.5f, Doodle.speed(Doodle.HALF_SPEED.bit))
         // the scripted solution still clears the stage under these rules
         assertEquals(GameState.CLEAR, p.play(), p.summary)
-        assertTrue(p.sim.runner.bold, "still Bold at the end")
+        assertTrue(p.sim.runner.bold, "still a Glob at the end")
         p.dispose()
     }
 

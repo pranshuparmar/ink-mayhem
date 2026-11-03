@@ -513,7 +513,7 @@ class InkPhysics(
         return b
     }
 
-    /** Resizes a ball made by [addBall] to radius [r], keeping its mass (the runner going Bold). */
+    /** Resizes a ball made by [addBall] to radius [r], keeping its mass (the runner turning into a Glob). */
     fun resizeBall(b: Body, r: Float) {
         val f = b.fixtureList.first()
         val shape = f.shape as CircleShape

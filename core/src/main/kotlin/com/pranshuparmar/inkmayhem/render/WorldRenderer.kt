@@ -835,7 +835,7 @@ class WorldRenderer(
         val sq = run.squash
         val sy = 1f - sq * 0.2f
         val r = run.r
-        // just lost Bold: it blinks while nothing can hurt it
+        // just stopped being a Glob: it blinks while nothing can hurt it
         val a = if (sim.simT < run.safeUntil && sin(sim.simT * 30f) > 0f) 0.35f else 1f
         // the character: upright whatever way the ball rolls, its face set by what's going on
         buddy.draw(pal, persona.state, cx, cy, r, run.dir.toFloat(), px, a, extraSquash = sq * 0.5f, stretch = persona.stretch, bold = run.bold, faceless = dotOut)

@@ -10,7 +10,7 @@ import com.pranshuparmar.inkmayhem.LifetimeStats
 enum class Doodle(val title: String, val detail: String) {
     ENDLESS_INK("Endless ink", "The ink meter never runs down"),
     HALF_SPEED("Half speed", "The page runs at half speed"),
-    BOLD("Always Bold", "Bigger, flattens Blots, shrugs off every hit"),
+    BOLD("Always a Glob", "Bigger, flattens Blots, shrugs off every hit"),
     HIGHLIGHTER("Highlighter", "Everything hidden shows from the start"),
     CHALK("Cloud chalk", "Every line floats where you draw it"),
     GOLD_NIB("Gold nib", "Free ink that never snaps or gets eaten"),

@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** World 1: star trails, Blots, doodle boxes and Bold, the face, and the first page's tuning gates. */
+/** World 1: star trails, Blots, doodle boxes and the Glob, the face, and the first page's tuning gates. */
 class World1Test {
     private fun stage(build: StageBuilder.() -> Unit) = StageDef(9, 9, "Test", Theme.PAGE, 3.4f, build)
 
@@ -19,7 +19,7 @@ class World1Test {
     }
 
     @Test
-    fun `the first page's solution stomps a Blot, goes Bold, flattens the next and takes the stars`() = playing(StagePlay(Stages.FIRST_PAGE)) { p ->
+    fun `the first page's solution stomps a Blot, becomes a Glob, flattens the next and takes the stars`() = playing(StagePlay(Stages.FIRST_PAGE)) { p ->
         var bold = false
         assertEquals(GameState.CLEAR, p.play(240f) { if (p.sim.runner.bold) bold = true }, p.summary)
         assertEquals(2, p.sim.squashed, p.summary)
@@ -72,7 +72,7 @@ class World1Test {
     }
 
     @Test
-    fun `the marker cap makes the runner Bold, which rolls Blots flat and survives spikes once`() = playing(StagePlay(stage {
+    fun `the marker cap makes the runner a Glob, which rolls Blots flat and survives spikes once`() = playing(StagePlay(stage {
         start(10f)
         flat(70f)
         box(16.5f, up = 2.6f)
@@ -88,9 +88,9 @@ class World1Test {
             if (p.sim.runner.bold && boldAt.isNaN()) boldAt = p.x
             if (!boldAt.isNaN() && !p.sim.runner.bold && lostAt.isNaN()) lostAt = p.x
         }
-        assertTrue(boldAt < 36f, "Bold before the Blot (at $boldAt)")
+        assertTrue(boldAt < 36f, "a Glob before the Blot (at $boldAt)")
         assertEquals(1, p.sim.squashed, "rolled flat: ${p.events.pops}")
-        assertTrue(lostAt > 44f && lostAt < 48f, "the first spikes took Bold (at $lostAt)")
+        assertTrue(lostAt > 44f && lostAt < 48f, "the first spikes shrank the Glob (at $lostAt)")
         assertEquals(GameState.DEAD, st, p.summary)
         assertEquals(DeathKind.SPIKED, p.sim.death?.kind)
         assertTrue(p.x > 60f, "the second spikes killed it: ${p.summary}")

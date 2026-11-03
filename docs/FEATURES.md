@@ -81,7 +81,7 @@ built round one idea:
 
 | World | Page | What's new | Power-up | Boss | Music |
 |---|---|---|---|---|---|
-| 1 **The Notebook** | ruled paper | rope, spring and beam; hills and seesaws; Blots | marker cap (Bold) | **The Big Blot** | Ink Rush |
+| 1 **The Notebook** | ruled paper | rope, spring and beam; hills and seesaws; Blots | marker cap (Glob) | **The Big Blot** | Ink Rush |
 | 2 **The Cellar** | graph paper underground | low roofs, spiked tunnels, slides, lifts; Erasers; inkwells down to bonus pages | Highlighter | **The Giant Eraser** | Cellar |
 | 3 **Up High** | dot grid in the sky | floating islands, bouncy clouds; paper planes | Cloud chalk | **The Paper Airliner** | Sky |
 | 4 **The Castle** | brickwork | boulder chases, crumbling bricks; ink beetles | Gold nib | **The Beetle Queen** | Castle |
@@ -107,7 +107,7 @@ it (rope lets them drop through the next gap; springs and beams carry them after
 
 | | | |
 |---|---|---|
-| **Blots** | waddle at you | Bounce on one with a spring, or drop a beam on it. Bold rolls them flat |
+| **Blots** | waddle at you | Bounce on one with a spring, or drop a beam on it. A Glob rolls them flat |
 | **Erasers** | rub out rope and springs they touch | Too rubbery to stomp; drop a beam on them |
 | **Paper planes** | fly in at head height, in flights of three | Spring through them, or block them with a beam |
 | **Ink beetles** | hop up to rope and springs and eat them | Can't bite beams. Stompable |
@@ -122,7 +122,7 @@ Touching a creature any other way costs a life.
 
 | | |
 |---|---|
-| **Marker cap** | Dot turns **Bold**: bigger, rolls creatures flat, and survives one hit |
+| **Marker cap** | Dot turns into a **Glob**: bigger, rolls creatures flat, and survives one hit |
 | **Highlighter** | for 9 s, strokes become swipes that reveal hidden ledges, boxes, stars and inkwells |
 | **Cloud chalk** | for 9 s, lines float where you draw them: even rope spans a long gap |
 | **Gold nib** | for 9 s, ink is free, never snaps, and beetles can't bite it |
@@ -260,7 +260,7 @@ off as you like and kept until you change it:
 |---|---|
 | **Endless ink** | the ink meter never runs down |
 | **Half speed** | stages run at half speed, for careful drawing |
-| **Always Bold** | Dot starts every life Bold and stays Bold through every hit |
+| **Always a Glob** | Dot starts every life a Glob and stays one through every hit |
 | **Highlighter** | everything hidden on a page shows from the start |
 | **Cloud chalk** | every line floats where you draw it |
 | **Gold nib** | free ink that never snaps and beetles can't bite |

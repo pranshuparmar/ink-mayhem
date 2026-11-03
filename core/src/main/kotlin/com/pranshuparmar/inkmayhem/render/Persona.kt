@@ -247,7 +247,7 @@ class Persona {
         private val SNAP = arrayOf("Eek!", "Whoa!", "That snapped!")
         private val GOLD = arrayOf("Shiny!", "Ooh, gold!", "Mine!")
         private val CHECKPOINT = arrayOf("Bookmarked!", "Saved my place.")
-        private val BOLD = arrayOf("Look at my hat!", "Feeling bold.")
+        private val BOLD = arrayOf("Look at my hat!", "Globby!")
         private val BOSS_START = arrayOf("You don't scare me!", "Big one...", "Let's do this.")
         private val BOSS_HIT = arrayOf("Take that!", "Ha!", "And again!")
         private val BOSS_DOWN = arrayOf("We did it!", "Who's next?", "Down it goes!")

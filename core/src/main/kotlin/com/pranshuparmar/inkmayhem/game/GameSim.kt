@@ -132,7 +132,7 @@ class GameSim(
         private set
     var happyUntil = -10f
         private set
-    /** simT the runner last lost Bold or squashed something (the face reacts). */
+    /** simT the runner last stopped being a Glob or squashed something (the face reacts). */
     var ouchAt = -10f
         private set
     /** How many rope, spring and beam fixtures the runner is touching (by ink weight). */
@@ -216,7 +216,7 @@ class GameSim(
      */
     var keptPowers = 0
 
-    /** Doodle mode: the runner is Bold from the start and stays Bold through every hit. */
+    /** Doodle mode: the runner is a Glob from the start and stays a Glob through every hit. */
     var keepBold = false
 
     /** The power is on: picked up, or held by Doodle mode. */
@@ -983,16 +983,16 @@ class GameSim(
         Creature.BEETLE -> FixtureTag.BEETLE
     }
 
-    /** A pickup caught: the marker cap makes the runner Bold; the others are timed powers. */
+    /** A pickup caught: the marker cap makes the runner a Glob; the others are timed powers. */
     private fun applyPower(kind: ItemKind, x: Float, y: Float) {
         happyUntil = simT + HAPPY_S * 2f
         events.burst(x, y, 16, 2.4f, Tok.ACCENT)
         if (kind == ItemKind.CAP) {
             if (!runner.bold) setBold(true)
             score += CAP_POINTS
-            events.pop(x, y - 1.2f, "Bold! +$CAP_POINTS", Tok.ACCENT)
+            events.pop(x, y - 1.2f, "Glob! +$CAP_POINTS", Tok.ACCENT)
             events.sound(Sfx.BOLD)
-            events.toast("Bold: you survive one hit and flatten Blots.", force = true)
+            events.toast("Glob: you survive one hit and flatten Blots.", force = true)
             return
         }
         runner.power = kind
@@ -1315,7 +1315,7 @@ class GameSim(
         return n >= 2 && d.startAnchored && tipHooks
     }
 
-    // ---------------------------------------------------------------- stars, Blots, boxes, Bold
+    // ---------------------------------------------------------------- stars, Blots, boxes, the Glob
 
     // ---------------------------------------------------------------- bosses
 
@@ -1528,7 +1528,7 @@ class GameSim(
     }
 
     /**
-     * A Blot or spikes got the runner. Bold takes the hit: the runner shrinks back and nothing
+     * A Blot or spikes got the runner. A Glob takes the hit: the runner shrinks back and nothing
      * hurts for [SAFE_S]. Otherwise it's a life.
      */
     private fun hurt(why: String, kind: DeathKind) {
@@ -1568,7 +1568,7 @@ class GameSim(
         return above
     }
 
-    /** The marker cap on or off: Bold is a bigger runner of the same weight. */
+    /** The marker cap on or off: a Glob is a bigger runner of the same weight. */
     private fun setBold(on: Boolean) {
         runner.bold = on
         runner.r = if (on) BOLD_R else RUNNER_R
@@ -1605,7 +1605,7 @@ class GameSim(
 
     /**
      * Blots wake when the runner comes within [BLOT_WAKE], then walk at it (pacing their patrol,
-     * turning round at walls). Touching one from above squashes it and bounces the runner; a Bold
+     * turning round at walls). Touching one from above squashes it and bounces the runner; a Glob
      * runner flattens it whatever the angle; any other touch hurts.
      */
     private fun updateBlots(px: Float, py: Float) {
@@ -2251,7 +2251,7 @@ class GameSim(
         const val STOMP_SLACK = 0.3f
         /** A spring bounce (about 1.9 s in the air) squashes any Blot met this long after it. */
         const val BOUNCE_STOMP_S = 2.3f
-        /** The marker cap and Bold: cap size, slide speed and hop, points, Bold's radius and the safe time after a hit. */
+        /** The marker cap and the Glob: cap size, slide speed and hop, points, the Glob's radius and the safe time after a hit. */
         const val CAP_R = 0.24f
         const val CAP_SPEED = 2.2f
         const val CAP_HOP = -4f
