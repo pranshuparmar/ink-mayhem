@@ -54,7 +54,10 @@ The page fights back and pays out:
   (Settings → **Dot's remarks** turns that off). It greets you on the title screen with tips,
   peeks over the pause screen, and is there at the end.
 - **Dot is your helper too.** On the very first launch it steps off the title screen to
-  introduce itself. On a world's first stage, when the runner stops at something new, Dot pops
+  introduce itself, then asks: a quick lesson first (**Teach me first**: the four How to play
+  lessons, then 1-1) or straight in (**Just play**). Dot presents the lessons itself, from a
+  speech balloon at the top of the page: it watches your pen, worries at a miss and beams when
+  a lesson passes. On a world's first stage, when the runner stops at something new, Dot pops
   out of the page towards you (leaving a plain dot of ink rolling below), sits in a corner clear
   of where you'll draw, and explains: what's new, and exactly what to draw, with a dotted
   pointer to the guide. Start drawing (or tap **Got it**) and it dives back in. A stroke that
@@ -117,9 +120,9 @@ one of the three is that ink whatever the pressure, and the pressures of those t
 **tune the pen** (if they rise from rope to beam). Each stroke becomes
 one ink, from the pressure it settles at once the pen has landed. **Settings** (on the title,
 the pause screen, or ⋯ on the stage list) has volume sliders for **Sound effects** and
-**Music**, **Runner's remarks**, **Tune your pen** (draw a rope, a spring and a
+**Music**, **Dot's remarks**, **Tune your pen** (draw a rope, a spring and a
 beam line along a guide, then try a few strokes), **How to play** (four short lessons on rope,
-spring, beam and erasing), and the **Pen readout** (tool type, raw and normalized
+spring, beam and erasing, presented by Dot), and the **Pen readout** (tool type, raw and normalized
 pressure, buttons, tilt, hover and event rates) for checking the S Pen. The **stage list** is a
 notebook with a tab per world: every world's tab opens, even a locked one (a padlock marks it),
 so you can read its stage names before you get there, though only open stages play. Behind

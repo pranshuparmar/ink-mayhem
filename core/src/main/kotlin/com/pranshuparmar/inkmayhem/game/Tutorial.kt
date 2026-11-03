@@ -21,17 +21,17 @@ class Tutorial(val sim: GameSim) {
         ROPE(
             "Light touch: rope",
             "Bridge the gap along the dotted line, lightly, from edge to edge. Rope costs almost no ink.",
-            "The runner waits until you lift the pen.",
+            "I’ll wait until you lift the pen.",
         ),
         SPRING(
             "Write normally: spring",
             "Draw a short line on the dotted mark, pressing the way you write. A spring bounces you over the wall.",
-            "The runner waits until you lift the pen.",
+            "I’ll wait until you lift the pen.",
         ),
         BEAM(
             "Press hard: beam",
             "Too far for rope. Press hard along the dotted line, edge to edge.",
-            "The runner waits until you lift the pen.",
+            "I’ll wait until you lift the pen.",
         ),
         ERASE(
             "Side button: erase",
@@ -253,7 +253,7 @@ class Tutorial(val sim: GameSim) {
                 }
             }
             Lesson.BEAM -> if (rx > BEAM_GAP + 1.2f) pass("Beams span anything, but cost ten times the ink of rope.")
-            Lesson.ERASE -> if (rx > POST_X + 1.5f) pass("Erased. You’re ready to run.")
+            Lesson.ERASE -> if (rx > POST_X + 1.5f) pass("Erased! You’re ready. Let’s roll!")
         }
     }
 

@@ -142,6 +142,8 @@ class InkMayhemGame(
     private var explainedFor: Any? = null
     /** When Dot steps off the title to say hello on the very first launch (−1: not due). */
     private var welcomeAt = -1.0
+    /** The lessons were chosen in the welcome: when they end, the game starts. */
+    private var playAfterTutorial = false
     private val runnerAt = FloatArray(3)
     /** When the screen last changed: the new one fades in from the paper. */
     private var fadeAt = -10.0
@@ -564,7 +566,7 @@ class InkMayhemGame(
                 (ses.phase == StageSession.Phase.PLAY || (ses.phase == StageSession.Phase.INTRO && !ses.firstIntro)))
         when (s.phase) {
             PenPhase.DOWN -> {
-                if (tut != null && card.box.contains(x, y)) {
+                if (tut != null && (card.box.contains(x, y) || card.dotBox.contains(x, y))) {
                     card.press.down(s.pointerId, if (card.skip.contains(x, y)) card.skip else null)
                     return
                 }
@@ -869,7 +871,15 @@ class InkMayhemGame(
             PenPhase.UP, PenPhase.CANCEL -> {
                 if (s.pointerId != dotHelper.press.pointer) return false
                 val hit = dotHelper.press.up(s.pointerId, dotHelper.targetAt(x, y) ?: dotHelper)
-                if (s.phase == PenPhase.UP && hit != null && hit !== dotHelper.balloon) dotHelper.next(clock)
+                if (s.phase == PenPhase.UP && hit != null && hit !== dotHelper.balloon) {
+                    when {
+                        hit === dotHelper.altButton -> dotHelper.choose(clock, alt = true)
+                        hit === dotHelper.button -> dotHelper.next(clock)
+                        // a choice is only answered by its buttons
+                        dotHelper.choosing -> Unit
+                        else -> dotHelper.next(clock)
+                    }
+                }
                 return true
             }
             else -> return s.pointerId == dotHelper.press.pointer
@@ -929,6 +939,16 @@ class InkMayhemGame(
                 dotHelper.targetX = Float.NaN
                 dotHelper.show(clock, WELCOME, titleCard.dotX, titleCard.dotY, com.pranshuparmar.inkmayhem.ui.TitleCard.BUDDY_R, modal = true)
                 dotHelper.onFinished = { settings.metDot = true }
+                // the welcome ends with a choice: a lesson first, or straight into 1-1
+                dotHelper.onChoice = { teach ->
+                    log { "first launch: ${if (teach) "the lessons first" else "straight in"}" }
+                    if (teach) {
+                        playAfterTutorial = true
+                        startTutorial(0)
+                    } else {
+                        (nextStage() ?: Stages.ALL.first()).let(::startStage)
+                    }
+                }
                 audio.play(Sfx.POP)
                 log("Dot says hello")
             }
@@ -1155,6 +1175,7 @@ class InkMayhemGame(
         tutorial = t
         world.hoverOn = false
         tutorialCard.press.cancel()
+        tutorialCard.begin(clock)
         toast.clear()
         audio.scratch(0f, 0.5f)
     }
@@ -1182,7 +1203,14 @@ class InkMayhemGame(
         world.hoverOn = false
         audio.scratch(0f, 0.5f)
         fx.clear()
-        if (afterTutorial == Screen.TITLE) showTitle() else openSelect()
+        when {
+            playAfterTutorial -> {
+                playAfterTutorial = false
+                (nextStage() ?: Stages.ALL.first()).let(::startStage)
+            }
+            afterTutorial == Screen.TITLE -> showTitle()
+            else -> openSelect()
+        }
         if (finished) toast.show(READY_TOAST, clock, force = true)
     }
 
@@ -1297,7 +1325,32 @@ class InkMayhemGame(
             world.guideTok = when (tut.guideInk) { Ink.ROPE -> Tok.ROPE; Ink.SPRING -> Tok.SPRING; Ink.BEAM -> Tok.BEAM }
         }
         // the tutorial always colours ink by type: that's what it teaches
-        world.dotOut = dotHelper.visible && screen == Screen.STAGE && tut == null
+        // Dot is out presenting the lessons, or helping in a stage: the runner on the page is a plain dot
+        world.dotOut = tut != null || (dotHelper.visible && screen == Screen.STAGE)
+        if (tut != null) {
+            val r = runnerOnScreen(tut.sim)
+            tutorialCard.fromX = r[0]
+            tutorialCard.fromY = r[1]
+            tutorialCard.fromR = r[2]
+            // Dot watches the pen while it draws, else the guide
+            val d = tut.sim.drawing
+            when {
+                d != null && d.size > 0 -> {
+                    tutorialCard.lookX = (d.xs[d.size - 1] - world.camX) * scale
+                    tutorialCard.lookY = (d.ys[d.size - 1] - world.camY) * scale
+                }
+                tut.showGuide -> {
+                    val gx = if (tut.guideRing) tut.guide[0] else (tut.guide[0] + tut.guide[2]) / 2f
+                    val gy = if (tut.guideRing) tut.guide[1] else (tut.guide[1] + tut.guide[3]) / 2f
+                    tutorialCard.lookX = (gx - world.camX) * scale
+                    tutorialCard.lookY = (gy - world.camY) * scale
+                }
+                else -> {
+                    tutorialCard.lookX = r[0]
+                    tutorialCard.lookY = r[1]
+                }
+            }
+        }
         titleCard.dotOut = dotHelper.visible && screen == Screen.TITLE
         val menu = tut == null && screen != Screen.STAGE && !(screen == Screen.SELECT && preview != null)
         world.render(
@@ -1340,7 +1393,7 @@ class InkMayhemGame(
 
         shapes.begin(uiCam.combined, density)
         if (tut != null) {
-            tutorialCard.drawShapes(shapes, pal, tut)
+            tutorialCard.drawShapes(shapes, pal, tut, now, reduced)
         } else if (screen != Screen.TITLE && screen != Screen.ENDING) {
             hud.drawShapes(
                 shapes, pal, wDp, ink, hudSim.combo, hudPress.isPressed(hud.settingsButton), full = ses != null,
@@ -1360,7 +1413,7 @@ class InkMayhemGame(
         batch.projectionMatrix = uiCam.combined
         batch.begin()
         if (tut != null) {
-            tutorialCard.drawText(text, pal, tut)
+            tutorialCard.drawText(text, pal, tut, now, reduced)
         } else if (screen != Screen.TITLE && screen != Screen.ENDING) {
             hud.drawText(text, fonts, pal, wDp, hudSim.combo, full = ses != null)
             if (screen == Screen.SELECT) hud.drawBackText(text, fonts, pal)
@@ -1626,7 +1679,10 @@ class InkMayhemGame(
             DotHelper.Page(null, "Hi! I'm Dot, a drop of ink.", com.pranshuparmar.inkmayhem.render.Expr.HAPPY, "Next", lookAtPlayer = true),
             DotHelper.Page(null, "I roll along by myself. You draw the way ahead with your S Pen.", com.pranshuparmar.inkmayhem.render.Expr.CURIOUS, "Next", lookAtPlayer = true),
             DotHelper.Page(null, "How hard you press makes the ink: lightly for rope, normally for a spring, hard for a beam.", com.pranshuparmar.inkmayhem.render.Expr.CALM, "Next", lookAtPlayer = true),
-            DotHelper.Page(null, "Tap Start. I'll stop and show you each new thing as we go.", com.pranshuparmar.inkmayhem.render.Expr.PROUD, "Let's go", lookAtPlayer = true),
+            DotHelper.Page(
+                null, "A quick lesson first, or straight in? Either way, I'll stop and show you each new thing as we go.",
+                com.pranshuparmar.inkmayhem.render.Expr.PROUD, "Just play", lookAtPlayer = true, alt = "Teach me first",
+            ),
         )
         /** The stage list's peek pans across its world at this many metres a second. */
         private const val PREVIEW_SPEED = 2.6f

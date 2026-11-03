@@ -470,8 +470,19 @@ stroke is finished and the pen lifted; in lesson 4 until the post is gone. A wai
 isn't launched by springs drawn under it. While drawing in the tutorial or a stage, a pill
 16 dp right of and 44 dp above the pen names the ink being laid. A death, or 3 s without 0.3 m of progress, fails the lesson with a hint for
 what went wrong; the scene resets 2.2 s later. A pass moves on after 1.6 s. The tutorial runs
-from "How to play" (no longer on first launch: 1-1 teaches by playing); Skip (or Android back)
-ends it, back to the title or the stage list, wherever it was opened from.
+from "How to play", or from **Teach me first** on the first-launch welcome (it isn't forced:
+1-1 teaches by playing). Skip (or Android back) ends it, back to the title or the stage list,
+wherever it was opened from; opened from the welcome, 1-1 starts instead, finished or skipped.
+
+**Dot presents it** (`ui/TutorialCard.kt`). As a lesson set opens, Dot steps out of the
+lesson's runner (a plain dot is left rolling) in 0.45 s to the top of the screen, 26 dp
+across, its shadow on the page; the lesson card is its speech balloon beside it (to its
+right, tail pointing at Dot), fading in from 0.25 s. The balloon is up to the card width
+(`cardW`) and fits beside Dot on a phone; a lesson title too wide for it shrinks from 28 sp, in
+2 sp steps, to no less than 20. Dot looks at the pen's tip while it draws, else at the guide,
+else the runner. Faces: curious while it waits, worried at a hint or a failed try, proud for
+0.9 s when a lesson passes, then happy. A pen-down on Dot or its balloon draws nothing. The
+lines are in Dot's voice ("I'll wait until you lift the pen.").
 
 ## Menus and pausing
 
@@ -510,7 +521,7 @@ they read the sim and never change it.
 | Helping | on a world's first stage (its first run), once the runner has stopped (under 0.3 m/s) at a gate it waits at, with nothing drawn, Dot steps out: 0.45 s from the runner up to a top corner below the HUD (the corner whose balloon stays 40 dp clear of the guide), growing to 30 dp across with its shadow falling on the page, the balloon fading in from 0.25 s. It says the stage's note for that gate (the last note within 30 m before it) and what to draw, with a dotted pointer to the guide, and looks at it. Once per gate per attempt. The runner on the page is a plain dot meanwhile, and notes wait |
 | Going back in | a pen-down anywhere but its balloon (the stroke goes on as normal), **Got it**, Android back, or the gate done, the runner moving on or the stage's play ending: 0.35 s back to the runner, then an ink splash |
 | Misses and waits | a stroke that wouldn't do the job is wiped and Dot steps out worried with why (the wipe's tip); 7 s waiting with nothing drawn and Dot knocks twice on the glass ("Hello? Draw along the dotted line...") unless it's already out explaining |
-| Welcome | the very first launch, 1 s after the title appears: Dot steps off the title (a plain dot left there) over a veil, looking at the player, in four pages (hello; it rolls, you draw; pressure makes the ink; tap Start), any tap moving on. Never again once seen (saved as `metDot`) |
+| Welcome | the very first launch, 1 s after the title appears: Dot steps off the title (a plain dot left there) over a veil, looking at the player, in four pages (hello; it rolls, you draw; pressure makes the ink; a lesson first or straight in?), any tap moving on until the last, which waits for a button: **Teach me first** (the How to play lessons, presented by Dot, then 1-1) or **Just play** (1-1); Android back closes it, leaving the title. Never again once seen (saved as `metDot`) |
 | Title | sat at the end of the name (it rolls in), looking about, at the pen when it hovers, pleased while a button is held; "Hi! Grab your S Pen." after 1.1 s, then a tip every 8.5 s; dozes after 30 s alone |
 | Pause | peeks over the top of the pause card with a line ("Take your time."), dozes after 6 s |
 | Ending | rolls along the line wide-mouthed, then "We did it!" and a wink |

@@ -466,3 +466,10 @@ first-run teaching itself, breaking the fourth wall the way the old Office assis
   stage the game has Dot say it.
 - **Its corner keeps the drawing area clear.** Dot sits in the top corner whose balloon stays
   clear of the guide (the right one in landscape, where the runner waits on the left).
+- **It presents the lessons too, and the first launch asks.** How to play became Dot's: it
+  steps out of the lesson's runner and the lesson card is its speech balloon, so the one
+  character teaches everywhere instead of a panel in one place and a face in another. The
+  welcome's last page asks whether to take the lessons first or play straight away. The
+  lessons are offered, not forced: 1-1's first run teaches by playing anyway, so a player who
+  wants to dive in loses nothing, and one who'd rather practise first gets the lessons with
+  1-1 waiting after them (finished or skipped).
