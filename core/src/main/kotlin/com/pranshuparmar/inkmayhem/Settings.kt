@@ -50,6 +50,10 @@ class Settings(private val prefs: Preferences) : StageStore {
     var remarks: Boolean = prefs.getBoolean("remarks", true)
         set(v) { field = v; put { putBoolean("remarks", v) } }
 
+    /** "Anonymous play counts" ([PlayCounts]): on by default, off in Settings. */
+    var playCounts: Boolean = prefs.getBoolean("playCounts", true)
+        set(v) { field = v; put { putBoolean("playCounts", v) } }
+
     /** Dot has introduced itself (on the very first launch). */
     var metDot: Boolean = prefs.getBoolean("metDot", false)
         set(v) { field = v; put { putBoolean("metDot", v) } }

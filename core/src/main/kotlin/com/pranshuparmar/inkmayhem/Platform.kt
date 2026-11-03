@@ -31,6 +31,12 @@ interface Platform {
     /** Where settings, calibration and scores are kept. A replay substitutes the recorded ones. */
     fun preferences(): Preferences = Gdx.app.getPreferences("ink-mayhem")
 
+    /**
+     * Whether this build may send anonymous play counts ([PlayCounts]): Android release builds
+     * only. Debug builds, the desktop launcher, replays and tests never do.
+     */
+    val countsPlays: Boolean get() = false
+
     /** Version name for recordings, e.g. "0.1.0-debug (42)". */
     val appVersion: String get() = ""
 

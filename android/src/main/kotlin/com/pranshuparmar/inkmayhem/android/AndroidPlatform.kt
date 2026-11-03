@@ -25,6 +25,8 @@ class AndroidPlatform(private val activity: AndroidLauncher, override val penQue
 
     override val isDebugBuild: Boolean = (activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
+    override val countsPlays: Boolean get() = !isDebugBuild
+
     override val density: Float get() = activity.resources.displayMetrics.density
 
     override val description: String = "Android ${Build.VERSION.RELEASE} · ${Build.MODEL}"

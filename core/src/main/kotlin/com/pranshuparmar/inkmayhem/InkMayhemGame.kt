@@ -100,6 +100,7 @@ class InkMayhemGame(
     private val frames: FrameSource = LiveFrames(platform),
 ) : ApplicationAdapter() {
     private lateinit var settings: Settings
+    private lateinit var counts: PlayCounts
     private lateinit var shapes: Shapes
     private lateinit var batch: SpriteBatch
     private lateinit var text: Text
@@ -197,6 +198,8 @@ class InkMayhemGame(
         val worldSeed = dev.seed ?: System.nanoTime()
         startRecording(prefs, worldSeed)
         settings = Settings(prefs)
+        counts = PlayCounts(platform.appVersion, enabled = { platform.countsPlays && settings.playCounts })
+        counts.opened()
         recordInputWas = settings.recordInput
         shapes = Shapes()
         batch = SpriteBatch()
@@ -228,6 +231,7 @@ class InkMayhemGame(
             fonts,
             onDone = { cal ->
                 settings.calibration = cal
+                counts.track("pen-tuned")
                 toast.show("Pen tuned: rope, spring and beam are yours.", clock, force = true)
             },
             onSkip = { if (!settings.penTuned) settings.calibration = settings.calibration ?: PenCalibration.DEFAULT },
@@ -408,6 +412,7 @@ class InkMayhemGame(
     }
 
     override fun pause() {
+        counts.away(System.currentTimeMillis())
         recorder?.let {
             it.pause()
             it.flush()
@@ -420,6 +425,7 @@ class InkMayhemGame(
     }
 
     override fun resume() {
+        counts.back(System.currentTimeMillis())
         recorder?.resume()
         paused = false
         frames.reset()
@@ -774,6 +780,7 @@ class InkMayhemGame(
             settings.calibration = PenCalibration.fromLines(r, sp, b)
             session?.sim?.gateTuning = false
             log { "pen tuned from the gates: ${settings.calibration}" }
+            counts.track("pen-tuned")
             toast.show("Got it: the game knows your light, normal and hard touch now.", clock, force = true)
         } else {
             gateRaw.fill(Float.NaN)
@@ -808,6 +815,7 @@ class InkMayhemGame(
         val ses = StageSession(ss, settings)
         session = ses
         ses.start(def)
+        counts.track("stage-${def.id}-start")
         stageBot = if (dev.autoplay) newBot(ss) else null
         screen = Screen.STAGE
         fadeAt = clock
@@ -1008,6 +1016,7 @@ class InkMayhemGame(
 
     /** The finale after the last stage, with the player's totals ([finale]), or just the credits. */
     private fun showEnding(finale: Boolean) {
+        if (finale) counts.track("ending")
         dotHelper.hide()
         welcomeAt = -1.0
         if (screen == Screen.STAGE) {
@@ -1141,8 +1150,14 @@ class InkMayhemGame(
     private fun stageFeedback(ses: StageSession) {
         if (ses.phase != lastPhase) {
             if (ses.phase == StageSession.Phase.DYING) audio.play(Sfx.LIFE_LOST)
-            if (ses.phase == StageSession.Phase.GAME_OVER) audio.play(Sfx.GAME_OVER)
-            if (ses.phase == StageSession.Phase.CLEARED) starsSounded = 0
+            if (ses.phase == StageSession.Phase.GAME_OVER) {
+                audio.play(Sfx.GAME_OVER)
+                counts.track("game-over")
+            }
+            if (ses.phase == StageSession.Phase.CLEARED) {
+                starsSounded = 0
+                counts.track("stage-${ses.stage.id}-clear")
+            }
             lastPhase = ses.phase
         }
         val r = ses.result
@@ -1211,6 +1226,7 @@ class InkMayhemGame(
         when {
             firstLessons -> {
                 firstLessons = false
+                counts.track("lessons-done")
                 settings.metDot = true
                 (nextStage() ?: Stages.ALL.first()).let(::startStage)
             }

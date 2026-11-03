@@ -25,8 +25,8 @@ game see the [full tour](FEATURES.md); for every gameplay number, [Tuning](TUNIN
 | compileSdk / targetSdk / minSdk | 37 / 37 / 28 (Android 9) |
 | JUnit | 5 (Jupiter) with kotlin-test, tests only |
 
-No other libraries. The app asks for one permission, `VIBRATE`, and makes no network requests
-(the repository link opens the browser).
+No other libraries. The app asks for two permissions: `VIBRATE`, and `INTERNET` for anonymous
+play counts only (see [Play counts](#play-counts)). The repository link opens the browser.
 
 ## Project layout
 
@@ -112,6 +112,18 @@ recordings still replay exactly. Dot the helper (`ui/DotHelper.kt`) and the less
 **Saves.** libGDX `Preferences` hold settings, the pen tuning and each stage's stars, best score
 and gold stars. They carry a version (`saveVersion`); a change to what a saved value means bumps
 it and adds a migration step.
+
+**Play counts.** <a id="play-counts"></a>`PlayCounts` is the only network code: release builds
+send a GET to GoatCounter's count endpoint (`https://ink-mayhem.goatcounter.com/count?p=<event>&e=true`)
+with libGDX's `Gdx.net`, one try with a 5 s timeout, no queue and no retries. The User-Agent
+is `InkMayhem/<version> (Android)`, which names nothing about the device and passes GoatCounter's
+bot filter. Events (`app-open`, `version-<v>`, `lessons-done`, `pen-tuned`, `stage-<id>-start`,
+`stage-<id>-clear`, `game-over`, `ending`) count once a visit; a visit is a launch, or coming
+back after 30 minutes away. `Platform.countsPlays` is true only on Android release builds and
+the Settings switch (`playCounts`, on by default) gates it too, so debug builds, the desktop
+launcher, replays and tests send nothing. Counting never throws and touches nothing the
+simulation or a replay reads. New counts are one `counts.track("name")` call in
+`InkMayhemGame`; the numbers are on the GoatCounter dashboard for the `ink-mayhem` site.
 
 **Orientation.** `screenOrientation="fullUser"`: all four orientations from the sensor, unless
 the player has locked rotation (`fullSensor` would ignore the lock, which is hostile while

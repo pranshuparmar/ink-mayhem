@@ -52,6 +52,7 @@ class SettingsSheet(
         add(Option("Colour ink by type", "Rope green, spring amber, beam red", { settings.tint }, { settings.tint = it }))
         add(Option("Pen readout", "Pointer type, pressure, buttons, hover rate", { settings.penReadout }, { settings.penReadout = it }))
         add(Option("Haptics", "A short buzz on snaps and crashes", { settings.haptics }, { settings.haptics = it }))
+        add(Option("Anonymous play counts", "Which stages get played. Nothing about you.", { settings.playCounts }, { settings.playCounts = it }))
         if (debugBuild) {
             add(Option("Allow finger and mouse", "Testing only. Fingers draw fixed spring ink.", { settings.allowFinger }, { settings.allowFinger = it }))
             add(Option("Record input", "Debug only. Saves sessions for replays.", { settings.recordInput }, { settings.recordInput = it }))

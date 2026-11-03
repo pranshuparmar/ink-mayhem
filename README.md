@@ -5,12 +5,12 @@ googly eyes, rolls across a notebook page, and you draw what's in front of it. H
 press decides what your ink becomes.
 
 <p align="center">
-  <img src="media/ink-mayhem.gif" alt="Dot rolling through the worlds: a boulder chase over rope bridges, a Blot parade, an Eraser, paper planes, the ink tide and a boss" width="100%">
+  <a href="https://github.com/pranshuparmar/ink-mayhem/releases/latest"><img src="media/ink-mayhem.gif" alt="Dot rolling through the worlds: a boulder chase over rope bridges, a Blot parade, an Eraser, paper planes, the ink tide and a boss" width="100%"></a>
 </p>
 
 <p align="center">
   <b><a href="https://github.com/pranshuparmar/ink-mayhem/releases/latest">⬇ DOWNLOAD THE APK: free, for Android with an S Pen</a></b><br>
-  <sub>No ads, no account, no internet · S Pen only: fingers tap buttons but never draw · Android 9 or newer</sub>
+  <sub>No ads, no account, plays offline · S Pen only: fingers tap buttons but never draw · Android 9 or newer</sub>
 </p>
 
 ## How it plays
@@ -107,6 +107,16 @@ learns your touch and runs five short lessons (about a minute) before the first 
 
 Building it, the architecture and the design choices: **[Under the hood →](docs/TECH.md)**.
 Every gameplay number: **[Tuning →](docs/TUNING.md)**.
+
+## Privacy
+
+Release builds send a few anonymous play counts to [GoatCounter](https://www.goatcounter.com/),
+just enough to know whether anyone plays and how far they get: the app was opened, which
+version it is, the lessons were finished, the pen was tuned, a stage was started or cleared, a
+game over, the ending reached. Each is sent at most once a visit, as a bare event name. Nothing
+identifies you or your device, nothing is stored on it, and there are no cookies, ads or
+accounts. Turn **Anonymous play counts** off in Settings and nothing is sent. Offline, counts
+are simply dropped and the game plays the same. Debug builds never send anything.
 
 ## Licence
 
