@@ -36,7 +36,7 @@ No other libraries. The app asks for one permission, `VIBRATE`, and makes no net
 | `android/` | `AndroidLauncher` and the S Pen bridge (`AndroidPenInput`), resources, and the shared `assets/` (fonts with their licences, sound effects, music). |
 | `lwjgl3/` | The desktop launcher, for development: mouse-as-pen, screenshots, scripted play and replays. |
 | `docs/` | This file, the [tour](FEATURES.md) and [Tuning](TUNING.md). |
-| `media/` | The README's screenshots and GIF, rendered from the game. |
+| `media/` | The README's screenshots and GIF and the repository's social preview, rendered from the game. |
 
 ## Building
 
