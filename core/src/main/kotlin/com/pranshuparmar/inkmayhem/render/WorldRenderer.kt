@@ -346,7 +346,11 @@ class WorldRenderer(
             shapes.color(pal[Tok.GRAPHITE], 0.32f)
             val a0 = max(r.x, vx0)
             val a1 = min(r.x + r.w, vx1)
-            var d = floor((a0 - h - r.x) / HATCH) * HATCH + r.x
+            // each hatch is a line x + y = k on the block's own grid (k from its top-left corner),
+            // so the hatching stays put while the screen's bottom edge cuts the block off
+            val base = r.y + h
+            val k0 = r.x + r.y
+            var d = floor((a0 - h + base - k0) / HATCH) * HATCH + k0 - base
             while (d < a1) {
                 hatch(d, r.y + h, h, r.x, r.x + r.w, px)
                 d += HATCH
@@ -438,7 +442,9 @@ class WorldRenderer(
         val h = bottom - min(r.y, r.yR)
         val a0 = max(r.x, vx0)
         val a1 = min(x1, vx1)
-        var d = floor((a0 - h - r.x) / HATCH) * HATCH + r.x
+        // on the slope's own grid (lines x + y = k), so the screen's bottom edge doesn't drag it
+        val k0 = r.x + r.y
+        var d = floor((a0 - h + bottom - k0) / HATCH) * HATCH + k0 - bottom
         while (d < a1) {
             // the hatch rises from (d, bottom) at 45° until it meets the slope
             val xm = (bottom + d - r.y + k * r.x) / (1f + k)
@@ -454,26 +460,33 @@ class WorldRenderer(
         sideEdge(x1, r.yR, bottom, r.edgeRTo, r.edgeRFrom, lw)
     }
 
-    /** Castle masonry: mortar rows every 0.5 m, joints every 1 m, offset on alternate rows. */
-    private fun bricks(x: Float, y: Float, w: Float, h: Float, a0: Float, a1: Float, pal: Palette, px: Float) {
+    /**
+     * Castle masonry over (x, y, w, h): mortar rows every 0.5 m, joints every 1 m, offset on
+     * alternate rows. The courses are laid from [oy], the wall's own top, so a wall cut off by the
+     * screen's edge (a roof running up off screen) keeps its bricks still as the camera moves.
+     */
+    private fun bricks(x: Float, y: Float, w: Float, h: Float, a0: Float, a1: Float, pal: Palette, px: Float, oy: Float = y) {
         shapes.color(pal[Tok.GRAPHITE], 0.3f)
         val rowH = 0.5f
-        var row = 0
-        var yy = y + rowH
-        while (yy < y + h) {
-            shapes.rect(a0, yy - px / 2f, a1 - a0, px)
-            yy += rowH
+        val bottom = y + h
+        val first = floor((y - oy) / rowH).toInt()
+        var k = first + 1
+        while (oy + k * rowH < bottom) {
+            val yy = oy + k * rowH
+            if (yy > y) shapes.rect(a0, yy - px / 2f, a1 - a0, px)
+            k++
         }
-        yy = y
-        while (yy < y + h) {
-            val off = if (row % 2 == 0) 0f else 0.5f
+        k = first
+        while (oy + k * rowH < bottom) {
+            val r0 = max(y, oy + k * rowH)
+            val r1 = min(bottom, oy + (k + 1) * rowH)
+            val off = if (Math.floorMod(k, 2) == 0) 0f else 0.5f
             var xx = floor((a0 - x - off) / 1f) * 1f + x + off
             while (xx < a1) {
-                if (xx > x && xx < x + w) shapes.rect(xx - px / 2f, yy, px, min(rowH, y + h - yy))
+                if (xx > x && xx < x + w && r1 > r0) shapes.rect(xx - px / 2f, r0, px, r1 - r0)
                 xx += 1f
             }
-            yy += rowH
-            row++
+            k++
         }
     }
 
@@ -492,10 +505,11 @@ class WorldRenderer(
         if (h <= 0f) return
         shapes.color(pal[Tok.ROCK]).rect(c.x, top, c.w, h)
         if (brick) {
-            bricks(c.x, top, c.w, h, max(c.x, vx0), min(c.x + c.w, vx1), pal, px)
+            bricks(c.x, top, c.w, h, max(c.x, vx0), min(c.x + c.w, vx1), pal, px, oy = c.y)
         } else {
             shapes.color(pal[Tok.GRAPHITE], 0.32f)
-            var d = c.x - h
+            // on the roof's own grid (its underside doesn't move), however much of it is on screen
+            var d = floor((-h) / HATCH) * HATCH + c.x
             while (d < c.x + c.w) {
                 hatch(d, top + h, h, c.x, c.x + c.w, px)
                 d += HATCH
