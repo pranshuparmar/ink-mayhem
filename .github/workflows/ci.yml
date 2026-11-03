@@ -15,7 +15,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # only used on main, to update the latest-debug prerelease
+      contents: write # only used to update the latest-debug prerelease (pushes to main, "Run workflow")
       actions: write # to drop a branch-scoped copy of the debug key (see below)
     env:
       # APKs are built for pushes to main and for "Run workflow"; other branches and pull
@@ -131,7 +131,8 @@ jobs:
           if-no-files-found: ignore
 
       - name: Publish to the latest-debug prerelease
-        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        # pushes to main, and "Run workflow" on any branch (to try a branch on the phone)
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
           APK: ${{ steps.apk.outputs.name }}
@@ -144,7 +145,7 @@ jobs:
           else
             gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
           fi
-          notes="Debug build of ${GITHUB_SHA::7} from main (run #${GITHUB_RUN_NUMBER}). Sideload the APK; see README."
+          notes="Debug build of ${GITHUB_SHA::7} from ${GITHUB_REF_NAME} (run #${GITHUB_RUN_NUMBER}). Sideload the APK; see README."
           if gh release view "$tag" >/dev/null 2>&1; then
             # Replace the previous APK(s) with this one.
             for asset in $(gh release view "$tag" --json assets --jq '.assets[].name'); do

@@ -304,7 +304,7 @@ under SoundPool's 1 MB.
 |---|---|---|
 | Push to any branch other than `main`, pull request | `ci.yml`: `./gradlew lint test` | Pass or fail |
 | Push to `main` | `ci.yml`: `./gradlew lint test assembleDebug` | The debug APK as a workflow artifact, and on the [`latest-debug`](https://github.com/pranshuparmar/ink-mayhem/releases/tag/latest-debug) prerelease |
-| **Run workflow** on any branch | `ci.yml`, as for `main` | The debug APK as a workflow artifact |
+| **Run workflow** on any branch | `ci.yml`, as for `main` | The debug APK as a workflow artifact, and on `latest-debug` (its notes name the branch) until the next push to `main` replaces it |
 | **Run workflow** on **Release** (manual only, from `main`) | `release.yml` | A `vX.Y.Z` tag and a GitHub Release with the signed APK |
 
 ### Debug signing
