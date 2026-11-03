@@ -36,7 +36,12 @@ class NotebookCard(
     private val onChanged: () -> Unit,
     private val onShare: (FileHandle) -> Unit,
     private val onTap: () -> Unit = {},
+    /** Debug builds: Doodle mode is open before the ending (for testing). */
+    private val debugOpen: Boolean = false,
 ) {
+    /** Doodle mode's switches can be used: the ending has been reached (or a debug build). */
+    private val doodleOpen: Boolean get() = debugOpen || settings.endingSeen
+
     enum class Tab(val label: String) { STATS("Stats"), STICKERS("Stickers"), PAGES("Pages"), MUSIC("Music"), DOODLE("Doodle") }
 
     var open = false
@@ -313,7 +318,7 @@ class NotebookCard(
             Tab.MUSIC -> musicRows.forEachIndexed { i, r ->
                 if (r.box.contains(x, y)) return if (i == 0 || unlocked[i - 1]) r.target else null
             }
-            Tab.DOODLE -> if (settings.endingSeen) doodleRows.forEach { r -> if (r.box.contains(x, y)) return r.target }
+            Tab.DOODLE -> if (doodleOpen) doodleRows.forEach { r -> if (r.box.contains(x, y)) return r.target }
             Tab.PAGES -> {
                 if (viewing != null) {
                     if (back.contains(x, y)) return back
@@ -383,7 +388,7 @@ class NotebookCard(
         shapes.color(pal[Tok.PAPER], 0.55f).rect(0f, 0f, f.wDp, f.hDp)
         Widgets.card(shapes, pal, card)
         Tab.entries.forEachIndexed { i, t ->
-            Widgets.button(shapes, pal, tabBoxes[i], primary = t == tab, enabled = t != Tab.DOODLE || settings.endingSeen || t == tab, pressed = press.isPressed(t))
+            Widgets.button(shapes, pal, tabBoxes[i], primary = t == tab, enabled = t != Tab.DOODLE || doodleOpen || t == tab, pressed = press.isPressed(t))
         }
         Widgets.button(shapes, pal, credits, primary = false, enabled = true, pressed = press.isPressed(credits))
         Widgets.button(shapes, pal, done, primary = true, enabled = true, pressed = press.isPressed(done))
@@ -403,7 +408,7 @@ class NotebookCard(
                 if (chosen) shapes.color(pal[Tok.ACCENT]).circle(cx, cy, 5f)
                 if (press.isPressed(r.target)) shapes.color(pal[Tok.INK], 0.06f).roundRect(r.box.x, r.box.y + 2f, r.box.w, r.box.h - 4f, 8f)
             }
-            Tab.DOODLE -> if (settings.endingSeen) {
+            Tab.DOODLE -> if (doodleOpen) {
                 doodleRows.forEach { r ->
                     shapes.color(pal[Tok.LINE]).rect(r.box.x, r.box.bottom - 1f, r.box.w, 1f)
                     Widgets.checkbox(shapes, pal, r.box.x + 2f, r.box.y + (r.box.h - 20f) / 2f, (r.target as Doodle).on(settings.doodle))
@@ -483,7 +488,7 @@ class NotebookCard(
         text.line(fonts.get(Face.HAND_BOLD, 30f), "Notebook", card.x + 20f, card.y + 20f, 34f, pal[Tok.INK])
         val tabFont = fonts.get(Face.UI_BOLD, 13f)
         Tab.entries.forEachIndexed { i, t ->
-            Widgets.buttonLabel(text, tabFont, pal, tabBoxes[i], t.label, primary = t == tab, enabled = t != Tab.DOODLE || settings.endingSeen || t == tab)
+            Widgets.buttonLabel(text, tabFont, pal, tabBoxes[i], t.label, primary = t == tab, enabled = t != Tab.DOODLE || doodleOpen || t == tab)
         }
         val font = fonts.get(Face.UI_BOLD, 14f)
         Widgets.buttonLabel(text, font, pal, credits, "Credits", primary = false, enabled = true)
@@ -541,7 +546,7 @@ class NotebookCard(
     }
 
     private fun drawDoodleText(text: Text, pal: Palette) {
-        if (!settings.endingSeen) {
+        if (!doodleOpen) {
             text.draw(
                 fonts.get(Face.UI, 14f), "Reach the ending to open Doodle mode: switches that bend the rules, just for fun.",
                 content.x, content.y + content.h * 0.36f + 44f, pal[Tok.MUTED], 1f, Align.center, content.w,

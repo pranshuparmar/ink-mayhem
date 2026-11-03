@@ -235,6 +235,7 @@ class InkMayhemGame(
             onChanged = { tunesReady = false },
             onShare = { f -> sharePicture(f.file(), "Ink Mayhem page") },
             onTap = { audio.play(Sfx.POP) },
+            debugOpen = platform.isDebugBuild,
         )
         stickerPop = com.pranshuparmar.inkmayhem.ui.StickerPop(fonts)
         faceOff = com.pranshuparmar.inkmayhem.ui.FaceOff(fonts)

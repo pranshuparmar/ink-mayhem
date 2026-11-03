@@ -252,7 +252,8 @@ notebook is tallied (stages cleared, stars, gold stars, best scores) and the cre
 
 ## Doodle mode
 
-Once you've reached the ending, the Notebook's **Doodle** tab bends the rules, each switch on or
+Once you've reached the ending (from the start in debug builds, for testing), the Notebook's
+**Doodle** tab bends the rules, each switch on or
 off as you like and kept until you change it:
 
 | Switch | |
