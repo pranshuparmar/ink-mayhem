@@ -272,15 +272,26 @@ under SoundPool's 1 MB.
 Every debug APK must carry the same key, or Android won't install a new one over the last.
 Without any setup, CI makes a debug key once on `main` and keeps it in the GitHub Actions cache;
 other branches use the same key. The cache drops it after 7 days without a build, and the next
-APK then needs one uninstall. For a key that never changes, add it as a secret:
+APK then needs one uninstall. For a key that never changes, add it as the
+`ANDROID_DEBUG_KEYSTORE_BASE64` secret. It needs no Java: OpenSSL (built into macOS and Linux,
+and in Git Bash on Windows) makes the keystore:
 
 ```sh
-keytool -genkeypair -v -keystore debug.keystore -storetype PKCS12 \
-  -alias androiddebugkey -storepass android -keypass android \
-  -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-base64 -w0 debug.keystore > debug.keystore.b64     # macOS: base64 -i debug.keystore -o debug.keystore.b64
-gh secret set ANDROID_DEBUG_KEYSTORE_BASE64 < debug.keystore.b64
+export MSYS_NO_PATHCONV=1    # Git Bash only: keeps "/CN=..." from being read as a path
+openssl req -x509 -newkey rsa:2048 -nodes -days 10000 \
+  -subj "/CN=Android Debug/O=Android/C=US" -keyout debug-key.pem -out debug-cert.pem
+openssl pkcs12 -export -inkey debug-key.pem -in debug-cert.pem \
+  -name androiddebugkey -passout pass:android -out debug.keystore
+rm debug-key.pem debug-cert.pem
+base64 < debug.keystore | tr -d '\n' > debug.keystore.b64
 ```
+
+(With a JDK, `keytool -genkeypair -keystore debug.keystore -storetype PKCS12 -alias
+androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000
+-dname "CN=Android Debug,O=Android,C=US"` makes the same.) Paste the contents of
+`debug.keystore.b64` into a new repository secret named `ANDROID_DEBUG_KEYSTORE_BASE64`, or
+`gh secret set ANDROID_DEBUG_KEYSTORE_BASE64 < debug.keystore.b64`. The first APK signed with it
+needs one uninstall of the debug app; every one after installs over the last.
 
 ### Release signing
 
@@ -288,16 +299,21 @@ Release builds are signed in CI from four repository secrets. Never commit a key
 `*.keystore` and `*.p12` are git-ignored).
 
 1. Create the release keystore once, and back up the file and its password: every future update
-   must be signed with it.
+   must be signed with it. With OpenSSL (no Java needed; in Git Bash run
+   `export MSYS_NO_PATHCONV=1` first), the second command asks for the password:
 
    ```sh
-   keytool -genkeypair -v \
-     -keystore ink-mayhem-release.jks -storetype PKCS12 \
-     -alias ink-mayhem -keyalg RSA -keysize 4096 -validity 10000
+   openssl req -x509 -newkey rsa:4096 -nodes -days 10000 \
+     -subj "/CN=Pranshu Parmar" -keyout release-key.pem -out release-cert.pem
+   openssl pkcs12 -export -inkey release-key.pem -in release-cert.pem \
+     -name ink-mayhem -out ink-mayhem-release.jks
+   rm release-key.pem release-cert.pem
    ```
 
-2. Base64-encode it: `base64 -w0 ink-mayhem-release.jks > ink-mayhem-release.jks.b64` (macOS:
-   `base64 -i ink-mayhem-release.jks -o ink-mayhem-release.jks.b64`; Windows PowerShell:
+   Or with a JDK: `keytool -genkeypair -v -keystore ink-mayhem-release.jks -storetype PKCS12
+   -alias ink-mayhem -keyalg RSA -keysize 4096 -validity 10000`.
+
+2. Base64-encode it: `base64 < ink-mayhem-release.jks | tr -d '\n' > ink-mayhem-release.jks.b64` (Windows PowerShell:
    `[Convert]::ToBase64String([IO.File]::ReadAllBytes("ink-mayhem-release.jks")) | Out-File -Encoding ascii ink-mayhem-release.jks.b64`).
 3. Add the secrets under **Settings → Secrets and variables → Actions**, then delete the `.b64`
    file:
