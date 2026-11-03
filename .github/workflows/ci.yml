@@ -73,7 +73,7 @@ jobs:
               -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US" -noprompt
             echo "created=true" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Debug signing::Made a new CI debug key; this APK won't install over earlier ones. Set ANDROID_DEBUG_KEYSTORE_BASE64 for a key that never changes (see README)."
+            echo "::notice title=Debug signing::Made a new CI debug key; this APK won't install over earlier ones. Set the ANDROID_DEBUG_KEYSTORE_BASE64 repository secret for a key that never changes (docs/TECH.md > Debug signing)."
           fi
           echo "ANDROID_DEBUG_KEYSTORE_PATH=$ks" >> "$GITHUB_ENV"
 
