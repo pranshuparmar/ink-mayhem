@@ -9,7 +9,7 @@ press decides what your ink becomes.
 </p>
 
 <p align="center">
-  <b><a href="https://github.com/pranshuparmar/ink-mayhem/releases">⬇ DOWNLOAD THE APK: free, for Android with an S Pen</a></b><br>
+  <b><a href="https://github.com/pranshuparmar/ink-mayhem/releases/latest">⬇ DOWNLOAD THE APK: free, for Android with an S Pen</a></b><br>
   <sub>No ads, no account, no internet · S Pen only: fingers tap buttons but never draw · Android 9 or newer</sub>
 </p>
 
@@ -73,8 +73,8 @@ Want the details? **[Read the full tour →](docs/FEATURES.md)**
 
 Ink Mayhem isn't on Google Play. Install it from an APK:
 
-1. On the phone, open this repository's [Releases](https://github.com/pranshuparmar/ink-mayhem/releases) page and download the newest
-   `ink-mayhem-*.apk`.
+1. On the phone, open the [latest release](https://github.com/pranshuparmar/ink-mayhem/releases/latest) and download
+   `ink-mayhem-*.apk` under **Assets**.
 2. Open it. When Android asks, allow your browser (or Files) to install unknown apps, then
    install.
 
