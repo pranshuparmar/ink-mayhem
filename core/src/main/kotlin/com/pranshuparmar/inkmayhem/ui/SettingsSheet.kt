@@ -51,7 +51,9 @@ class SettingsSheet(
         add(Option("Dot's remarks", "Little speech bubbles now and then", { settings.remarks }, { settings.remarks = it }))
         add(Option("Colour ink by type", "Rope green, spring amber, beam red", { settings.tint }, { settings.tint = it }))
         add(Option("Pen readout", "Pointer type, pressure, buttons, hover rate", { settings.penReadout }, { settings.penReadout = it }))
-        add(Option("Haptics", "A short buzz on snaps and crashes", { settings.haptics }, { settings.haptics = it }))
+        add(Option("Haptics", "A buzz for each ink, snaps and crashes", { settings.haptics }, { settings.haptics = it }))
+        add(Option("Screen shake", "Crashes and boss hits shake the page", { settings.shake }, { settings.shake = it }))
+        add(Option("Dot's hints", "First-run stops, and its dots when you're stuck", { settings.dotHints }, { settings.dotHints = it }))
         add(Option("Anonymous play counts", "Which stages get played. Nothing about you.", { settings.playCounts }, { settings.playCounts = it }))
         if (debugBuild) {
             add(Option("Allow finger and mouse", "Testing only. Fingers draw fixed spring ink.", { settings.allowFinger }, { settings.allowFinger = it }))

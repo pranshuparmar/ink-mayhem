@@ -33,8 +33,9 @@ import java.util.zip.Deflater
  *          --autoplay (each stage's scripted solution plays), --wrong-ink TUNNEL=SPRING, --seed N, --settings,
  *          --calibration, --tutorial LESSON (1-based),
  *          --stage 1-2 (with --autoplay its solution plays), --select, --pause-at seconds, --ending,
- *          --credits, --faces (the runner's expressions), --speed N,
+ *          --credits, --notebook [TAB] (stats, stickers, pages, music, doodle), --faces (the runner's expressions), --speed N,
  *          --rotate-after seconds, --demo-draw, --demo-tune LINES (with --calibration),
+ *          --tap X,Y@S[;X,Y@S...] (pen taps at dp positions, S seconds in: scripted button presses),
  *          --screenshot out.png --after seconds,
  *          --record out.txt (an input recording, as debug builds make on Android),
  *          --replay rec.txt [--frames dir --every N --from S --to S] (plays a recording back exactly;
@@ -70,6 +71,7 @@ private fun devOptions(opts: Options, seed: Long?) = DevOptions(
     toast = opts.toast,
     pauseAt = opts.pauseAt,
     faces = opts.faces,
+    notebook = opts.notebook,
     ending = when {
         opts.ending -> "finale"
         opts.credits -> "credits"
@@ -100,6 +102,8 @@ private class Options(args: Array<String>) {
     val ending = "--ending" in list
     val credits = "--credits" in list
     val faces = "--faces" in list
+    /** Opens the Notebook on start, on this tab (or Stats). */
+    val notebook: String? = if ("--notebook" in list) value("--notebook")?.takeIf { !it.startsWith("--") } ?: "stats" else null
     /** e.g. --wrong-ink ROPE=SPRING */
     val wrongInk = value("--wrong-ink")?.split(',')?.associate {
         val (a, b) = it.split('=')
@@ -114,6 +118,12 @@ private class Options(args: Array<String>) {
     val demoTune = value("--demo-tune")?.toInt() ?: 0
     /** Swaps width and height after this many seconds, like rotating the phone mid-run. */
     val rotateAfter = value("--rotate-after")?.toFloat()
+    /** --tap 200,440@3.5;300,120@6: pen taps at those dp positions, those many seconds in. */
+    val taps: List<Triple<Float, Float, Float>> = value("--tap")?.split(';')?.map { t ->
+        val (xy, at) = t.split('@')
+        val (x, y) = xy.split(',')
+        Triple(x.toFloat(), y.toFloat(), at.toFloat())
+    } ?: emptyList()
     val screenshot: String? = value("--screenshot")
     val after = value("--after")?.toFloat() ?: 2f
     val record: String? = value("--record")
@@ -263,7 +273,22 @@ private class DesktopHost(
         }
     }
 
+    private var tapsDone = 0
+
+    /** --tap: each due tap is a pen down and up at its spot. */
+    private fun taps() {
+        while (tapsDone < opts.taps.size && elapsed >= opts.taps[tapsDone].third) {
+            val (x, y) = opts.taps[tapsDone]
+            val d = platform.density
+            val now = System.nanoTime()
+            platform.penQueue.offer(x * d, y * d, 0.3f, 0f, 0f, 0, PenPhase.DOWN, ToolType.STYLUS, 9, now)
+            platform.penQueue.offer(x * d, y * d, 0.3f, 0f, 0f, 0, PenPhase.UP, ToolType.STYLUS, 9, now)
+            tapsDone++
+        }
+    }
+
     override fun render() {
+        taps()
         if (opts.demoDraw) demoDraw()
         demoTune()
         game.render()

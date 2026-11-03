@@ -44,6 +44,12 @@ class WorldRenderer(
      * [guideTok], or a dashed ring round (x0, y0) when [guideRing]. Off when [guideOn] is false.
      */
     var guideOn = false
+
+    /**
+     * Ask Dot: the next strokes of the stage's scripted solution, shown as dotted lines in their
+     * ink's colour (world metres). Only drawn, never touched by the simulation.
+     */
+    val hints = ArrayList<com.pranshuparmar.inkmayhem.game.StageLayout.Stroke>()
     var guideRing = false
     val guide = FloatArray(4)
     var guideTok = Tok.ROPE
@@ -197,6 +203,7 @@ class WorldRenderer(
         drawCrumbles(sim, pal, vx0, vx1, px)
         drawWarps(sim, pal, vx0, vx1, px)
         drawGates(sim, pal, px)
+        if (hints.isNotEmpty()) drawHints(sim, pal)
         if (guideOn) drawGuide(sim, pal, px)
         drawLifts(sim, pal, px)
         drawSeesaws(sim, pal, px)
@@ -862,6 +869,39 @@ class WorldRenderer(
         if (pending != null && g.x0 > pending.x1) return 0f
         val ahead = g.gx0 - sim.runner.body.position.x
         return (1f - (ahead - GATE_SHOW) / 3f).coerceIn(0f, 1f)
+    }
+
+    /** Ask Dot's dotted lines: each scripted stroke ahead, dots every 0.28 m and an arrow at its end. */
+    private fun drawHints(sim: GameSim, pal: Palette) {
+        val pulse = 0.55f + 0.35f * sin(sim.realTime.toFloat() * 4f)
+        hints.fastEach { h ->
+            val xs = h.xs
+            val ys = h.ys
+            if (xs.size < 2) return@fastEach
+            shapes.color(pal[inkTok(h.ink)], pulse)
+            var carry = 0f
+            for (i in 1 until xs.size) {
+                val dx = xs[i] - xs[i - 1]
+                val dy = ys[i] - ys[i - 1]
+                val len = kotlin.math.hypot(dx, dy)
+                if (len <= 0f) continue
+                var d = carry
+                while (d <= len) {
+                    shapes.circle(xs[i - 1] + dx * d / len, ys[i - 1] + dy * d / len, 0.08f)
+                    d += 0.28f
+                }
+                carry = d - len
+            }
+            val n = xs.size - 1
+            val dx = xs[n] - xs[n - 1]
+            val dy = ys[n] - ys[n - 1]
+            val len = kotlin.math.hypot(dx, dy).coerceAtLeast(1e-4f)
+            val ux = dx / len
+            val uy = dy / len
+            val ax = xs[n] + ux * 0.35f
+            val ay = ys[n] + uy * 0.35f
+            shapes.triangle(ax, ay, ax - ux * 0.35f - uy * 0.22f, ay - uy * 0.35f + ux * 0.22f, ax - ux * 0.35f + uy * 0.22f, ay - uy * 0.35f - ux * 0.22f)
+        }
     }
 
     /** The hints: a dotted guide in the ink's colour with an arrow, where to draw it. */

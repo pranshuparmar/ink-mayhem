@@ -46,6 +46,13 @@ stroke to erase it (you get half its ink back). Hover to see where the nib will 
 - 🎵 **An original chiptune theme for every world**, plus one for the bosses. All of it is made
   by the game's own code.
 - 🏁 **A real ending**: beat the last boss and your notebook is tallied before the credits roll.
+- 🤔 **Ask Dot when you're stuck**: from the pause card (or by itself after two falls in the same
+  spot), Dot dots in the next strokes, in their ink's colour. Free, and it never plays for you.
+- 📒 **Your Notebook**: lifetime stats, a book of 16 stickers to earn, the pages you tear out
+  mid-stage and the result cards you share, and a jukebox that unlocks a world's tune when you
+  beat its boss.
+- 🖍️ **Doodle mode**, once you've seen the ending: endless ink, half speed, always Bold, and every
+  power-up held for as long as you like.
 
 Want the details? **[Read the full tour →](docs/FEATURES.md)**
 
@@ -91,8 +98,10 @@ learns your touch and runs five short lessons (about a minute) before the first 
 | Pause | The button at the top right, or Android back. Resuming counts you back in, 3‑2‑1 |
 | Menus | Tap with the pen or a finger |
 
-**Settings** has sound and music volume, Dot's remarks, ink colours, haptics, **Tune your pen**
-(three lines to fit light, normal and hard to your hand again) and the How to play lessons.
+**Settings** has sound and music volume, Dot's remarks, ink colours, haptics, screen shake,
+Dot's hints, anonymous play counts, **Tune your pen** (three lines to fit light, normal and hard
+to your hand again) and the How to play lessons. The **Notebook** on the title screen holds your
+stats, stickers, torn-out pages, the jukebox, Doodle mode and the credits.
 
 ## Tech
 
@@ -113,7 +122,7 @@ Every gameplay number: **[Tuning →](docs/TUNING.md)**.
 Release builds send a few anonymous play counts to [GoatCounter](https://www.goatcounter.com/),
 just enough to know whether anyone plays and how far they get: the app was opened, which
 version it is, the lessons were finished, the pen was tuned, a stage was started or cleared, a
-game over, the ending reached. Each is sent at most once a visit, as a bare event name. Nothing
+game over, a sticker earned, the ending reached. Each is sent at most once a visit, as a bare event name. Nothing
 identifies you or your device, nothing is stored on it, and there are no cookies, ads or
 accounts. Turn **Anonymous play counts** off in Settings and nothing is sent. Offline, counts
 are simply dropped and the game plays the same. Debug builds never send anything.

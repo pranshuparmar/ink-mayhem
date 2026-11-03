@@ -27,7 +27,8 @@ class TitleCard(private val fonts: Fonts) {
     val stages = Box()
     val howTo = Box()
     val settings = Box()
-    val credits = Box()
+    /** The Notebook: stats, stickers, torn-out pages, the jukebox, Doodle mode and the credits. */
+    val notebook = Box()
     /** The repository link under the footer. */
     val repo = Box()
     val press = Press()
@@ -95,8 +96,10 @@ class TitleCard(private val fonts: Fonts) {
         howTo.set(left + w + 8f, y, w, 42f)
         settings.set(left + 2f * (w + 8f), y, w, 42f)
         y += 42f + FOOT_GAP
-        val cw = text.width(fonts.get(Face.UI_BOLD, 13f), "Credits") + 28f
-        credits.set(left + colW - cw, y, cw, FOOT_H)
+        val cw = text.width(fonts.get(Face.UI_BOLD, 13f), NOTEBOOK) + 28f
+        notebook.set(left + colW - cw, y, cw, FOOT_H)
+        // a narrow phone: the footer's note shortens so it clears the button
+        penOnly = if (24f + text.width(fonts.get(Face.MONO_BOLD, 10.5f), PEN_ONLY) + 10f <= colW - cw) PEN_ONLY else PEN_ONLY_SHORT
         footY = y
         y += FOOT_H + LINK_GAP
         val lw = text.width(fonts.get(Face.MONO_MEDIUM, 11f), Links.REPO_TEXT) + 26f
@@ -104,13 +107,14 @@ class TitleCard(private val fonts: Fonts) {
     }
 
     private var footY = 0f
+    private var penOnly = PEN_ONLY
 
     fun targetAt(x: Float, y: Float): Any? = when {
         play.contains(x, y) -> play
         stages.contains(x, y) -> stages
         howTo.contains(x, y) -> howTo
         settings.contains(x, y) -> settings
-        credits.contains(x, y) -> credits
+        notebook.contains(x, y) -> notebook
         repo.contains(x, y) -> repo
         else -> null
     }
@@ -174,7 +178,7 @@ class TitleCard(private val fonts: Fonts) {
         Widgets.button(shapes, pal, stages, primary = false, enabled = true, pressed = press.isPressed(stages))
         Widgets.button(shapes, pal, howTo, primary = false, enabled = true, pressed = press.isPressed(howTo))
         Widgets.button(shapes, pal, settings, primary = false, enabled = true, pressed = press.isPressed(settings))
-        Widgets.button(shapes, pal, credits, primary = false, enabled = true, pressed = press.isPressed(credits))
+        Widgets.button(shapes, pal, notebook, primary = false, enabled = true, pressed = press.isPressed(notebook))
         // the S Pen, drawn small before "S Pen only"
         val py = footY + FOOT_H / 2f
         shapes.color(pal[Tok.UI_FG], a).capsule(left + 2f, py + 5f, left + 16f, py - 5f, 4.2f)
@@ -200,8 +204,8 @@ class TitleCard(private val fonts: Fonts) {
         Widgets.buttonLabel(text, font, pal, stages, "Stages", primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, howTo, "How to play", primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, settings, "Settings", primary = false, enabled = true)
-        Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 13f), pal, credits, "Credits", primary = false, enabled = true)
-        text.line(fonts.get(Face.MONO_BOLD, 10.5f), PEN_ONLY, left + 24f, footY, FOOT_H, pal[Tok.UI_FG], a)
+        Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 13f), pal, notebook, NOTEBOOK, primary = false, enabled = true)
+        text.line(fonts.get(Face.MONO_BOLD, 10.5f), penOnly, left + 24f, footY, FOOT_H, pal[Tok.UI_FG], a)
         text.line(fonts.get(Face.MONO_MEDIUM, 11f), Links.REPO_TEXT, repo.x + 22f, repo.y, repo.h, pal[Tok.ACCENT], a)
         if (buddy.bubble != null) bubble.drawText(text, fonts.get(Face.HAND_BOLD, 16f), pal, buddy.bubbleAlpha * a)
     }
@@ -237,6 +241,7 @@ class TitleCard(private val fonts: Fonts) {
 
     companion object {
         const val TITLE = "Ink Mayhem"
+        const val NOTEBOOK = "Notebook"
         const val BUDDY_R = 17f
         private const val GREET_S = 1.1
         private const val TIP_EVERY_S = 8.5
@@ -265,6 +270,7 @@ class TitleCard(private val fonts: Fonts) {
         private const val HEIGHT = TITLE_H + TAG_H + 18f + LEGEND_H + 26f + PLAY_H + 10f + 42f + FOOT_GAP + FOOT_H + LINK_GAP + LINK_H
         /** Said on the title screen: the game is drawn with an S Pen, never a finger. */
         const val PEN_ONLY = "S PEN ONLY · FINGERS CAN'T DRAW"
+        private const val PEN_ONLY_SHORT = "S PEN ONLY"
         private const val ROLL_S = 0.9
         private const val FADE_S = 0.5
         /** Room each side of the centred name for the runner sat beside it. */
@@ -280,9 +286,13 @@ class TitleCard(private val fonts: Fonts) {
 class PauseCard(private val fonts: Fonts) {
     val box = Box()
     val resume = Box()
+    /** Dot shows the way past what's next: dotted lines where to draw. */
+    val askDot = Box()
     val restart = Box()
     val settings = Box()
     val quit = Box()
+    /** Saves a picture of the page, strokes and all, to the Notebook. */
+    val tear = Box()
     val press = Press()
     var open = false
         private set
@@ -308,22 +318,29 @@ class PauseCard(private val fonts: Fonts) {
     }
 
     fun layout(f: Frame) {
-        val h = 20f + 44f + 4f + 20f + 18f + 48f + 10f + 42f + 20f
+        val h = 20f + 44f + 4f + 20f + 18f + 48f + 10f + 42f + 10f + 42f + 20f
         box.set((f.wDp - f.cardW) / 2f + (f.padL - f.padR) / 2f, (f.hDp - h) / 2f + (f.safeT - f.safeB) / 2f, f.cardW, h)
         var y = box.y + 20f + 44f + 4f + 20f + 18f
-        resume.set(box.x + 20f, y, box.w - 40f, 48f)
+        val inner = box.w - 40f
+        val aw = inner * 0.36f
+        resume.set(box.x + 20f, y, inner - aw - 8f, 48f)
+        askDot.set(resume.right + 8f, y, aw, 48f)
         y += 48f + 10f
-        val w = (box.w - 40f - 16f) / 3f
+        val w = (inner - 16f) / 3f
         restart.set(box.x + 20f, y, w, 42f)
         settings.set(box.x + 20f + w + 8f, y, w, 42f)
         quit.set(box.x + 20f + 2f * (w + 8f), y, w, 42f)
+        y += 42f + 10f
+        tear.set(box.x + 20f, y, inner, 42f)
     }
 
     fun targetAt(x: Float, y: Float): Any? = when {
         resume.contains(x, y) -> resume
+        askDot.contains(x, y) -> askDot
         restart.contains(x, y) -> restart
         settings.contains(x, y) -> settings
         quit.contains(x, y) -> quit
+        tear.contains(x, y) -> tear
         else -> null
     }
 
@@ -358,9 +375,11 @@ class PauseCard(private val fonts: Fonts) {
             d.bubbleShapes(pal, bubble, buddy.bubbleAlpha)
         }
         Widgets.button(shapes, pal, resume, primary = true, enabled = true, pressed = press.isPressed(resume))
+        Widgets.button(shapes, pal, askDot, primary = false, enabled = true, pressed = press.isPressed(askDot))
         Widgets.button(shapes, pal, restart, primary = false, enabled = true, pressed = press.isPressed(restart))
         Widgets.button(shapes, pal, settings, primary = false, enabled = true, pressed = press.isPressed(settings))
         Widgets.button(shapes, pal, quit, primary = false, enabled = true, pressed = press.isPressed(quit))
+        Widgets.button(shapes, pal, tear, primary = false, enabled = true, pressed = press.isPressed(tear))
     }
 
     private var subFor: StageDef? = null
@@ -379,6 +398,8 @@ class PauseCard(private val fonts: Fonts) {
         Widgets.buttonLabel(text, font, pal, restart, "Restart", primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, settings, "Settings", primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, quit, "Stage list", primary = false, enabled = true)
+        Widgets.buttonLabel(text, font, pal, askDot, ASK_DOT, primary = false, enabled = true)
+        Widgets.buttonLabel(text, font, pal, tear, TEAR, primary = false, enabled = true)
         if (buddy.bubble != null) bubble.drawText(text, fonts.get(Face.HAND_BOLD, 16f), pal, buddy.bubbleAlpha)
     }
 
@@ -386,6 +407,8 @@ class PauseCard(private val fonts: Fonts) {
         private const val BUDDY_R = 17f
         private const val DOZE_S = 6.0
         private val LINES = arrayOf("Take your time.", "I'll wait right here.", "Breather? Good idea.", "Pen down. Me too.")
+        const val ASK_DOT = "Ask Dot"
+        const val TEAR = "Tear out this page"
     }
 }
 

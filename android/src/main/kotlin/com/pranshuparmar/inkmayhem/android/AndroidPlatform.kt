@@ -58,6 +58,61 @@ class AndroidPlatform(private val activity: AndroidLauncher, override val penQue
         v.vibrate(VibrationEffect.createOneShot(millis.toLong(), amplitude.coerceIn(1, 255)))
     }
 
+    override fun vibratePattern(timings: LongArray, amplitudes: IntArray) {
+        val v = vibrator ?: return
+        if (!v.hasVibrator() || timings.size != amplitudes.size || timings.isEmpty()) return
+        val amps = IntArray(amplitudes.size) { amplitudes[it].coerceIn(0, 255) }
+        runCatching { v.vibrate(VibrationEffect.createWaveform(timings, amps, -1)) }
+    }
+
+    /** Copies the picture into Pictures/Ink Mayhem and opens the share sheet (Android 10 and later). */
+    override fun shareImage(file: File, title: String) {
+        Thread({
+            val saved = runCatching { saveToPictures(file) }.getOrNull()
+            val uri = saved?.uri
+            activity.runOnUiThread {
+                when {
+                    saved == null -> Toast.makeText(activity, "Couldn't save the picture", Toast.LENGTH_LONG).show()
+                    uri == null -> Toast.makeText(activity, "Saved to ${saved.where}", Toast.LENGTH_LONG).show()
+                    else -> {
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/png"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            putExtra(Intent.EXTRA_SUBJECT, title)
+                            clipData = ClipData.newRawUri(file.name, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        runCatching { activity.startActivity(Intent.createChooser(send, title)) }
+                    }
+                }
+            }
+        }, "share-image").start()
+    }
+
+    private fun saveToPictures(file: File): Saved? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val resolver = activity.contentResolver
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Ink Mayhem")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+            val out = resolver.openOutputStream(uri) ?: return null
+            out.use { o -> file.inputStream().use { it.copyTo(o) } }
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            return Saved(uri, "Pictures/Ink Mayhem/${file.name}")
+        }
+        // Android 9: the app's own pictures folder, reachable over USB
+        val dir = activity.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: return null
+        val copy = File(dir, file.name)
+        file.copyTo(copy, overwrite = true)
+        return Saved(null, copy.absolutePath)
+    }
+
     fun onConfigurationChanged(config: Configuration) {
         dark = isNight(config)
     }

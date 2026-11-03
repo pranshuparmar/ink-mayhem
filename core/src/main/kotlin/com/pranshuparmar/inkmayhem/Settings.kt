@@ -54,6 +54,38 @@ class Settings(private val prefs: Preferences) : StageStore {
     var playCounts: Boolean = prefs.getBoolean("playCounts", true)
         set(v) { field = v; put { putBoolean("playCounts", v) } }
 
+    /** "Screen shake": crashes, stomps and boss hits shake the page. On by default. */
+    var shake: Boolean = prefs.getBoolean("shake", true)
+        set(v) { field = v; put { putBoolean("shake", v) } }
+
+    /**
+     * "Dot's hints": Dot stops before each new thing on a world's first stage and offers its dots
+     * when you're stuck. Off, it leaves you to it (Ask Dot on the pause card still works).
+     */
+    var dotHints: Boolean = prefs.getBoolean("dotHints", true)
+        set(v) { field = v; put { putBoolean("dotHints", v) } }
+
+    /** The jukebox's pick: a tune's name, or "" for each world's own. */
+    var jukebox: String = prefs.getString("jukebox", "")
+        set(v) { field = v; put { putString("jukebox", v) } }
+
+    /** The finale has been reached once: Doodle mode is open. */
+    var endingSeen: Boolean = prefs.getBoolean("endingSeen", false)
+        set(v) { field = v; put { putBoolean("endingSeen", v) } }
+
+    /** Doodle mode's switches, a bit per [com.pranshuparmar.inkmayhem.game.Doodle]. */
+    var doodle: Int = prefs.getInteger("doodle", 0)
+        set(v) { field = v; put { putInteger("doodle", v) } }
+
+    /** Stickers earned, a bit per [com.pranshuparmar.inkmayhem.game.Sticker]. */
+    var stickers: Long = prefs.getLong("stickers", 0L)
+        set(v) { field = v; put { putLong("stickers", v) } }
+
+    /** Lifetime numbers for the Notebook: kept in memory, written by [saveStats]. */
+    val stats = LifetimeStats(prefs)
+
+    fun saveStats() = put { stats.writeTo(this) }
+
     /** Dot has introduced itself (on the very first launch). */
     var metDot: Boolean = prefs.getBoolean("metDot", false)
         set(v) { field = v; put { putBoolean("metDot", v) } }

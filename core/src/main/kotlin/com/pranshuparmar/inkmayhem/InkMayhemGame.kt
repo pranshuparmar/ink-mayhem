@@ -88,6 +88,8 @@ class DevOptions(
     val ending: String? = null,
     /** Show a gallery of the runner's expressions instead of the game (for tuning its face). */
     val faces: Boolean = false,
+    /** Open the Notebook on start at this tab ("stats", "stickers", "pages", "music", "doodle"). */
+    val notebook: String? = null,
 )
 
 /**
@@ -138,6 +140,14 @@ class InkMayhemGame(
     private lateinit var endingCard: EndingCard
     /** Dot, stepping out of the page to teach (first-run stops, misses) and to say hello on the first launch. */
     private lateinit var dotHelper: DotHelper
+    /** The Notebook (from the title): stats, stickers, pages, the jukebox, Doodle mode, credits. */
+    private lateinit var notebook: com.pranshuparmar.inkmayhem.ui.NotebookCard
+    /** A sticker just earned, slapped into the margin. */
+    private lateinit var stickerPop: com.pranshuparmar.inkmayhem.ui.StickerPop
+    /** Before a boss: Dot and the boss trade a few lines. */
+    private lateinit var faceOff: com.pranshuparmar.inkmayhem.ui.FaceOff
+    private lateinit var shareCard: com.pranshuparmar.inkmayhem.ui.ShareCard
+    private val album = com.pranshuparmar.inkmayhem.render.PageAlbum.local()
     /** The gates Dot has explained this attempt (a retry builds a new world, and they're explained again). */
     private val explained = HashSet<com.pranshuparmar.inkmayhem.game.Gate>()
     private var explainedFor: Any? = null
@@ -219,6 +229,18 @@ class InkMayhemGame(
         countdown = Countdown(fonts)
         endingCard = EndingCard(fonts)
         dotHelper = DotHelper(fonts)
+        notebook = com.pranshuparmar.inkmayhem.ui.NotebookCard(
+            fonts, settings, album,
+            onCredits = { showEnding(finale = false) },
+            onChanged = { tunesReady = false },
+            onShare = { f -> sharePicture(f.file(), "Ink Mayhem page") },
+            onTap = { audio.play(Sfx.POP) },
+        )
+        stickerPop = com.pranshuparmar.inkmayhem.ui.StickerPop(fonts)
+        faceOff = com.pranshuparmar.inkmayhem.ui.FaceOff(fonts)
+        shareCard = com.pranshuparmar.inkmayhem.ui.ShareCard(fonts)
+        // stickers the save already earns (from before there were stickers) go in quietly
+        settings.stickers = settings.stickers or com.pranshuparmar.inkmayhem.game.Sticker.earnedFrom(settings, settings.stats)
         sheet = SettingsSheet(
             fonts, settings, platform.isDebugBuild,
             onRecalibrate = { calibration.show() },
@@ -232,6 +254,7 @@ class InkMayhemGame(
             onDone = { cal ->
                 settings.calibration = cal
                 counts.track("pen-tuned")
+                award(com.pranshuparmar.inkmayhem.game.Sticker.TUNED)
                 toast.show("Pen tuned: rope, spring and beam are yours.", clock, force = true)
             },
             onSkip = { if (!settings.penTuned) settings.calibration = settings.calibration ?: PenCalibration.DEFAULT },
@@ -248,6 +271,9 @@ class InkMayhemGame(
         showTitle()
 
         if (dev.openSelect) openSelect()
+        dev.notebook?.let { t ->
+            notebook.show(com.pranshuparmar.inkmayhem.ui.NotebookCard.Tab.entries.firstOrNull { it.name.equals(t, ignoreCase = true) } ?: com.pranshuparmar.inkmayhem.ui.NotebookCard.Tab.STATS)
+        }
         dev.ending?.let { showEnding(finale = it == "finale") }
         // Android back closes an overlay first, pauses a stage, steps back a screen, and on the
         // title leaves the game as usual.
@@ -272,6 +298,8 @@ class InkMayhemGame(
         when {
             calibration.open -> calibration.skip()
             sheet.open -> sheet.hide()
+            notebook.open -> notebook.hide()
+            faceOff.open -> faceOff.close()
             dotHelper.open -> dotHelper.dismiss(clock)
             tutorial != null && firstLessons -> toast.show(FINISH_LESSONS, clock, force = true)
             tutorial != null -> endTutorial(finished = false)
@@ -413,6 +441,7 @@ class InkMayhemGame(
 
     override fun pause() {
         counts.away(System.currentTimeMillis())
+        if (settings.stats.dirty) settings.saveStats()
         recorder?.let {
             it.pause()
             it.flush()
@@ -477,13 +506,14 @@ class InkMayhemGame(
         session?.let { if (pauseAt != null && !devPaused && it.sim.simT >= pauseAt && pausable(it)) { devPaused = true; pauseStage() } }
 
         // a stage holds while paused, while the settings sheet is open and through the count back in
-        if (!paused && screen == Screen.STAGE && !pauseCard.open && !sheet.open && !calibration.open) {
+        if (!paused && screen == Screen.STAGE && !pauseCard.open && !sheet.open && !calibration.open && !faceOff.open) {
             val beat = countdown.update(dt)
             if (beat > 0) audio.play(Sfx.CHIME, 6 - beat)
         }
-        val stagePaused = screen == Screen.STAGE && (sheet.open || calibration.open || pauseCard.open || countdown.running)
+        val stagePaused = screen == Screen.STAGE && (sheet.open || calibration.open || pauseCard.open || countdown.running || faceOff.open)
         if (!paused && !stagePaused) {
-            acc += dt * dev.speed
+            // Doodle mode's half speed slows stages (not the menus or the lessons)
+            acc += dt * dev.speed * if (session != null && tutorial == null) com.pranshuparmar.inkmayhem.game.Doodle.speed(doodle) else 1f
             var n = 0
             val tut = tutorial
             val ses = session
@@ -511,6 +541,7 @@ class InkMayhemGame(
         }
         if (dev.autoplay && tutorial == null) autoplay()
         updateDot()
+        updateMoments(dt, now, reduced)
 
         readout.update(now)
         toast.update(now, reduced)
@@ -526,7 +557,7 @@ class InkMayhemGame(
             tunesWorld = tuneWorld
             audio.prepare(
                 if (tuneStage == null) listOf(menuTune())
-                else listOfNotNull(Stages.worldOf(tuneStage).music, BOSS_MUSIC.takeIf { tuneStage.layout.arenas.isNotEmpty() }),
+                else listOfNotNull(juke(Stages.worldOf(tuneStage).music), juke(BOSS_MUSIC).takeIf { tuneStage.layout.arenas.isNotEmpty() }).distinct(),
             )
         }
         if (screen == Screen.SELECT && tutorial == null) updatePreview(dt) else dropPreview()
@@ -558,6 +589,14 @@ class InkMayhemGame(
         }
         if (sheet.open) {
             sheet.onSample(s, x, y)
+            return
+        }
+        if (notebook.open) {
+            notebook.onSample(s, x, y)
+            return
+        }
+        if (faceOff.open && tutorial == null && !pauseCard.open) {
+            if (faceOff.onSample(s, x, y, now)) log("face-off over")
             return
         }
         if (dotHelper.open && tutorial == null && dotSample(s, x, y)) return
@@ -632,6 +671,7 @@ class InkMayhemGame(
                 }
                 val note = if (recorder != null) strokeNote(s.pointerId) else null
                 val wasDrawing = active.drawing?.pointer == s.pointerId
+                val length = if (wasDrawing && tut == null) strokeLength() else 0f
                 if (tut != null) {
                     // the touch lesson learns the player's pressure from the raw pressure each line settled at
                     tut.penUp(s.pointerId, if (wasDrawing && strokeByPen) rawSteady.finish(Float.NaN) else Float.NaN)
@@ -640,11 +680,20 @@ class InkMayhemGame(
                         lessonTuning = cal
                         settings.calibration = cal
                         log { "pen tuned by the touch lesson: $cal" }
+                        award(com.pranshuparmar.inkmayhem.game.Sticker.TUNED)
                     }
                 } else {
                     active.penUp(s.pointerId)
                 }
                 if (note != null) log { "$note -> ${active.lastStrokeInk?.label ?: "nothing"}" }
+                val made = active.lastStrokeInk
+                if (wasDrawing && made != null) {
+                    inkFeel(made)
+                    if (tut == null && session != null) {
+                        settings.stats.stroke(made, length)
+                        attemptInks = attemptInks or (1 shl made.weight)
+                    }
+                }
                 val gate = active.lastGate
                 if (wasDrawing && gate != null && tut == null && strokeByPen) learnGate(gate.ink, rawSteady.finish(Float.NaN))
             }
@@ -719,7 +768,7 @@ class InkMayhemGame(
             hit === titleCard.stages -> openSelect()
             hit === titleCard.howTo -> startTutorial(0)
             hit === titleCard.settings -> sheet.show()
-            hit === titleCard.credits -> showEnding(finale = false)
+            hit === titleCard.notebook -> notebook.show()
             hit === titleCard.repo || hit === endingCard.link -> openRepo()
             hit === endingCard.button -> if (endingCard.finished(clock)) showTitle() else endingCard.skip(clock)
             hit === selectCard.play -> (nextStage() ?: Stages.ALL.first()).let(::startStage)
@@ -735,6 +784,12 @@ class InkMayhemGame(
                 audio.play(Sfx.STAGE_START)
             }
             hit === pauseCard.settings -> sheet.show()
+            hit === pauseCard.askDot -> {
+                askDot(ses, asked = true)
+                resumeStage()
+            }
+            hit === pauseCard.tear -> tearPending = true
+            hit === clearCard.share -> shareClear(ses)
             hit === pauseCard.quit -> endStage()
             hit === gameOverCard.again -> {
                 ses.tryAgain()
@@ -781,6 +836,7 @@ class InkMayhemGame(
             session?.sim?.gateTuning = false
             log { "pen tuned from the gates: ${settings.calibration}" }
             counts.track("pen-tuned")
+                award(com.pranshuparmar.inkmayhem.game.Sticker.TUNED)
             toast.show("Got it: the game knows your light, normal and hard touch now.", clock, force = true)
         } else {
             gateRaw.fill(Float.NaN)
@@ -812,10 +868,18 @@ class InkMayhemGame(
         ss.tint = settings.tint
         ss.gateTuning = !settings.penTuned
         ss.learning = firstRun(def)
-        val ses = StageSession(ss, settings)
+        com.pranshuparmar.inkmayhem.game.Doodle.apply(doodle, ss)
+        // doodling: nothing a stage does is kept
+        val store: com.pranshuparmar.inkmayhem.game.StageStore = if (doodle == 0) settings else object : com.pranshuparmar.inkmayhem.game.StageStore by settings {
+            override fun record(id: String, stars: Int, score: Int, gold: Int) = Unit
+        }
+        val ses = StageSession(ss, store)
         session = ses
         ses.start(def)
         counts.track("stage-${def.id}-start")
+        settings.stats.started()
+        faceOffSeen = false
+        world.hints.clear()
         stageBot = if (dev.autoplay) newBot(ss) else null
         screen = Screen.STAGE
         fadeAt = clock
@@ -855,6 +919,9 @@ class InkMayhemGame(
 
     /** The title screen, Play pointing at the first stage not yet cleared. */
     private fun showTitle() {
+        if (settings.stats.dirty) settings.saveStats()
+        world.hints.clear()
+        faceOff.close()
         if (screen == Screen.STAGE) {
             session?.sim?.dispose()
             session = null
@@ -867,7 +934,7 @@ class InkMayhemGame(
         dotHelper.hide()
         titleCard.show(nextStage(), fresh = Stages.ALL.none { settings.stars(it.id) > 0 }, clock)
         // the very first launch: Dot steps off the title to say hello
-        welcomeAt = if (!settings.metDot && dev.ending == null && !dev.faces) clock + WELCOME_DELAY else -1.0
+        welcomeAt = if (!settings.metDot && dev.ending == null && !dev.faces && dev.notebook == null) clock + WELCOME_DELAY else -1.0
         fx.clear()
         toast.clear()
     }
@@ -1016,7 +1083,14 @@ class InkMayhemGame(
 
     /** The finale after the last stage, with the player's totals ([finale]), or just the credits. */
     private fun showEnding(finale: Boolean) {
-        if (finale) counts.track("ending")
+        if (finale) {
+            counts.track("ending")
+            if (doodle == 0) {
+                settings.endingSeen = true
+                award(com.pranshuparmar.inkmayhem.game.Sticker.THE_END)
+            }
+        }
+        notebook.hide()
         dotHelper.hide()
         welcomeAt = -1.0
         if (screen == Screen.STAGE) {
@@ -1045,7 +1119,7 @@ class InkMayhemGame(
     private fun newBot(s: GameSim) = StageBot(s, inkFor = { dev.wrongInk[it] ?: it })
 
     /** A world's first stage until it has been cleared once: the runner waits before each new thing. */
-    private fun firstRun(def: StageDef) = def.number == 1 && settings.stars(def.id) == 0
+    private fun firstRun(def: StageDef) = def.number == 1 && settings.stars(def.id) == 0 && settings.dotHints
 
     /** The stage list, on the world of [played] (the stage just left), or where play picks up. */
     private fun openSelect(played: StageDef? = session?.stage) {
@@ -1110,6 +1184,10 @@ class InkMayhemGame(
 
     /** Leaves stage play for the stage list (on the world just played). */
     private fun endStage() {
+        if (settings.stats.dirty) settings.saveStats()
+        world.hints.clear()
+        stickerPop.clear()
+        faceOff.close()
         val played = session?.stage
         session?.sim?.dispose()
         session = null
@@ -1137,14 +1215,18 @@ class InkMayhemGame(
 
     /** The world's own tune; a boss fight has its own. */
     /** The menus' tune: the stage list plays the tune of the world on its tab, the rest Ink Rush. */
-    private fun menuTune(): String =
+    private fun menuTune(): String = juke(
         if (screen == Screen.SELECT) Stages.WORLDS.firstOrNull { it.number == selectCard.world }?.music ?: Stages.WORLDS[0].music
-        else Stages.WORLDS[0].music
+        else Stages.WORLDS[0].music,
+    )
 
     private fun musicTheme(): String {
         val ses = session ?: return menuTune()
-        return if (ses.sim.bossFight) BOSS_MUSIC else Stages.worldOf(ses.stage).music
+        return juke(if (ses.sim.bossFight) BOSS_MUSIC else Stages.worldOf(ses.stage).music)
     }
+
+    /** The jukebox's pick in place of [own], when one is picked and unlocked. */
+    private fun juke(own: String): String = com.pranshuparmar.inkmayhem.game.Jukebox.choose(settings.jukebox, own, settings)
 
     /** Sounds for the session's moments: a lost life, game over, and a ding per star on the tally. */
     private fun stageFeedback(ses: StageSession) {
@@ -1157,6 +1239,14 @@ class InkMayhemGame(
             if (ses.phase == StageSession.Phase.CLEARED) {
                 starsSounded = 0
                 counts.track("stage-${ses.stage.id}-clear")
+                onCleared(ses)
+            }
+            if (ses.phase == StageSession.Phase.INTRO && ses.firstIntro) {
+                // a fresh attempt at the stage (a start, Try again, Next)
+                attemptInks = 0
+                deathXs.clear()
+                world.hints.clear()
+                if (ses.stage !== faceOffFor) faceOffSeen = false
             }
             lastPhase = ses.phase
         }
@@ -1265,6 +1355,232 @@ class InkMayhemGame(
         }
     }
 
+    // ------------------------------------------------------------------------- extras and moments
+
+    /** Doodle mode's switches (0: the normal rules). */
+    private val doodle: Int get() = settings.doodle
+    /** The inks drawn in this attempt at the stage, a bit per ink (for "rope alone"). */
+    private var attemptInks = 0
+    /** Where lives were lost in this attempt: two near the same spot and Dot offers its dots. */
+    private val deathXs = ArrayList<Float>()
+    private var autoHintPending = false
+    /** The boss's lines have been said this time through the stage. */
+    private var faceOffSeen = false
+    private var faceOffFor: StageDef? = null
+    /** Pictures wanted from the next frame's page: a page torn out, the moment of a clear. */
+    private var tearPending = false
+    private var clearShotPending = false
+    private var clearShot: com.badlogic.gdx.graphics.Pixmap? = null
+    /** Where Dot was in [clearShot] (pixels), to frame the result card's picture round it. */
+    private var clearFocusX = Float.NaN
+    private var clearFocusY = Float.NaN
+    /** A picture is being written: Share waits for it. */
+    private var saving = false
+    /** The clear last shared and its card: sharing it again offers the same picture. */
+    private var sharedFor: StageSession.Result? = null
+    private var sharedFile: com.badlogic.gdx.files.FileHandle? = null
+
+    /** The stroke being finished, in metres along its points. */
+    private fun strokeLength(): Float {
+        val d = active.drawing ?: return 0f
+        var len = 0f
+        for (i in 1 until d.size) len += kotlin.math.hypot(d.xs[i] - d.xs[i - 1], d.ys[i] - d.ys[i - 1])
+        return len
+    }
+
+    /** Each ink has its own feel as it's laid down: rope a soft tick, a spring a double pulse, a beam a thud. */
+    private fun inkFeel(ink: Ink) {
+        if (!settings.haptics) return
+        when (ink) {
+            Ink.ROPE -> platform.vibratePattern(ROPE_FEEL, ROPE_FEEL_AMP)
+            Ink.SPRING -> platform.vibratePattern(SPRING_FEEL, SPRING_FEEL_AMP)
+            Ink.BEAM -> platform.vibratePattern(BEAM_FEEL, BEAM_FEEL_AMP)
+        }
+    }
+
+    /** Per frame: stickers peeling on, the best combo, a boss's entrance, hints left behind. */
+    private fun updateMoments(dt: Float, now: Double, reduced: Boolean) {
+        if (stickerPop.update(now) != null) {
+            audio.play(Sfx.GOLD)
+            if (settings.haptics) platform.vibratePattern(SPRING_FEEL, SPRING_FEEL_AMP)
+        }
+        val ses = session
+        if (ses != null && tutorial == null && screen == Screen.STAGE) {
+            val sim = ses.sim
+            settings.stats.combo(sim.combo)
+            if (sim.combo >= GameSim.COMBO_MAX) award(com.pranshuparmar.inkmayhem.game.Sticker.TOP_COMBO)
+            if (ses.lives >= StageSession.MAX_LIVES) award(com.pranshuparmar.inkmayhem.game.Sticker.NINE_LIVES)
+            val boss = sim.boss
+            if (sim.bossFight && boss != null && !faceOffSeen && ses.phase == StageSession.Phase.PLAY && !pauseCard.open &&
+                settings.stars(ses.stage.id) == 0
+            ) {
+                faceOffSeen = true
+                faceOffFor = ses.stage
+                sim.drawing?.let { sim.penUp(it.pointer) }
+                faceOff.start(boss.kind, now)
+                log { "face-off ${boss.kind.name}" }
+            }
+            if (autoHintPending && ses.phase == StageSession.Phase.PLAY && !faceOff.open) {
+                autoHintPending = false
+                askDot(ses, asked = false)
+            }
+            if (world.hints.isNotEmpty()) {
+                val x = sim.runner.body.position.x
+                world.hints.removeAll { it.xs.max() < x - 0.5f }
+            }
+        }
+        faceOff.update(now, dt, reduced)
+        val blip = faceOff.consumeBlip()
+        if (!blip.isNaN()) audio.babble(blip, deep = faceOff.bossSpeaking)
+    }
+
+    /** A stage was cleared: the numbers, the moment's picture, and any stickers it earns. */
+    private fun onCleared(ses: StageSession) {
+        settings.stats.cleared()
+        clearShotPending = true
+        val r = ses.result
+        if (doodle == 0 && r != null) {
+            if (attemptInks == 1 shl Ink.ROPE.weight) award(com.pranshuparmar.inkmayhem.game.Sticker.LIGHT_TOUCH)
+            if (ses.stage.layout.arenas.isNotEmpty() && r.noDeaths) award(com.pranshuparmar.inkmayhem.game.Sticker.UNTOUCHED)
+        }
+        settings.saveStats()
+        checkStickers()
+    }
+
+    /** Sticks [s] in the book (and the margin), once; nothing while doodling. */
+    private fun award(s: com.pranshuparmar.inkmayhem.game.Sticker) {
+        if (doodle != 0 || s.on(settings.stickers)) return
+        settings.stickers = settings.stickers or s.bit
+        stickerPop.add(s)
+        counts.track("sticker-${s.name.lowercase()}")
+        log { "sticker ${s.name}" }
+    }
+
+    /** The stickers the save and the numbers now account for. */
+    private fun checkStickers() {
+        if (doodle != 0) return
+        val now = settings.stickers or com.pranshuparmar.inkmayhem.game.Sticker.earnedFrom(settings, settings.stats)
+        com.pranshuparmar.inkmayhem.game.Sticker.fresh(settings.stickers, now).forEach { award(it) }
+    }
+
+    /**
+     * Ask Dot: the next strokes of the stage's own solution appear as dotted lines in their ink's
+     * colour, until the runner is past them. In a boss fight Dot says how that boss is beaten.
+     * Free, and only drawn: the run is the same either way.
+     */
+    private fun askDot(ses: StageSession, asked: Boolean) {
+        val sim = ses.sim
+        if (asked) {
+            settings.stats.hint()
+            award(com.pranshuparmar.inkmayhem.game.Sticker.ASKED)
+        }
+        val boss = sim.boss
+        if (sim.bossFight && boss != null) {
+            val tip = com.pranshuparmar.inkmayhem.ui.FaceOff.LINES.getValue(boss.kind).last { it.dot }.text
+            toast.show(tip, clock, force = true)
+            log("asked Dot: boss tip")
+            return
+        }
+        val x = sim.runner.body.position.x
+        val ahead = com.pranshuparmar.inkmayhem.game.Hints.ahead(ses.stage.layout.solution, x)
+        world.hints.clear()
+        world.hints.addAll(ahead)
+        val say = when {
+            ahead.isEmpty() -> "Nothing tricky just ahead. Roll on!"
+            !asked -> "Stuck? Follow my dots: ${ahead.joinToString(", then ") { it.ink.label }}."
+            else -> "Follow my dots: ${ahead.joinToString(", then ") { it.ink.label }}."
+        }
+        toast.show(say, clock, force = true)
+        log { "asked Dot: ${ahead.size} hint strokes" }
+    }
+
+    /** A life lost near where one was lost before: Dot offers its dots once play is back. */
+    private fun stuckCheck(ses: StageSession) {
+        val x = ses.sim.runner.body.position.x
+        if (settings.dotHints && world.hints.isEmpty() && deathXs.any { kotlin.math.abs(it - x) < STUCK_M }) autoHintPending = true
+        deathXs += x
+    }
+
+    /** Right after the page is drawn (before the HUD and cards): the pictures asked for. */
+    private fun capturePage() {
+        if (!tearPending && !clearShotPending) return
+        val w = Gdx.graphics.backBufferWidth
+        val h = Gdx.graphics.backBufferHeight
+        if (clearShotPending) {
+            clearShotPending = false
+            clearShot?.dispose()
+            clearShot = runCatching { com.pranshuparmar.inkmayhem.render.Grab.pixmap(0, 0, w, h) }.getOrNull()
+            val ses = session
+            if (ses != null) {
+                val r = runnerOnScreen(ses.sim)
+                val k = w / wDp
+                clearFocusX = r[0] * k
+                clearFocusY = r[1] * k
+            } else {
+                clearFocusX = Float.NaN
+                clearFocusY = Float.NaN
+            }
+        }
+        if (tearPending) {
+            tearPending = false
+            val shot = runCatching { com.pranshuparmar.inkmayhem.render.Grab.pixmap(0, 0, w, h) }.getOrNull() ?: return
+            settings.stats.pageTorn()
+            award(com.pranshuparmar.inkmayhem.game.Sticker.SCRAPBOOK)
+            savePicture(shot, "page") { toast.show(PAGE_TORN, clock, force = true) }
+        }
+    }
+
+    /** The clear card's Share: a result card from the moment of the clear, kept in the Notebook and shared. */
+    private fun shareClear(ses: StageSession) {
+        val r = ses.result ?: return
+        if (saving) return
+        val title = "Ink Mayhem: ${r.stage.id} cleared"
+        val again = sharedFile
+        if (sharedFor === r && again != null && again.exists()) {
+            sharePicture(again.file(), title)
+            return
+        }
+        val content = com.pranshuparmar.inkmayhem.ui.ShareCard.Content(
+            heading = "WORLD ${r.stage.id} · ${r.stage.name.uppercase()}",
+            title = "${r.stage.id} cleared!",
+            stars = r.stars,
+            gold = r.gold or r.goldEver,
+            lines = listOf(
+                (if (r.newBest) "SCORE · NEW BEST" else "SCORE") to com.pranshuparmar.inkmayhem.ui.Format.thousands(r.total),
+                "LIVES LOST" to ses.deaths.toString(),
+            ),
+        )
+        val pic = runCatching { shareCard.render(shapes, text, batch, pal, density, clearShot, content, clearFocusX, clearFocusY) }.getOrNull() ?: return
+        savePicture(pic, "result-${r.stage.id}") { file ->
+            sharedFor = r
+            sharedFile = file
+            toast.show(SHARED, clock, force = true)
+            sharePicture(file.file(), title)
+        }
+        log { "shared ${r.stage.id}" }
+    }
+
+    private fun sharePicture(file: File, title: String) = platform.shareImage(file, title)
+
+    /** Writes [p] into the album off the GL thread (and disposes it), then [then] back on it. */
+    private fun savePicture(p: com.badlogic.gdx.graphics.Pixmap, kind: String, then: (com.badlogic.gdx.files.FileHandle) -> Unit) {
+        val at = System.currentTimeMillis()
+        saving = true
+        Thread({
+            val f = try {
+                album.add(p, kind, at)
+            } catch (e: Exception) {
+                null
+            } finally {
+                p.dispose()
+            }
+            Gdx.app.postRunnable {
+                saving = false
+                if (f != null) then(f) else toast.show("Couldn't keep that picture.", clock, force = true)
+            }
+        }, "save-picture").start()
+    }
+
     // ------------------------------------------------------------------------------------ events
 
     /** What the sims (a stage's, the tutorial's, the menus' page) tell the game. */
@@ -1288,20 +1604,31 @@ class InkMayhemGame(
         override fun burst(x: Float, y: Float, n: Int, spread: Float, color: Tok, up: Float) = fx.burst(x, y, n, spread, color, up)
 
         override fun pop(x: Float, y: Float, text: String, color: Tok) = fx.pop(x, y, text, color)
-        override fun shake(amount: Float) = fx.shake(amount)
+        override fun shake(amount: Float) {
+            if (settings.shake) fx.shake(amount)
+        }
         override fun haptic(kind: Haptic) {
             if (!settings.haptics) return
             when (kind) {
-                Haptic.SNAP -> if (clock - lastSnapHaptic > 0.08) {
+                // a joint giving way: a little crackle
+                Haptic.SNAP -> if (clock - lastSnapHaptic > 0.12) {
                     lastSnapHaptic = clock
-                    platform.vibrate(SNAP_BUZZ_MS, 140)
+                    platform.vibratePattern(SNAP_CRACKLE, SNAP_CRACKLE_AMP)
                 }
                 Haptic.DEATH -> platform.vibrate(DEATH_BUZZ_MS, 255)
             }
         }
 
+        override fun erased() {
+            if (session != null && tutorial == null) settings.stats.erased()
+        }
+
         override fun died(death: Death) {
             log { "died ${death.kind.name}: ${death.reason}" }
+            val ses = session ?: return
+            if (tutorial != null) return
+            settings.stats.lifeLost()
+            stuckCheck(ses)
         }
 
         override fun runReset() = fx.clear()
@@ -1382,6 +1709,7 @@ class InkMayhemGame(
             active, fx, pal, settings.tint || tut != null, uiCam, wDp, hDp, scale, density, (acc / STEP).coerceIn(0f, 1f),
             pageOnly = menu, dt = frames.dt, remarks = settings.remarks && tut == null && screen == Screen.STAGE,
         )
+        capturePage()
 
         updateFrame()
         val safeL = frame.safeL
@@ -1475,8 +1803,14 @@ class InkMayhemGame(
             selectCard.layout(text, frame)
             pass({ selectCard.drawShapes(shapes, pal, frame) }, { selectCard.drawText(text, pal) })
         } else if (tut == null && ses != null) {
+            if (doodle != 0) drawDoodleTag()
             drawStageCards(ses)
             drawDot(now, reduced, frame.safeT + DOT_BELOW_HUD)
+            if (stickerPop.showing) pass(
+                { stickerPop.drawShapes(shapes, pal, frame, frame.safeT + STICKER_BELOW_HUD, now, reduced) },
+                { stickerPop.drawText(text, pal) },
+            )
+            if (faceOff.open) pass({ faceOff.drawShapes(shapes, pal, frame, now, reduced) }, { faceOff.drawText(text, pal, frame, now, reduced) })
             if (pauseCard.open) {
                 pauseCard.layout(frame)
                 pauseCard.remarks = settings.remarks
@@ -1484,6 +1818,10 @@ class InkMayhemGame(
             } else if (countdown.running) {
                 pass({ countdown.drawShapes(shapes, pal, frame, reduced) }, { countdown.drawText(text, pal, frame) })
             }
+        }
+        if (notebook.open) {
+            notebook.layout(text, frame)
+            pass({ notebook.drawShapes(shapes, pal, frame) }, { notebook.drawText(text, pal) })
         }
         if (sheet.open) {
             sheet.layout(text, frame)
@@ -1575,6 +1913,18 @@ class InkMayhemGame(
             }
             else -> Unit
         }
+    }
+
+    /** Doodling: a small tag in the bottom-left corner says the rules are bent (and nothing is kept). */
+    private fun drawDoodleTag() {
+        val font = fonts.get(Face.MONO_BOLD, 10.5f)
+        val w = text.width(font, DOODLE_TAG) + 18f
+        val x = max(12f, frame.safeL)
+        val y = hDp - max(12f, frame.safeB) - 24f
+        pass(
+            { shapes.color(pal[Tok.BEAM], 0.9f).roundRect(x, y, w, 24f, 12f) },
+            { text.line(font, DOODLE_TAG, x + w / 2f, y, 24f, pal[Tok.PAPER_WHITE], 1f, Align.center) },
+        )
     }
 
     private fun updateFrame() {
@@ -1680,6 +2030,9 @@ class InkMayhemGame(
     }
 
     override fun dispose() {
+        if (settings.stats.dirty) settings.saveStats()
+        notebook.dispose()
+        clearShot?.dispose()
         recorder?.close()
         tutorial?.sim?.dispose()
         session?.sim?.dispose()
@@ -1716,7 +2069,22 @@ class InkMayhemGame(
         const val FIRST_STAR = "Stars! Every ${GameSim.STARS_PER_LIFE} is an extra life."
         const val READY_TOAST = "You’re ready. The lightest ink that works grows your combo."
         const val FINISH_LESSONS = "Let’s finish the lessons first. Nearly there!"
-        const val SNAP_BUZZ_MS = 12
+        /** The ink feels and the snap's crackle: off/on timings (ms) and strengths. */
+        private val ROPE_FEEL = longArrayOf(0, 8)
+        private val ROPE_FEEL_AMP = intArrayOf(0, 60)
+        private val SPRING_FEEL = longArrayOf(0, 10, 45, 10)
+        private val SPRING_FEEL_AMP = intArrayOf(0, 120, 0, 120)
+        private val BEAM_FEEL = longArrayOf(0, 30)
+        private val BEAM_FEEL_AMP = intArrayOf(0, 230)
+        private val SNAP_CRACKLE = longArrayOf(0, 6, 22, 6, 18, 8)
+        private val SNAP_CRACKLE_AMP = intArrayOf(0, 170, 0, 120, 0, 150)
+        /** Two lives lost within this many metres of each other: stuck. */
+        private const val STUCK_M = 6f
+        /** The sticker slides in this far under the top of the safe area. */
+        private const val STICKER_BELOW_HUD = 128f
+        const val PAGE_TORN = "Page torn out: it's in your Notebook."
+        private const val DOODLE_TAG = "DOODLE MODE"
+        const val SHARED = "Saved to your Notebook."
         private const val TAG_W = 58f
         private const val TOAST_LINE = 19f
         /** Metres a view always shows across (portrait zooms out to fit them). */

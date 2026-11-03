@@ -209,6 +209,19 @@ class GameSim(
     /** Tutorial: strokes cost nothing. */
     var unlimitedInk = false
 
+    /**
+     * Doodle mode: powers held for the whole run, a bit per [ItemKind] ordinal. A held Gold nib,
+     * Cloud chalk or Star nib works as if just picked up; a held Highlighter shows everything
+     * hidden from the start (strokes stay ink, so the page can still be drawn on).
+     */
+    var keptPowers = 0
+
+    /** Doodle mode: the runner is Bold from the start and stays Bold through every hit. */
+    var keepBold = false
+
+    /** The power is on: picked up, or held by Doodle mode. */
+    fun powered(kind: ItemKind): Boolean = runner.power == kind || keptPowers and (1 shl kind.ordinal) != 0
+
     // ---------------------------------------------------------------- stages
 
     /** The stage being played, or null in the tutorial's sandbox and the menus' blank page. */
@@ -515,7 +528,24 @@ class GameSim(
         runnerHeld = true
         camFocusX = Float.NaN
         state = GameState.RUN
+        if (keepBold) setBold(true)
+        if (keptPowers and (1 shl ItemKind.HIGHLIGHTER.ordinal) != 0) revealAll()
         snapCamera()
+    }
+
+    /** Doodle mode's held Highlighter: everything hidden on the page shows from the start. */
+    private fun revealAll() {
+        stars.fastEach { it.hidden = false }
+        golds.fastEach { it.hidden = false }
+        warps.fastEach { it.hidden = false }
+        hiddenBlocks.fastEach { b ->
+            val r = ink.addRect(b.x, b.top, b.w, b.depth)
+            r.level = b.top
+            blocks += r
+        }
+        hiddenBlocks.clear()
+        hiddenBoxes.fastEach { addBox(it) }
+        hiddenBoxes.clear()
     }
 
     /**
@@ -717,14 +747,14 @@ class GameSim(
             return
         }
         val highlighting = runner.power == ItemKind.HIGHLIGHTER
-        if (inkLeft <= 0.5f && !highlighting && runner.power != ItemKind.GOLD_NIB) {
+        if (inkLeft <= 0.5f && !highlighting && !powered(ItemKind.GOLD_NIB) && !unlimitedInk) {
             events.toast(OUT_OF_INK)
             return
         }
         drawing = Drawing(pointer).also { d ->
             d.highlight = highlighting
-            d.goldNib = runner.power == ItemKind.GOLD_NIB
-            d.chalk = runner.power == ItemKind.CHALK
+            d.goldNib = powered(ItemKind.GOLD_NIB)
+            d.chalk = powered(ItemKind.CHALK)
             d.gate = if (learning || gateTuning) gateAt(x) else null
             d.forced = d.gate?.takeIf { gateTuning && it.tunes }
         }
@@ -1025,6 +1055,7 @@ class GameSim(
         inkLeft = min(INK_MAX, inkLeft + s.cost * 0.5f)
         events.burst(x, y, 10, 2f, Tok.MUTED)
         events.sound(Sfx.ERASE)
+        events.erased()
         ink.removeStroke(s)
     }
 
@@ -1494,7 +1525,7 @@ class GameSim(
     private fun hurt(why: String, kind: DeathKind) {
         if (state != GameState.RUN || simT < runner.safeUntil) return
         // the Star nib: nothing hurts
-        if (runner.power == ItemKind.STAR_NIB) return
+        if (powered(ItemKind.STAR_NIB)) return
         val rb = runner.body
         val p = rb.position
         if (!runner.bold) {
@@ -1502,7 +1533,7 @@ class GameSim(
             die(why, kind)
             return
         }
-        setBold(false)
+        if (!keepBold) setBold(false)
         runner.safeUntil = simT + SAFE_S
         ouchAt = simT
         events.burst(p.x, p.y, 12, 2.5f, Tok.ACCENT)
@@ -1599,7 +1630,7 @@ class GameSim(
             val stomp = (rv.y > 0.5f && py < q.y - 0.15f) || simT - bounceAt < BOUNCE_STOMP_S
             if (d > runner.r + b.kind.r + if (stomp) STOMP_SLACK else 0.04f) return@fastEach
             when {
-                runner.power == ItemKind.STAR_NIB -> squash(b, "Zap! +$BLOT_POINTS", atRunner = true)
+                powered(ItemKind.STAR_NIB) -> squash(b, "Zap! +$BLOT_POINTS", atRunner = true)
                 // an Eraser is too rubbery to squash: the runner bounces off it
                 stomp && b.kind == Creature.ERASER -> {
                     rb.setLinearVelocity(rv.x, STOMP_VY)
@@ -1643,7 +1674,7 @@ class GameSim(
             val rv = rb.linearVelocity
             val bouncing = simT - bounceAt < BOUNCE_STOMP_S || (rv.y > 0.5f && py < q.y - 0.15f)
             when {
-                bouncing || runner.bold || runner.power == ItemKind.STAR_NIB -> crumplePlane(pl, "Crumpled! +$PLANE_POINTS")
+                bouncing || runner.bold || powered(ItemKind.STAR_NIB) -> crumplePlane(pl, "Crumpled! +$PLANE_POINTS")
                 simT < runner.safeUntil -> Unit
                 else -> {
                     crumplePlane(pl, null)
