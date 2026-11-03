@@ -698,6 +698,7 @@ class InkMayhemGame(
             hit === titleCard.howTo -> startTutorial(0)
             hit === titleCard.settings -> sheet.show()
             hit === titleCard.credits -> showEnding(finale = false)
+            hit === titleCard.repo || hit === endingCard.link -> openRepo()
             hit === endingCard.button -> if (endingCard.finished(clock)) showTitle() else endingCard.skip(clock)
             hit === selectCard.play -> (nextStage() ?: Stages.ALL.first()).let(::startStage)
             hit is StageSelectCard.WorldTab -> selectCard.show(hit.number)
@@ -975,6 +976,13 @@ class InkMayhemGame(
         if (!dotHelper.visible) return
         dotHelper.layout(text, frame, hudBottom)
         pass({ dotHelper.drawShapes(shapes, pal, frame, now, reduced) }, { dotHelper.drawText(text, pal, now) })
+    }
+
+    /** Opens the game's repository in the browser. */
+    private fun openRepo() {
+        val opened = runCatching { Gdx.net.openURI(com.pranshuparmar.inkmayhem.ui.Links.REPO_URL) }.getOrDefault(false)
+        if (!opened) toast.show("Couldn't open a browser: ${com.pranshuparmar.inkmayhem.ui.Links.REPO_TEXT}", clock, force = true)
+        log("opened the repository link")
     }
 
     /** The finale after the last stage, with the player's totals ([finale]), or just the credits. */

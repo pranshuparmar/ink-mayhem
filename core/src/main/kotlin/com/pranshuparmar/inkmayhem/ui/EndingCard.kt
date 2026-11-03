@@ -27,6 +27,9 @@ class EndingCard(private val fonts: Fonts) {
     class Totals(val cleared: Int, val stages: Int, val stars: Int, val gold: Int, val score: Int)
 
     val button = Box()
+    /** The repository link, where it is on screen this frame (empty while it's scrolled away). */
+    val link = Box()
+    private var linkW = 0f
     val press = Press()
     /** The runner, rolling along its line in the finale. */
     private val buddy = BuddyState()
@@ -37,7 +40,7 @@ class EndingCard(private val fonts: Fonts) {
     private var bubbleTipX = 0f
     private var bubbleTipY = 0f
 
-    private enum class Kind { TITLE, LINE, NOTE, HEAD, ROW, RUNNER, GAP }
+    private enum class Kind { TITLE, LINE, NOTE, HEAD, ROW, RUNNER, GAP, LINK }
 
     private class Item(val kind: Kind, val text: String = "", val value: String = "", val h: Float) {
         var y = 0f
@@ -97,7 +100,10 @@ class EndingCard(private val fonts: Fonts) {
         items += Item(Kind.HEAD, "STARRING", h = 24f)
         items += Item(Kind.LINE, "Dot, a drop of ink", h = 24f)
         items += Item(Kind.NOTE, "and your S Pen", h = 26f)
-        items += Item(Kind.GAP, h = 70f)
+        items += Item(Kind.GAP, h = 22f)
+        items += Item(Kind.HEAD, "THE CODE, AND NEW BUILDS", h = 24f)
+        items += Item(Kind.LINK, Links.REPO_TEXT, h = 30f)
+        items += Item(Kind.GAP, h = 56f)
         items += Item(Kind.TITLE, "Thanks for playing!", h = 52f)
         var y = 0f
         for (it in items) {
@@ -146,7 +152,11 @@ class EndingCard(private val fonts: Fonts) {
         if (!finished(now)) skippedAt = now
     }
 
-    fun targetAt(x: Float, y: Float): Any? = if (button.contains(x, y)) button else null
+    fun targetAt(x: Float, y: Float): Any? = when {
+        button.contains(x, y) -> button
+        link.w > 0f && link.contains(x, y) -> link
+        else -> null
+    }
 
     private fun alphaAt(y: Float, f: Frame): Float {
         // fade in from the bottom edge and out at the top
@@ -158,6 +168,17 @@ class EndingCard(private val fonts: Fonts) {
     fun drawShapes(shapes: Shapes, pal: Palette, f: Frame, now: Double, reduced: Boolean) {
         val t = t(now)
         val sc = scroll(t)
+        // the link: where it is now, its underline and mark; not tappable while it's faded out
+        link.set(0f, 0f, 0f, 0f)
+        for (it in items) {
+            if (it.kind != Kind.LINK) continue
+            val y = it.y - sc
+            val a = alphaAt(y + it.h / 2f, f)
+            if (a < 0.5f) continue
+            val w = linkW + 26f + 8f
+            link.set(cx - w / 2f, y, w, it.h)
+            linkShapes(shapes, pal, link, a, press.isPressed(link))
+        }
         for (it in items) {
             if (it.kind != Kind.RUNNER) continue
             val y = it.y - sc + it.h / 2f
@@ -211,8 +232,9 @@ class EndingCard(private val fonts: Fonts) {
         }
     }
 
-    /** Lays out the runner's bubble; call before [drawShapes] with the frame's [text]. */
+    /** Lays out the runner's bubble (and measures the link); call before [drawShapes] with the frame's [text]. */
     fun layoutBubble(text: Text, f: Frame) {
+        linkW = text.width(fonts.get(Face.MONO_MEDIUM, 13f), Links.REPO_TEXT)
         val line = buddy.bubble ?: return
         bubble.place(text, fonts.get(Face.HAND_BOLD, 16f), line, bubbleTipX, bubbleTipY, 1f, 8f, f.wDp - 8f, f.safeT + 4f, buddy.bubbleScale)
     }
@@ -231,6 +253,7 @@ class EndingCard(private val fonts: Fonts) {
                 Kind.LINE -> text.line(fit(text, Face.UI, 16f, it.text), it.text, cx, y, it.h, pal[Tok.UI_FG], a, Align.center)
                 Kind.NOTE -> text.line(fonts.get(Face.HAND, 20f), it.text, cx, y, it.h, pal[Tok.GRAPHITE], a, Align.center)
                 Kind.HEAD -> text.line(fonts.get(Face.MONO_BOLD, 11f), it.text, cx, y, it.h, pal[Tok.ACCENT], a, Align.center)
+                Kind.LINK -> text.line(fonts.get(Face.MONO_MEDIUM, 13f), it.text, cx - (linkW + 34f) / 2f + 22f, y, it.h, pal[Tok.ACCENT], a)
                 Kind.ROW -> {
                     text.line(fonts.get(Face.MONO_MEDIUM, 12f), it.text, left, y, it.h, pal[Tok.MUTED], a)
                     text.line(fonts.get(Face.MONO_BOLD, 15f), it.value, right, y, it.h, pal[Tok.INK], a, Align.right)

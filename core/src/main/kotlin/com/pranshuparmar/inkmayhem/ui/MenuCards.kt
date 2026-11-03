@@ -28,6 +28,8 @@ class TitleCard(private val fonts: Fonts) {
     val howTo = Box()
     val settings = Box()
     val credits = Box()
+    /** The repository link under the footer. */
+    val repo = Box()
     val press = Press()
 
     private var top = 0f
@@ -96,6 +98,9 @@ class TitleCard(private val fonts: Fonts) {
         val cw = text.width(fonts.get(Face.UI_BOLD, 13f), "Credits") + 28f
         credits.set(left + colW - cw, y, cw, FOOT_H)
         footY = y
+        y += FOOT_H + LINK_GAP
+        val lw = text.width(fonts.get(Face.MONO_MEDIUM, 11f), Links.REPO_TEXT) + 26f
+        repo.set(cx - lw / 2f, y, lw, LINK_H)
     }
 
     private var footY = 0f
@@ -106,6 +111,7 @@ class TitleCard(private val fonts: Fonts) {
         howTo.contains(x, y) -> howTo
         settings.contains(x, y) -> settings
         credits.contains(x, y) -> credits
+        repo.contains(x, y) -> repo
         else -> null
     }
 
@@ -173,6 +179,7 @@ class TitleCard(private val fonts: Fonts) {
         val py = footY + FOOT_H / 2f
         shapes.color(pal[Tok.UI_FG], a).capsule(left + 2f, py + 5f, left + 16f, py - 5f, 4.2f)
         shapes.color(pal[Tok.UI_FG], a).triangle(left - 2.5f, py + 8f, left + 0.5f, py + 2.5f, left + 3.5f, py + 7.5f)
+        linkShapes(shapes, pal, repo, a, press.isPressed(repo))
     }
 
     fun drawText(text: Text, pal: Palette, now: Double, reduced: Boolean) {
@@ -195,6 +202,7 @@ class TitleCard(private val fonts: Fonts) {
         Widgets.buttonLabel(text, font, pal, settings, "Settings", primary = false, enabled = true)
         Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 13f), pal, credits, "Credits", primary = false, enabled = true)
         text.line(fonts.get(Face.MONO_BOLD, 10.5f), PEN_ONLY, left + 24f, footY, FOOT_H, pal[Tok.UI_FG], a)
+        text.line(fonts.get(Face.MONO_MEDIUM, 11f), Links.REPO_TEXT, repo.x + 22f, repo.y, repo.h, pal[Tok.ACCENT], a)
         if (buddy.bubble != null) bubble.drawText(text, fonts.get(Face.HAND_BOLD, 16f), pal, buddy.bubbleAlpha * a)
     }
 
@@ -252,7 +260,9 @@ class TitleCard(private val fonts: Fonts) {
         private const val PLAY_H = 58f
         private const val FOOT_GAP = 14f
         private const val FOOT_H = 32f
-        private const val HEIGHT = TITLE_H + TAG_H + 18f + LEGEND_H + 26f + PLAY_H + 10f + 42f + FOOT_GAP + FOOT_H
+        private const val LINK_GAP = 4f
+        private const val LINK_H = 26f
+        private const val HEIGHT = TITLE_H + TAG_H + 18f + LEGEND_H + 26f + PLAY_H + 10f + 42f + FOOT_GAP + FOOT_H + LINK_GAP + LINK_H
         /** Said on the title screen: the game is drawn with an S Pen, never a finger. */
         const val PEN_ONLY = "S PEN ONLY · FINGERS CAN'T DRAW"
         private const val ROLL_S = 0.9
@@ -377,6 +387,27 @@ class PauseCard(private val fonts: Fonts) {
         private const val DOZE_S = 6.0
         private val LINES = arrayOf("Take your time.", "I'll wait right here.", "Breather? Good idea.", "Pen down. Me too.")
     }
+}
+
+/**
+ * A link's look in [b]: a small "leaves the game" mark (a box with an arrow) at its left, and an
+ * underline under the text that follows it; pressed, a soft highlight.
+ */
+internal fun linkShapes(shapes: Shapes, pal: Palette, b: Box, a: Float, pressed: Boolean) {
+    if (pressed) shapes.color(pal[Tok.ACCENT], 0.12f * a).roundRect(b.x, b.y, b.w, b.h, 8f)
+    val c = pal[Tok.ACCENT]
+    val cy = b.y + b.h / 2f
+    val x = b.x + 6f
+    // the box
+    shapes.color(c, a).rect(x, cy - 5f, 1.4f, 10f)
+    shapes.color(c, a).rect(x, cy + 3.6f, 10f, 1.4f)
+    shapes.color(c, a).rect(x, cy - 5f, 4f, 1.4f)
+    shapes.color(c, a).rect(x + 8.6f, cy, 1.4f, 5f)
+    // the arrow out of it
+    shapes.color(c, a).capsule(x + 4.5f, cy + 0.5f, x + 11f, cy - 6f, 1.4f)
+    shapes.color(c, a).triangle(x + 12.5f, cy - 7.5f, x + 7.5f, cy - 7.5f, x + 12.5f, cy - 2.5f)
+    // the underline
+    shapes.color(c, 0.6f * a).rect(b.x + 22f, cy + 7f, b.w - 26f, 1.2f)
 }
 
 /** After Resume: 3, 2, 1 over the page, then the runner rolls on. */

@@ -101,7 +101,7 @@ first, which clears its best score, calibration and tutorial progress.
 The game opens on its **title screen**: the name, a reminder of the three inks, and **Start**
 (**Play** once something is cleared, naming the stage it picks up at: the first not yet
 cleared), **Stages**, **How to play**, **Settings** and **Credits**, with a reminder that it's S Pen
-only. The stage list has a **Menu** button
+only and a link to this repository (tap it to open it in the browser; the credits have it too). The stage list has a **Menu** button
 back to it. In a stage the button at the top right **pauses**: Resume (the runner is counted
 back in, 3‑2‑1), Restart, Settings or Stage list. Android back pauses too (and on the pause
 screen resumes), and so does leaving the app. The title and the stage list play Ink Rush.
