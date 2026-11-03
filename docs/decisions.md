@@ -420,7 +420,8 @@ screen.
 Before playtesting, the owner asked for what would keep the game from feeling unfinished: it
 stays S Pen only (said on the title screen and in the README), it gets an ending, a polish pass,
 a save version and a smooth boss fight, and the runner becomes a character "like the old
-Office paperclip: pure fun". It will be open source on GitHub, not on Google Play.
+Office paperclip: pure fun". It will be source-available on GitHub (PolyForm Strict: free to
+read, build and play, not to change, redistribute or sell), not on Google Play.
 
 - **The ending is earned and skippable.** It follows the last clear card rather than replacing
   it, so the tally still shows; it holds on the clean page and the runner first, then rolls the

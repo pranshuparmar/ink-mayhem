@@ -4,9 +4,10 @@ An S Pen-only Android game in the Mayhem series. A blot of ink rolls across a ru
 you draw the way ahead. How hard you press decides what the ink becomes:
 
 > **S Pen only.** Everything is drawn with a pressure-sensitive pen: a Galaxy phone or tablet
-> with an S Pen. Fingers can tap buttons, but they never draw. Ink Mayhem is open source and isn't
-> on Google Play: get the APK from this repository's [Releases](../../releases), or build it
-> yourself.
+> with an S Pen. Fingers can tap buttons, but they never draw. Ink Mayhem is source-available
+> (free to read, build and play; not to change, redistribute or sell: see [Licence](#licence))
+> and isn't on Google Play: get the APK from this repository's [Releases](../../releases), or
+> build it yourself.
 
 | Pressure | Ink | |
 |---|---|---|
@@ -303,7 +304,11 @@ the `.apk`); a run on `main` also refreshes `latest-debug`.
 
 ## Licence
 
-Copyright (c) 2026 Pranshu Parmar. All rights reserved. See [LICENSE](LICENSE).
+Copyright (c) 2026 Pranshu Parmar. Ink Mayhem is **source-available** under the
+[PolyForm Strict License 1.0.0](LICENSE): you may read the code, build it and play it for any
+noncommercial purpose (personal use, study, hobby, education, charity), but not change it,
+redistribute it or sell it, or use it commercially in any way. It is not "open source" in the
+OSI sense, which would allow commercial use.
 
 Fonts: [Kalam](https://fonts.google.com/specimen/Kalam),
 [Atkinson Hyperlegible](https://fonts.google.com/specimen/Atkinson+Hyperlegible) and
