@@ -32,6 +32,11 @@ class SettingsSheet(
 
     private class Option(title: String, val detail: String, val get: () -> Boolean, val set: (Boolean) -> Unit) : Row(title)
 
+    /** One of a few [choices] (value to label), picked from segments on the row's right. */
+    private class Choice(title: String, val detail: String, val choices: List<Pair<String, String>>, val get: () -> String, val set: (String) -> Unit) : Row(title) {
+        val segs = Array(choices.size) { Box() }
+    }
+
     /** A volume, 0 (off) to 1, dragged along a track on the row's right. */
     private class Slider(title: String, val get: () -> Float, val set: (Float) -> Unit) : Row(title) {
         val track = Box()
@@ -48,10 +53,20 @@ class SettingsSheet(
     private val options: List<Row> = buildList {
         add(sound)
         add(music)
+        add(
+            Choice(
+                "Theme", "Auto follows your phone",
+                listOf(Settings.THEME_AUTO to "Auto", Settings.THEME_LIGHT to "Light", Settings.THEME_DARK to "Dark"),
+                { settings.theme }, { settings.theme = it },
+            ),
+        )
         add(Option("Dot's remarks", "Little speech bubbles now and then", { settings.remarks }, { settings.remarks = it }))
         add(Option("Colour ink by type", "Rope green, spring amber, beam red", { settings.tint }, { settings.tint = it }))
         add(Option("Pen readout", "Pointer type, pressure, buttons, hover rate", { settings.penReadout }, { settings.penReadout = it }))
-        add(Option("Haptics", "A short buzz on snaps and crashes", { settings.haptics }, { settings.haptics = it }))
+        add(Option("Haptics", "A buzz for each ink, snaps and crashes", { settings.haptics }, { settings.haptics = it }))
+        add(Option("Screen shake", "Crashes and boss hits shake the page", { settings.shake }, { settings.shake = it }))
+        add(Option("Dot's hints", "First-run stops, and its dots when you're stuck", { settings.dotHints }, { settings.dotHints = it }))
+        add(Option("Anonymous play counts", "Which stages get played. Nothing about you.", { settings.playCounts }, { settings.playCounts = it }))
         if (debugBuild) {
             add(Option("Allow finger and mouse", "Testing only. Fingers draw fixed spring ink.", { settings.allowFinger }, { settings.allowFinger = it }))
             add(Option("Record input", "Debug only. Saves sessions for replays.", { settings.recordInput }, { settings.recordInput = it }))
@@ -98,6 +113,12 @@ class SettingsSheet(
             if (o is Slider) {
                 val tw = minOf(170f, o.box.w * 0.48f)
                 o.track.set(o.box.right - tw - 12f, o.box.y, tw, o.box.h)
+            }
+            if (o is Choice) {
+                val sw = minOf(62f, o.box.w * 0.17f)
+                val sh = 32f
+                val y0 = o.box.y + (o.box.h - sh) / 2f
+                o.segs.forEachIndexed { k, b -> b.set(o.box.right - (o.segs.size - k) * (sw + 4f) + 4f, y0, sw, sh) }
             }
         }
         var y = card.y + 20f + rows * (rowH + 4f)
@@ -156,6 +177,10 @@ class SettingsSheet(
                     t.set(!t.get())
                     onChanged()
                 }
+                is Pick -> if (t.row.get() != t.value) {
+                    t.row.set(t.value)
+                    onChanged()
+                }
             }
             PenPhase.CANCEL -> press.cancel()
             else -> Unit
@@ -177,7 +202,19 @@ class SettingsSheet(
         if (recal.contains(x, y)) return recal
         if (howTo.contains(x, y)) return howTo
         if (onShareRecording != null && share.contains(x, y)) return share
+        for (o in options) {
+            if (o !is Choice || !o.box.contains(x, y)) continue
+            o.segs.forEachIndexed { k, b -> if (b.contains(x, y)) return picks.getValue(o)[k] }
+            return null
+        }
         return options.firstOrNull { it.box.contains(x, y) }
+    }
+
+    /** A segment of a [Choice]: the row and the value it picks (one object each, for [Press]). */
+    private class Pick(val row: Choice, val value: String)
+
+    private val picks: Map<Choice, List<Pick>> by lazy {
+        options.filterIsInstance<Choice>().associateWith { c -> c.choices.map { Pick(c, it.first) } }
     }
 
     fun drawShapes(shapes: Shapes, pal: Palette, f: Frame) {
@@ -187,6 +224,13 @@ class SettingsSheet(
             shapes.color(pal[Tok.LINE]).rect(o.box.x, o.box.bottom - 1f, o.box.w, 1f)
             when (o) {
                 is Option -> Widgets.checkbox(shapes, pal, o.box.x + 2f, o.box.y + (o.box.h - 20f) / 2f, o.get())
+                is Choice -> {
+                    themeIcon(shapes, pal, o.box.x + 12f, o.box.y + o.box.h / 2f)
+                    val ps = picks.getValue(o)
+                    o.segs.forEachIndexed { k, b ->
+                        Widgets.button(shapes, pal, b, primary = o.get() == o.choices[k].first, enabled = true, pressed = press.isPressed(ps[k]))
+                    }
+                }
                 is Slider -> {
                     speaker(shapes, pal, o.box.x + 2f, o.box.y + o.box.h / 2f, o.get() > 0f, o === music)
                     val v = o.get()
@@ -214,8 +258,13 @@ class SettingsSheet(
             val x = o.box.x + 2f + 20f + 12f
             val ty = o.box.y + (o.box.h - 35f) / 2f
             text.line(title, o.title, x, ty, 19f, pal[Tok.UI_FG])
+            if (o is Choice) {
+                val f = fonts.get(Face.UI_BOLD, 12.5f)
+                o.segs.forEachIndexed { k, b -> Widgets.buttonLabel(text, f, pal, b, o.choices[k].second, primary = o.get() == o.choices[k].first, enabled = true) }
+            }
             val d = when (o) {
                 is Option -> o.detail
+                is Choice -> o.detail
                 is Slider -> {
                     val v = o.get()
                     if (v != o.shown) {
@@ -233,6 +282,13 @@ class SettingsSheet(
         if (onShareRecording != null) Widgets.buttonLabel(text, font, pal, share, SHARE, primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, recal, RECALIBRATE, primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, done, "Done", primary = true, enabled = true)
+    }
+
+    /** A half-filled circle where a checkbox would be: light and dark. */
+    private fun themeIcon(shapes: Shapes, pal: Palette, cx: Float, cy: Float) {
+        shapes.color(pal[Tok.UI_FG]).circle(cx, cy, 9f)
+        shapes.color(pal[Tok.UI]).circle(cx, cy, 7.4f)
+        shapes.color(pal[Tok.UI_FG]).pie(cx, cy, 7.4f, 90f, 180f)
     }
 
     /** A loudspeaker (or a note, for music) where a checkbox would be; struck through when off. */

@@ -5,12 +5,12 @@ googly eyes, rolls across a notebook page, and you draw what's in front of it. H
 press decides what your ink becomes.
 
 <p align="center">
-  <img src="media/ink-mayhem.gif" alt="Dot rolling through the worlds: a boulder chase over rope bridges, a Blot parade, an Eraser, paper planes, the ink tide and a boss" width="100%">
+  <a href="https://github.com/pranshuparmar/ink-mayhem/releases/latest"><img src="media/ink-mayhem.gif" alt="Dot rolling through the worlds: a boulder chase over rope bridges, a Blot parade, an Eraser, paper planes, the ink tide and a boss" width="100%"></a>
 </p>
 
 <p align="center">
   <b><a href="https://github.com/pranshuparmar/ink-mayhem/releases/latest">⬇ DOWNLOAD THE APK: free, for Android with an S Pen</a></b><br>
-  <sub>No ads, no account, no internet · S Pen only: fingers tap buttons but never draw · Android 9 or newer</sub>
+  <sub>No ads, no account, plays offline · S Pen only: fingers tap buttons but never draw · Android 9 or newer</sub>
 </p>
 
 ## How it plays
@@ -33,7 +33,7 @@ stroke to erase it (you get half its ink back). Hover to see where the nib will 
 - 👾 **A page that fights back**: Blots to bounce on, Erasers that rub out your ink, paper planes,
   ink beetles that eat rope, rolling boulders, crumbling bricks, ink pools and a rising ink tide.
 - 👑 **A boss at the end of every world**, each beaten with something that world taught you.
-- ✨ **Power-ups that change your ink**: the marker cap makes Dot Bold, the Highlighter finds
+- ✨ **Power-ups that change your ink**: the marker cap makes Dot a Glob, the Highlighter finds
   hidden things, Cloud chalk floats where you draw it, the Gold nib's ink is free and unbreakable,
   and the Star nib makes Dot untouchable.
 - ⭐ **Three hidden gold stars a stage**: at the top of a risky bounce, on a high road, down an
@@ -46,6 +46,13 @@ stroke to erase it (you get half its ink back). Hover to see where the nib will 
 - 🎵 **An original chiptune theme for every world**, plus one for the bosses. All of it is made
   by the game's own code.
 - 🏁 **A real ending**: beat the last boss and your notebook is tallied before the credits roll.
+- 🤔 **Ask Dot when you're stuck**: from the pause card (or by itself after two falls in the same
+  spot), Dot dots in the next strokes, in their ink's colour. Free, and it never plays for you.
+- 📒 **Your Notebook**: lifetime stats, a book of 16 stickers to earn, the pages you tear out
+  mid-stage and the result cards you share, and a jukebox that unlocks a world's tune when you
+  beat its boss.
+- 🖍️ **Doodle mode**, once you've seen the ending: endless ink, half speed, always a Glob, and every
+  power-up held for as long as you like.
 
 Want the details? **[Read the full tour →](docs/FEATURES.md)**
 
@@ -91,8 +98,10 @@ learns your touch and runs five short lessons (about a minute) before the first 
 | Pause | The button at the top right, or Android back. Resuming counts you back in, 3‑2‑1 |
 | Menus | Tap with the pen or a finger |
 
-**Settings** has sound and music volume, Dot's remarks, ink colours, haptics, **Tune your pen**
-(three lines to fit light, normal and hard to your hand again) and the How to play lessons.
+**Settings** has sound and music volume, a light, dark or automatic theme, Dot's remarks, ink colours, haptics, screen shake,
+Dot's hints, anonymous play counts, **Tune your pen** (three lines to fit light, normal and hard
+to your hand again) and the How to play lessons. The **Notebook** on the title screen holds your
+stats, stickers, torn-out pages, the jukebox, Doodle mode and the credits.
 
 ## Tech
 
@@ -107,6 +116,16 @@ learns your touch and runs five short lessons (about a minute) before the first 
 
 Building it, the architecture and the design choices: **[Under the hood →](docs/TECH.md)**.
 Every gameplay number: **[Tuning →](docs/TUNING.md)**.
+
+## Privacy
+
+Release builds send a few anonymous play counts to [GoatCounter](https://www.goatcounter.com/),
+just enough to know whether anyone plays and how far they get: the app was opened, which
+version it is, the lessons were finished, the pen was tuned, a stage was started or cleared, a
+game over, a sticker earned, the ending reached. Each is sent at most once a visit, as a bare event name. Nothing
+identifies you or your device, nothing is stored on it, and there are no cookies, ads or
+accounts. Turn **Anonymous play counts** off in Settings and nothing is sent. Offline, counts
+are simply dropped and the game plays the same. Debug builds never send anything.
 
 ## Licence
 

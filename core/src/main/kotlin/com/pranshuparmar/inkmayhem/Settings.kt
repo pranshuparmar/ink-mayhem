@@ -50,6 +50,53 @@ class Settings(private val prefs: Preferences) : StageStore {
     var remarks: Boolean = prefs.getBoolean("remarks", true)
         set(v) { field = v; put { putBoolean("remarks", v) } }
 
+    /** "Anonymous play counts" ([PlayCounts]): on by default, off in Settings. */
+    var playCounts: Boolean = prefs.getBoolean("playCounts", true)
+        set(v) { field = v; put { putBoolean("playCounts", v) } }
+
+    /** "Theme": [THEME_AUTO] follows the phone's dark mode; [THEME_LIGHT] or [THEME_DARK] fixes it. */
+    var theme: String = prefs.getString("theme", THEME_AUTO).let { if (it in THEMES) it else THEME_AUTO }
+        set(v) { field = if (v in THEMES) v else THEME_AUTO; put { putString("theme", field) } }
+
+    /** Whether the page is dark, given the phone's own [systemDark]. */
+    fun dark(systemDark: Boolean): Boolean = when (theme) {
+        THEME_LIGHT -> false
+        THEME_DARK -> true
+        else -> systemDark
+    }
+
+    /** "Screen shake": crashes, stomps and boss hits shake the page. On by default. */
+    var shake: Boolean = prefs.getBoolean("shake", true)
+        set(v) { field = v; put { putBoolean("shake", v) } }
+
+    /**
+     * "Dot's hints": Dot stops before each new thing on a world's first stage and offers its dots
+     * when you're stuck. Off, it leaves you to it (Ask Dot on the pause card still works).
+     */
+    var dotHints: Boolean = prefs.getBoolean("dotHints", true)
+        set(v) { field = v; put { putBoolean("dotHints", v) } }
+
+    /** The jukebox's pick: a tune's name, or "" for each world's own. */
+    var jukebox: String = prefs.getString("jukebox", "")
+        set(v) { field = v; put { putString("jukebox", v) } }
+
+    /** The finale has been reached once: Doodle mode is open. */
+    var endingSeen: Boolean = prefs.getBoolean("endingSeen", false)
+        set(v) { field = v; put { putBoolean("endingSeen", v) } }
+
+    /** Doodle mode's switches, a bit per [com.pranshuparmar.inkmayhem.game.Doodle]. */
+    var doodle: Int = prefs.getInteger("doodle", 0)
+        set(v) { field = v; put { putInteger("doodle", v) } }
+
+    /** Stickers earned, a bit per [com.pranshuparmar.inkmayhem.game.Sticker]. */
+    var stickers: Long = prefs.getLong("stickers", 0L)
+        set(v) { field = v; put { putLong("stickers", v) } }
+
+    /** Lifetime numbers for the Notebook: kept in memory, written by [saveStats]. */
+    val stats = LifetimeStats(prefs)
+
+    fun saveStats() = put { stats.writeTo(this) }
+
     /** Dot has introduced itself (on the very first launch). */
     var metDot: Boolean = prefs.getBoolean("metDot", false)
         set(v) { field = v; put { putBoolean("metDot", v) } }
@@ -132,6 +179,10 @@ class Settings(private val prefs: Preferences) : StageStore {
 
     companion object {
         const val RECORD_INPUT = "recordInput"
+        const val THEME_AUTO = "auto"
+        const val THEME_LIGHT = "light"
+        const val THEME_DARK = "dark"
+        val THEMES = listOf(THEME_AUTO, THEME_LIGHT, THEME_DARK)
         /** The save's format: bump it (and teach [migrate] the step) whenever saved data changes meaning. */
         const val SAVE_VERSION = 1
         const val SAVE_VERSION_KEY = "saveVersion"

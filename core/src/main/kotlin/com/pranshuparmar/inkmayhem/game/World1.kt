@@ -13,7 +13,7 @@ object World1 {
      * thing just before it. The first three obstacles each ask for one ink with a doodled guide:
      * a rope gap, a spring wall and a beam chasm (while the pen is untuned, they also tune it
      * from the strokes drawn for them). Then a Blot to bounce on, a doodle box with the marker
-     * cap, and a second Blot that a Bold runner just rolls flat. On the page's first run the
+     * cap, and a second Blot that a Glob just rolls flat. On the page's first run the
      * runner waits before each of those first five until a stroke that works is drawn, and a
      * checkpoint right after the three inks keeps a later death from sending it back through them.
      */
@@ -58,8 +58,8 @@ object World1 {
         spring(bx - 0.5f, bx + 0.3f, level, lead = 4f)
         stars(bx + 3f, 4)
         flat(16f)
-        // Bold rolls straight through the next one
-        note("Bold rolls Blots flat. Not Bold? Bounce.", dx = -12f, maxW = 7f)
+        // A Glob rolls straight through the next one
+        note("A Glob rolls Blots flat. Not a Glob? Bounce.", dx = -12f, maxW = 7f)
         blot(x - 3f)
         flat(4f)
         slope(10f, 2f)
@@ -199,7 +199,7 @@ object World1 {
 
     /**
      * Blots in every arrangement: a pair one bounce squashes, a marker cap and then a whole parade
-     * to roll flat while Bold, a Blot guarding the top of a wall, and a pair after a gap.
+     * to roll flat while a Glob, a Blot guarding the top of a wall, and a pair after a gap.
      */
     val BLOT_PARADE = StageDef(1, 4, "Blot Parade", Theme.PAGE, 3.5f) {
         start(14f)

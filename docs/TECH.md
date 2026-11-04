@@ -25,8 +25,8 @@ game see the [full tour](FEATURES.md); for every gameplay number, [Tuning](TUNIN
 | compileSdk / targetSdk / minSdk | 37 / 37 / 28 (Android 9) |
 | JUnit | 5 (Jupiter) with kotlin-test, tests only |
 
-No other libraries. The app asks for one permission, `VIBRATE`, and makes no network requests
-(the repository link opens the browser).
+No other libraries. The app asks for two permissions: `VIBRATE`, and `INTERNET` for anonymous
+play counts only (see [Play counts](#play-counts)). The repository link opens the browser.
 
 ## Project layout
 
@@ -110,8 +110,43 @@ recordings still replay exactly. Dot the helper (`ui/DotHelper.kt`) and the less
 (`ui/TutorialCard.kt`) are drawn in screen space, over the HUD.
 
 **Saves.** libGDX `Preferences` hold settings, the pen tuning and each stage's stars, best score
-and gold stars. They carry a version (`saveVersion`); a change to what a saved value means bumps
-it and adds a migration step.
+and gold stars, plus the Notebook's lifetime numbers (`stat.*`, counted in memory by
+`LifetimeStats` and written when a stage ends, on leaving it and when the app is paused), the
+stickers (`stickers`, a bit each), the jukebox's pick and Doodle mode's switches. They carry a
+version (`saveVersion`); a change to what a saved value means bumps it and adds a migration step.
+
+**Extras.** Kept off the simulation's path wherever they can be, so recordings still replay:
+
+- `game/Extras.kt` holds the rules as plain data: `Doodle` (its switches and how they set a
+  sim up), `Sticker` (what each is and which follow from the save), `Jukebox` (which tunes are
+  unlocked, what plays) and `Hints` (which solution strokes Ask Dot shows).
+- **Ask Dot** only draws: `WorldRenderer.hints` holds strokes of the stage's scripted solution
+  (`StageLayout.solution`, the same the bot draws) and shows them as dotted lines.
+- **Doodle mode** is the one extra that changes a run. `GameSim.keptPowers` holds powers for the
+  whole run (`powered(kind)` is a pickup's power or a held one), `keepBold` keeps the runner a Glob
+  through hits, `unlimitedInk` is the tutorial's free ink, and half speed scales the stage's
+  time step. A doodling session records through a `StageStore` that keeps nothing.
+- **The boss face-off** (`ui/Moments.kt`) holds the stage the way the pause card does, so the sim
+  doesn't tick while it's on screen.
+- **Pictures**: after the page is drawn and before the HUD, the game reads the frame back
+  (`render/Grab`) for a torn-out page or the moment of a clear. `ui/ShareCard.kt` draws a result
+  card into a `FrameBuffer` at the screen's density, `render/PageAlbum` writes PNGs (and a small
+  copy for the grid) into the app's own storage on a worker thread and keeps the newest 24, and
+  `Platform.shareImage` copies one into *Pictures/Ink Mayhem* and opens the share sheet.
+- **Haptics**: `Platform.vibratePattern` plays a waveform (`VibrationEffect.createWaveform`)
+  for each ink's feel and a snap's crackle.
+
+**Play counts.** <a id="play-counts"></a>`PlayCounts` is the only network code: release builds
+send a GET to GoatCounter's count endpoint (`https://ink-mayhem.goatcounter.com/count?p=<event>&e=true`)
+with libGDX's `Gdx.net`, one try with a 5 s timeout, no queue and no retries. The User-Agent
+is `InkMayhem/<version> (Android)`, which names nothing about the device and passes GoatCounter's
+bot filter. Events (`app-open`, `version-<v>`, `lessons-done`, `pen-tuned`, `stage-<id>-start`,
+`stage-<id>-clear`, `game-over`, `sticker-<name>`, `ending`) count once a visit; a visit is a launch, or coming
+back after 30 minutes away. `Platform.countsPlays` is true only on Android release builds and
+the Settings switch (`playCounts`, on by default) gates it too, so debug builds, the desktop
+launcher, replays and tests send nothing. Counting never throws and touches nothing the
+simulation or a replay reads. New counts are one `counts.track("name")` call in
+`InkMayhemGame`; the numbers are on the GoatCounter dashboard for the `ink-mayhem` site.
 
 **Orientation.** `screenOrientation="fullUser"`: all four orientations from the sensor, unless
 the player has locked rotation (`fullSensor` would ignore the lock, which is hostile while
@@ -169,7 +204,7 @@ survives them.
 
 ## Tests
 
-`./gradlew :core:test` runs about 240 headless tests through the real pen-input path, with no
+`./gradlew :core:test` runs about 275 headless tests through the real pen-input path, with no
 window:
 
 | Behaviour | Test |
@@ -186,6 +221,9 @@ window:
 | The lessons: the touch lesson tunes the pen from rising lines (and moves on for a pen that can't tell them apart); each lesson passes with the right ink, fails with a hint with the wrong one; the whole tutorial plays through | `TutorialTest` |
 | Pen tuning and pressure mapping | `PenInputTest` |
 | Settings and save migration | `SettingsTest`, `SaveVersionTest` |
+| Every first-run stop's guide is all on screen while the runner waits there, in portrait (15 m) and landscape (26.7 m) | `GateViewTest` |
+| Doodle mode's switches (a stage still clears under them), stickers from the save and the lifetime numbers, the jukebox's unlocks, Ask Dot's choice of strokes, lifetime numbers kept, the album's names, order and pruning | `ExtrasTest` |
+| Play counts: nothing sent while off, once a visit, a new visit after 30 minutes away, clean URLs, never a throw | `PlayCountsTest` |
 | Recordings write and read back exactly | `InputLogTest` |
 | The committed sounds and music match their synthesizers, and each tune fits SoundPool | `AssetsTest` |
 
@@ -212,6 +250,8 @@ taller than the runner's radius, so the runner gets stuck on it. Bridges are dra
 | `--demo-tune N` | With `--calibration`: draws N tuning lines with a light pen's pressures (4 adds a free stroke). |
 | `--pause-at S` | Pause the stage S seconds in. |
 | `--ending`, `--credits` | Open the ending (with your totals) or just the credits. |
+| `--notebook [TAB]` | Open the Notebook at start, on `stats`, `stickers`, `pages`, `music` or `doodle`. |
+| `--tap X,Y@S[;X,Y@S…]` | Pen taps at those dp positions, S seconds in: scripted presses for screenshots of what a button does. |
 | `--faces` | A gallery of Dot's expressions. |
 | `--landscape`, `--size WxH`, `--density D` | Window size in dp and pixels per dp. |
 | `--dark`, `--reduced-motion` | Simulate the system settings. |
@@ -265,7 +305,7 @@ under SoundPool's 1 MB.
 |---|---|---|
 | Push to any branch other than `main`, pull request | `ci.yml`: `./gradlew lint test` | Pass or fail |
 | Push to `main` | `ci.yml`: `./gradlew lint test assembleDebug` | The debug APK as a workflow artifact, and on the [`latest-debug`](https://github.com/pranshuparmar/ink-mayhem/releases/tag/latest-debug) prerelease |
-| **Run workflow** on any branch | `ci.yml`, as for `main` | The debug APK as a workflow artifact |
+| **Run workflow** on any branch | `ci.yml`, as for `main` | The debug APK as a workflow artifact, and on `latest-debug` (its notes name the branch) until the next push to `main` replaces it |
 | **Run workflow** on **Release** (manual only, from `main`) | `release.yml` | A `vX.Y.Z` tag and a GitHub Release with the signed APK |
 
 ### Debug signing

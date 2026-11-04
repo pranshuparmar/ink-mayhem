@@ -62,6 +62,16 @@ class Audio(private val settings: Settings) : Disposable {
         s?.play(settings.soundVolume)
     }
 
+    /**
+     * A syllable of babble for a talking face: a short blip at [pitch] (0.5..2), quieter than
+     * the effects. [deep] voices use the hop, others the pop.
+     */
+    fun babble(pitch: Float, deep: Boolean) {
+        if (!settings.sound) return
+        val s = bySfx[(if (deep) Sfx.HOP else Sfx.POP).ordinal] ?: return
+        s.play(settings.soundVolume * 0.35f, pitch.coerceIn(0.5f, 2f), 0f)
+    }
+
     /** The scratch while drawing: pitch follows pressure (1800 + (1 − p) × 2600 Hz). */
     fun scratch(vol: Float, p: Float) {
         targetVolume = vol * settings.soundVolume

@@ -69,7 +69,7 @@ enum class Creature(val r: Float, val speed: Float, val wake: Float) {
 
 /**
  * A Blot (or another [Creature]): an ink smudge that waddles at the runner. A bounce onto it (or a beam dropped on it)
- * squashes it; touching it otherwise costs a life, unless the runner is Bold. It wakes when the
+ * squashes it; touching it otherwise costs a life, unless the runner is a Glob. It wakes when the
  * runner comes near and paces between [x0] and [x1] (no limits when they're NaN).
  */
 class Blot(val body: Body, val x0: Float, val x1: Float, val kind: Creature = Creature.BLOT) {
@@ -228,7 +228,7 @@ class Runner(val body: Body) {
     var squash = 0f
     /** The marker cap: survives one hit, flattens Blots by rolling into them. */
     var bold = false
-    /** After losing Bold, nothing hurts until this simT. */
+    /** After it stops being a Glob, nothing hurts until this simT. */
     var safeUntil = -1f
     /** A timed power (the Highlighter, Cloud chalk, the Gold nib, the Star nib) and when it ends. */
     var power: ItemKind? = null

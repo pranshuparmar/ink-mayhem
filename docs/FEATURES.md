@@ -12,7 +12,12 @@ Everything in the game, for anyone who wants the details. Back to the [README](.
 - [Bosses](#bosses)
 - [Dot](#dot)
 - [Menus, pausing and settings](#menus-pausing-and-settings)
+- [Ask Dot](#ask-dot)
+- [The Notebook](#the-notebook)
+- [Stickers](#stickers)
+- [Sharing and torn-out pages](#sharing-and-torn-out-pages)
 - [The ending](#the-ending)
+- [Doodle mode](#doodle-mode)
 - [Music and sound](#music-and-sound)
 
 ## The idea
@@ -69,13 +74,14 @@ built round one idea:
   three stars.
 - **First runs teach.** On a world's first stage, until it has a star, Dot stops before each new
   thing and waits until you've drawn a stroke that will work.
-- A stage opens once the one before has at least one star.
+- A stage opens once the one before has at least one star. (Debug builds open every stage, for
+  testing.)
 
 ## The five worlds
 
 | World | Page | What's new | Power-up | Boss | Music |
 |---|---|---|---|---|---|
-| 1 **The Notebook** | ruled paper | rope, spring and beam; hills and seesaws; Blots | marker cap (Bold) | **The Big Blot** | Ink Rush |
+| 1 **The Notebook** | ruled paper | rope, spring and beam; hills and seesaws; Blots | marker cap (Glob) | **The Big Blot** | Ink Rush |
 | 2 **The Cellar** | graph paper underground | low roofs, spiked tunnels, slides, lifts; Erasers; inkwells down to bonus pages | Highlighter | **The Giant Eraser** | Cellar |
 | 3 **Up High** | dot grid in the sky | floating islands, bouncy clouds; paper planes | Cloud chalk | **The Paper Airliner** | Sky |
 | 4 **The Castle** | brickwork | boulder chases, crumbling bricks; ink beetles | Gold nib | **The Beetle Queen** | Castle |
@@ -101,7 +107,7 @@ it (rope lets them drop through the next gap; springs and beams carry them after
 
 | | | |
 |---|---|---|
-| **Blots** | waddle at you | Bounce on one with a spring, or drop a beam on it. Bold rolls them flat |
+| **Blots** | waddle at you | Bounce on one with a spring, or drop a beam on it. A Glob rolls them flat |
 | **Erasers** | rub out rope and springs they touch | Too rubbery to stomp; drop a beam on them |
 | **Paper planes** | fly in at head height, in flights of three | Spring through them, or block them with a beam |
 | **Ink beetles** | hop up to rope and springs and eat them | Can't bite beams. Stompable |
@@ -116,7 +122,7 @@ Touching a creature any other way costs a life.
 
 | | |
 |---|---|
-| **Marker cap** | Dot turns **Bold**: bigger, rolls creatures flat, and survives one hit |
+| **Marker cap** | Dot turns into a **Glob**: bigger, rolls creatures flat, and survives one hit |
 | **Highlighter** | for 9 s, strokes become swipes that reveal hidden ledges, boxes, stars and inkwells |
 | **Cloud chalk** | for 9 s, lines float where you draw them: even rope spans a long gap |
 | **Gold nib** | for 9 s, ink is free, never snaps, and beetles can't bite it |
@@ -162,37 +168,110 @@ Dot is the runner, and it has a personality:
 - **Remarks**: now and then a speech bubble: "Wheee!", "Not the tide!", "Shiny!". Rationed, and
   off with **Dot's remarks** in Settings.
 - **A helper**: on a world's first stage, when it stops at something new, Dot steps out of the
-  page towards you (leaving a plain dot of ink below), sits in a corner clear of where you'll
+  page towards you (leaving a dashed outline where it was), sits in a corner clear of where you'll
   draw, and explains what's new and exactly what to draw, with a pointer to the dotted guide.
   Start drawing (or tap **Got it**) and it dives back in. A stroke that wouldn't work brings it
   out worried with the fix; leave it waiting and it knocks on the glass.
 - **Everywhere**: rolling up to the title, peeking over the pause card, presenting the lessons,
   and in the ending.
+- **Face to face with each boss**: the first time you reach a boss (until you've beaten it), the
+  page letterboxes and Dot and the boss trade a few lines, typed out to a babble. Dot's last line
+  is how that boss is beaten. Tap to move on, or **Skip**.
 
 ## Menus, pausing and settings
 
 - **Title screen**: **Start** (or **Play**, naming the first stage you haven't cleared),
-  **Stages**, **How to play**, **Settings** and **Credits**, plus a link to this repository.
+  **Stages**, **How to play**, **Settings** and the **Notebook**, plus a link to this repository.
 - **Stage list**: a notebook with a tab per world. Every world's tab opens, even a locked one
   (marked with a padlock), so you can read what's coming; only open stages play. Behind the
   list, that world scrolls slowly past on its own page, to its own tune.
 - **Pausing**: the button at the top right, Android back, or leaving the app. The pause card has
-  **Resume** (counting you back in, 3‑2‑1), **Restart**, **Settings** and **Stage list**.
-- **Settings**: sound effects and music volume; Dot's remarks; colour ink by type (rope green,
-  spring amber, beam red); haptics; **Tune your pen**; **How to play**; and a **Pen readout**
+  **Resume** (counting you back in, 3‑2‑1), **Ask Dot**, **Restart**, **Settings**, **Stage
+  list** and **Tear out this page**.
+- **Settings**: sound effects and music volume; **Theme** (Auto follows the phone's dark mode,
+  or pick Light or Dark); Dot's remarks; colour ink by type (rope green,
+  spring amber, beam red); haptics (each ink has its own feel as it goes down: a soft tick for
+  rope, a double pulse for a spring, a thud for a beam, and a crackle when a joint snaps);
+  **Screen shake**; **Dot's hints** (its first-run stops and its offer of dots when you're
+  stuck; off, you're on your own); **Anonymous play counts** (on by default; see
+  [Privacy](../README.md#privacy)); **Tune your pen**; **How to play**; and a **Pen readout**
   (tool type, raw and tuned pressure, buttons, tilt, hover and event rates) for checking the
   S Pen.
-- **Portrait and landscape**, light and dark mode (following the system), and reduced motion
+- **Portrait and landscape**, light and dark mode (following the system, or as picked under
+  **Theme**), and reduced motion
   (following the system's animation setting).
+
+## Ask Dot
+
+**Ask Dot** on the pause card dots in the next one or two strokes of the way through, in their
+ink's colour with an arrow at the end, just where the stage's own solution draws them. They fade
+as Dot rolls past. In a boss fight Dot tells you how that boss is beaten instead. With **Dot's
+hints** on, losing two lives near the same spot brings the dots up by themselves. Hints are free:
+they don't cost a star or a point.
+
+## The Notebook
+
+**Notebook** on the title screen opens five tabs:
+
+- **Stats**: stages cleared, stars, gold stars and bosses beaten; strokes drawn (and how many of
+  each ink), metres of ink, strokes erased, lives lost, your best combo, stages played, hints
+  asked and stickers earned.
+- **Stickers**: the sticker book (below). Tap one to see how it's earned.
+- **Pages**: the pages you've torn out and the result cards you've shared, newest first (the
+  last 24 are kept). Tap one to see it whole, **Share** it again or **Delete** it.
+- **Music**: the jukebox. **Each world's own** is the game as it comes; pick any tune you've
+  unlocked (a world's when you beat its boss, the boss theme with your first boss) and the menus
+  and stages play it instead.
+- **Doodle**: Doodle mode's switches, once you've reached the ending (below).
+
+**Credits** at its foot rolls the credits.
+
+## Stickers
+
+Sixteen, each stuck into the margin with a flourish the moment it's earned: **First page**
+(clear a stage), **Fine nib** (tune your pen), **Light touch** (clear a stage with rope alone),
+**Nine times** (a ×9 combo), **Nine lives**, **Untouched** (beat a boss without losing a life),
+**Gold rush** (every gold star in a world), **Boss bin** (all five bosses), **Full notebook**
+(all 25 stages), **Star chart** (three stars everywhere), **Golden** (every gold star), **The
+end?** (reach the ending), **Ink well spent** (1,000 strokes), **Second thoughts** (erase 100),
+**Just asking** (ask Dot) and **Scrapbook** (tear out a page).
+
+## Sharing and torn-out pages
+
+- **Share** on the clear card makes a result card: a picture of the moment you crossed the
+  finish, the stage, your stars, score, lives lost and gold stars, signed by Dot. It's kept in
+  the Notebook, saved to *Pictures/Ink Mayhem* and offered to Android's share sheet.
+- **Tear out this page** on the pause card keeps a picture of the page as it is, your strokes
+  and all, without the HUD. Share it from the Notebook.
 
 ## The ending
 
 Beat the Big Smudge and the page comes clean. Dot rolls along a line that draws itself, your
 notebook is tallied (stages cleared, stars, gold stars, best scores) and the credits roll.
-**Credits** on the title screen rolls them alone.
+**Credits** in the Notebook rolls them alone. Reaching the ending opens Doodle mode.
+
+## Doodle mode
+
+Once you've reached the ending (from the start in debug builds, for testing), the Notebook's
+**Doodle** tab bends the rules, each switch on or
+off as you like and kept until you change it:
+
+| Switch | |
+|---|---|
+| **Endless ink** | the ink meter never runs down |
+| **Half speed** | stages run at half speed, for careful drawing |
+| **Always a Glob** | Dot starts every life a Glob and stays one through every hit |
+| **Highlighter** | everything hidden on a page shows from the start |
+| **Cloud chalk** | every line floats where you draw it |
+| **Gold nib** | free ink that never snaps and beetles can't bite |
+| **Star nib** | nothing hurts Dot (falls, pools and the tide still do) |
+
+While any is on, a **DOODLE MODE** tag sits in the corner, and stars, best scores, gold stars
+and stickers aren't kept.
 
 ## Music and sound
 
 An original chiptune theme for each world (Ink Rush, Cellar, Sky, Castle, Midnight) and one for
 the bosses, plus jingles cut from Ink Rush and a few dozen sound effects. All of it is
-synthesized by the game's own code. Volume sliders for each are in Settings.
+synthesized by the game's own code. Volume sliders for each are in Settings, and the Notebook's
+jukebox picks the tune.

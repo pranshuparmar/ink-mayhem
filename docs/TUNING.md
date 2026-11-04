@@ -75,7 +75,7 @@ it's built, [Under the hood](TECH.md).
 | Scratch | volume min(0.09, speed px/s × 0.00012) × (0.5 + p); pitch 1800 + (1 − p) 2600 Hz; smoothing 0.03 s / 0.05 s |
 | Shake | 0.35 on death, 0.15 boulder spawn, 0.12 snaps; off with reduced motion |
 | Particles | capped at 4 per burst with reduced motion |
-| Haptics | 12 ms at amplitude 140 per snap (at most every 80 ms), 45 ms at 255 on death |
+| Haptics | a snap: a crackle of three pulses (6, 6 and 8 ms at 170, 120 and 150, 22 and 18 ms apart; at most one every 0.12 s); 45 ms at 255 on death. Each ink as it goes down: see [Menus and pausing](#menus-and-pausing) |
 
 ## Stages
 
@@ -89,7 +89,7 @@ its own `GameSim`. Lengths are start to finish.
 | 1-1 First Page | 3.4 m/s | 232 m | the three inks (the tuning gates), a Blot, the marker cap, a second Blot, a seesaw |
 | 1-2 Doodle Hills | 3.5 m/s | 191 m | hills: gaps on hilltops and in valleys, a Blot rolling downhill, a long run down to a beam gap |
 | 1-3 Seesaw Lane | 3.5 m/s | 139 m | seesaws, longer, over spikes, two in a row |
-| 1-4 Blot Parade | 3.5 m/s | 159 m | Blots: a pair for one bounce, a parade to roll flat while Bold, one on top of a wall |
+| 1-4 Blot Parade | 3.5 m/s | 159 m | Blots: a pair for one bounce, a parade to roll flat while a Glob, one on top of a wall |
 | 1-5 The Big Blot | 3.6 m/s | 146 m | a run through the world, then the Big Blot |
 | **World 2, The Cellar** (graph paper, cave roofs) | | | |
 | 2-1 Cellar Door | 3.5 m/s | 166 m | low roof (rope, not springs), a spiked tunnel, a slide, an Eraser to drop a beam on, the Highlighter, an inkwell |
@@ -187,11 +187,11 @@ obstacles), `MusicSynth` and `SfxSynth` (sound). `World1Test` covers each rule b
 | Blot | r 0.38, density 1, upright; stands on ground, ink and boulders, passes through the runner and other Blots. Wakes when the runner is within 11 m and walks at 1.1 m/s towards it, turning at walls (and at its patrol ends, if it has any); falls off edges. Gone 10 m below the ground |
 | Stomp | the runner meets a Blot coming down from above (falling faster than 0.5 m/s, centre 0.15 m higher; reach +0.3 m) or anywhere within 2.3 s of a spring bounce: the Blot is squashed (+100) and the runner hops at 6.5 m/s |
 | Beam drop | a beam stroke falling faster than 0.5 m/s onto a Blot squashes it (+100); so does a boulder |
-| Touch | any other touch: Bold rolls the Blot flat (+100); otherwise "Blotted", a life |
+| Touch | any other touch: a Glob rolls it flat (+100); otherwise "Blotted", a life |
 | Doodle box | 0.9 m square, solid (ink hooks to it); a runner touching its underside pops what it holds, once: the marker cap, or 5 stars |
-| Marker cap | r 0.24, hops out at (2.2, −4) m/s and slides at 2.2 m/s, turning at walls; once the runner is ahead of it, it slides after it at the run speed + 1.5 m/s (the runner can't turn back); caught within 0.1 m of touching: +500, Bold |
+| Marker cap | r 0.24, hops out at (2.2, −4) m/s and slides at 2.2 m/s, turning at walls; once the runner is ahead of it, it slides after it at the run speed + 1.5 m/s (the runner can't turn back); caught within 0.1 m of touching: +500, and Dot becomes a Glob |
 | Box corner | a runner that meets a doodle box's underside outside its width is carried on at 0.95 × the run speed and starts falling, so it can't drop back onto the spring under it and bounce into the corner for ever |
-| Bold | runner r 0.52 instead of 0.4, the same mass (density scaled); rolls Blots flat; a Blot or spike hit takes Bold instead of a life, knocks the runner up at 7.5 m/s (down at 2 m/s if the nearest spikes hang above it) and nothing hurts for 1.5 s (it blinks). Falls and boulders still cost a life. Lost with a life |
+| Glob | runner r 0.52 instead of 0.4, the same mass (density scaled); rolls Blots flat; a Blot or spike hit shrinks the Glob instead of taking a life, knocks the runner up at 7.5 m/s (down at 2 m/s if the nearest spikes hang above it) and nothing hurts for 1.5 s (it blinks). Falls and boulders still cost a life. Lost with a life |
 | Mood | what the sim tells Dot's face (see [Dot](#dot-the-runners-character)): hurt, scared (a boulder within 14 m behind), happy (1.2 s after a star, a squash or a clean judgement, or a combo of 4+), dizzy (0.9 s after a bounce's 1.5 s), worried (no ground, lift, seesaw or ink 1.2 m ahead) |
 | Tuning gates | while the pen is untuned, 1-1's rope gap, spring wall and beam chasm make a stroke begun within 1.5 m of them that ink whatever its pressure, and once all three are drawn their raw settled pressures tune the pen if they rise by the tuning lines' rule (each ≥ 1.2× and 0.004 / 0.008 raw harder) |
 | Waiting | 1-1 until it has been cleared once: from 8 m before a wait point the drive aims for √(2 × 3 m/s² × distance left), so the runner stops there (1.4 m before the rope and beam gaps, 5 m before the spring wall, 12.5 m before the first Blot, before it wakes, and 4.5 m before the box) and holds until a stroke that does the job is there; it never counts as stuck. Nudge after 7 s |
@@ -216,7 +216,7 @@ obstacles), `MusicSynth` and `SfxSynth` (sound). `World1Test` covers each rule b
 
 | | Radius | Walk | Wakes within | |
 |---|---|---|---|---|
-| Blot | 0.38 m | 1.1 m/s | 11 m | squashed by a stomp, a beam drop, Bold or the Star nib |
+| Blot | 0.38 m | 1.1 m/s | 11 m | squashed by a stomp, a beam drop, a Glob or the Star nib |
 | Eraser | 0.45 m | 1.25 m/s | 18 m | rubs out rope and springs it touches; a stomp bounces off it; a beam drop squashes it |
 | Ink beetle | 0.3 m | 1.3 m/s | 14 m | hops up to rope or a spring up to 7 m above it (and within 3 m to the side) and eats it after 0.9 s on it; leaves beams and Gold nib ink alone; stompable |
 
@@ -227,7 +227,7 @@ as an obstacle), unless it is hooked to something or hit a boss.
 
 | | |
 |---|---|
-| Marker cap | Bold (see [Stars, Blots and boxes](#stars-blots-and-boxes)), +500 |
+| Marker cap | Dot becomes a Glob (see [Stars, Blots and boxes](#stars-blots-and-boxes)), +500 |
 | Timed powers | last 9 s, shown by a ring round the runner; +500 when caught |
 | Highlighter | strokes lay no ink; a swipe finds hidden ledges, boxes, stars, gold stars and inkwells within 1.1 m of it, and fades over 1.6 s |
 | Cloud chalk | strokes are static: they stay where they're drawn, so even rope spans an 11 m gap |
@@ -259,7 +259,7 @@ at each wall and the boss theme plays.
 
 ### Paper planes
 
-Radius 0.28 m; a flight flies level at 4 m/s. A spring's bounce through a plane (or Bold, or the
+Radius 0.28 m; a flight flies level at 4 m/s. A spring's bounce through a plane (or a Glob, or the
 Star nib) crumples it (+50); so does spring or beam ink in its way; it tears through rope.
 Touching one otherwise costs a life.
 
@@ -330,15 +330,25 @@ lesson passes, then happy. A pen-down on Dot or its balloon draws nothing.
 
 | | |
 |---|---|
-| Title | what the game opens on: the name (64 dp, smaller if it and the runner beside it don't fit), "Draw the way ahead with your S Pen.", the three inks drawn with their pressures, then **Start** (nothing cleared yet) or **Play**, naming the first stage not yet cleared (with every stage cleared it opens the list), and **Stages**, **How to play**, **Settings**. Fades in over 0.5 s; Android back leaves the app |
-| Stage list | a **Menu** button at the top left goes back to the title, as does Android back. Every world's tab opens, locked or not (a padlock marks a locked world), to show its stage names; only open stages play. Opened from a stage it shows that stage's world |
+| Title | what the game opens on: the name (64 dp, smaller if it and the runner beside it don't fit), "Draw the way ahead with your S Pen.", the three inks drawn with their pressures, then **Start** (nothing cleared yet) or **Play**, naming the first stage not yet cleared (with every stage cleared it opens the list), and **Stages**, **How to play**, **Settings**, and **Notebook** in the footer (on a phone too narrow for both, the footer's note shortens to "S PEN ONLY"). Fades in over 0.5 s; Android back leaves the app |
+| Stage list | a **Menu** button at the top left goes back to the title, as does Android back. Every world's tab opens, locked or not (a padlock marks a locked world), to show its stage names; only open stages play (in debug builds, and the desktop launcher, every stage is open). Opened from a stage it shows that stage's world |
 | World peek | behind the stage list, the tab's world: its finale stage, built but never stepped, without notes or the runner, panned at 2.6 m/s from start to finish and round again (a fade at the turn), its ground 84 % down a tall screen (under the card) or 70 % down a wide one; the page and palette are the world's (Midnight Ink's dark page), the veil over it 30 %, and the world's tune plays. Still with reduced motion |
 | Menus | the title screen and the ending show only the ruled paper; Ink Rush plays (the Music slider turns it down or off) |
-| Pause | the top-right button in a stage (two bars; ⋯ on the stage list), Android back, or leaving the app, during a stage's intro, play or a lost life's moment. A stroke being drawn is let go. The page dims; the card has the stage, **Resume**, **Restart** (the stage from the start, keeping the lives), **Settings** and **Stage list**. Android back on it resumes |
+| Pause | the top-right button in a stage (two bars; ⋯ on the stage list), Android back, or leaving the app, during a stage's intro, play or a lost life's moment. A stroke being drawn is let go. The page dims; the card has the stage, **Resume**, **Ask Dot**, **Restart** (the stage from the start, keeping the lives), **Settings**, **Stage list** and **Tear out this page**. Android back on it resumes |
 | Countdown | Resume mid-play counts 3, 2, 1, 0.5 s each, with a rising chime; the stage, its music and the pen stay held until it ends. Resuming during an intro skips it |
 | Screen changes | the new screen fades in from the paper over 0.3 s (not with reduced motion) |
 | Repository link | under the title screen's footer and near the end of the credits (`ui/Links.kt`); a tap opens it in the browser, or says the address in a toast if no browser opens |
-| Ending | after 5-5 the clear card's button reads **The end**: the page clean, the runner rolling along a line that draws itself (5.5 s held), then the player's notebook (stages cleared, stars, gold stars, best scores added up) and the credits roll up at 42 dp/s to "Thanks for playing!". **Skip** jumps to the end; then **Back to the title**. **Credits** on the title screen rolls the credits alone |
+| Ending | after 5-5 the clear card's button reads **The end**: the page clean, the runner rolling along a line that draws itself (5.5 s held), then the player's notebook (stages cleared, stars, gold stars, best scores added up) and the credits roll up at 42 dp/s to "Thanks for playing!". **Skip** jumps to the end; then **Back to the title**. **Credits** in the Notebook rolls the credits alone |
+| Ask Dot | the next 2 strokes of the stage's scripted solution that reach past the runner and are due within 30 m, dotted every 0.28 m (0.08 m dots, pulsing) in their ink's colour with an arrow; each goes once the runner is 0.5 m past its end. In a boss fight, a toast with how that boss is beaten. With **Dot's hints** on, a second life lost within 6 m of an earlier one in the same attempt shows them by itself once play is back. Free |
+| Boss face-off | when a boss's fight starts, once per go at the stage (not again after a lost life), until that boss is beaten; never under the desktop's `--autoplay`: bars over the top (0.55 × the bar) and bottom (16 % of the height, at least 64 dp), sliding in over 0.35 s; four lines, typed at 38 letters a second with a babble blip every 3 letters (Dot's higher, the boss's lower, at 35 % of the effects' volume). A tap finishes a line or moves on; **Skip** or Android back ends it. The stage holds meanwhile |
+| Stickers | 16; slapped into the top-right margin 128 dp under the top of the safe area, sliding in over 0.25 s, on for 3.4 s, a gold-star chime; several queue. Ones the save already earns go in quietly at launch. None while doodling |
+| Notebook | from the title: Stats, Stickers, Pages, Music and Doodle tabs, Credits and Done. Up to 420 dp wide (720 dp on a wide screen, where lists go in two columns); a tap outside closes it |
+| Album | torn-out pages and shared result cards as PNGs in the app's storage, at most 1600 px on the long side with a 360 px copy for the grid; the newest 24 are kept. Written on a worker thread |
+| Result card | 360 × 450 dp at the screen's density: the moment of the clear (the frame the clear card first shows, before the HUD and cards), framed round Dot, then the stage, three stars, score (and new best), lives lost and gold stars, signed by Dot. Sharing the same clear again offers the same card |
+| Jukebox | "Each world's own", or a tune: a world's once its boss has a star, the boss theme once any boss has; the pick plays on the menus, in stages and in boss fights |
+| Doodle mode | after the ending (from the start in debug builds and the desktop launcher): Endless ink, Half speed (stages run at 0.5×), Always a Glob, Highlighter (everything hidden shows from the start), Cloud chalk, Gold nib and Star nib held all run. While any is on, a "DOODLE MODE" tag in the bottom-left corner, and stars, bests, gold stars and stickers aren't kept |
+| Ink feel | on a stroke's pen-up: rope 8 ms at 60, a spring two 10 ms pulses at 120 (45 ms apart), a beam 30 ms at 230. Off with **Haptics**; nothing on the desktop |
+| Theme | Settings → **Theme**: Auto (the phone's dark mode, followed live), Light or Dark; saved as `theme`. Midnight Ink's page stays dark whatever is picked |
 | Volumes | Sound effects and Music sliders, 0 to 100 % in steps of 5 (snapping to off near the left); the music plays at 0.42 × its slider, effects at their slider. On/off switches saved by early builds carry over as 100 % or off |
 | Saves | stamped with a version (`saveVersion`, now 1). An unversioned save with no gold-star keys is from before the five worlds: its 1-2 to 1-4 results (then Cellar, Up High and Castle) are dropped |
 | Tunes | a stage's own tune and, if it has a boss, the boss's are loaded during its intro card, so the boss music starts the moment the arena closes; the menus keep Ink Rush loaded |
@@ -358,10 +368,10 @@ they read the sim and never change it.
 | Faces | hurt or dead: crossed-out eyes; scared (a boulder, or the tide within 6 m): wide eyes, sweat; 0.9 s after a squash: proud, with a wink; off a spring, rising: whee; dizzy after a bounce; waiting at a gate: curious, dozing (z's) after 7 s; while the pen draws: curious; in a boss fight: determined; at an edge: worried; on rope: wobbly; on a beam: proud; happy on a combo or with the Star nib; otherwise calm |
 | Looks at | the pen's tip while it draws, the gate's guide while it waits, the boss in a fight, back at a boulder or the tide, else the nearest awake creature (up to 8 m ahead) or gold star (5 m), else ahead |
 | Remarks | a speech bubble over its head, leaning away from where it's going and below the HUD, for 1.5 s + 0.04 s a letter; at most one every 4.5 s unless it matters (death, clear, gold star, a power-up, a boss starting or beaten, the tide). On a stage's start (80 %), a stomp (70 %), a bounce (35 %), a snap (60 %), a checkpoint (60 %), a hit on a boss (60 %), onto rope or a beam (20 %) and an edge (20 %). Off with "Dot's remarks"; never in the tutorial, nor while Dot is out helping |
-| Helping | on a world's first stage (its first run), once the runner has stopped (under 0.3 m/s) at a gate it waits at, with nothing drawn, Dot steps out: 0.45 s from the runner up to a top corner below the HUD (the corner whose balloon stays 40 dp clear of the guide), growing to 30 dp across with its shadow falling on the page, the balloon fading in from 0.25 s. It says the stage's note for that gate (the last note within 30 m before it) and what to draw, with a dotted pointer to the guide, and looks at it. Once per gate per attempt. The runner on the page is a plain dot meanwhile, and notes wait |
+| Helping | on a world's first stage (its first run), once the runner has stopped (under 0.3 m/s) at a gate it waits at, with nothing drawn, Dot steps out: 0.45 s from the runner up to a top corner below the HUD (the corner whose balloon stays 40 dp clear of the guide), growing to 30 dp across with its shadow falling on the page, the balloon fading in from 0.25 s. It says the stage's note for that gate (the last note within 30 m before it) and what to draw, with a dotted pointer to the guide, and looks at it. Once per gate per attempt. The runner on the page is a dashed outline meanwhile (an empty spot where Dot was, with a faint pool of ink), and notes wait. While the runner waits at a gate, its guide shows in full however far ahead it is, and the camera brings the whole guide into view with 0.8 m to spare (where a narrow screen can't show both, as at 2-1's and 4-1's long waits in portrait, the runner slips off the left edge until the stroke is drawn) |
 | Going back in | a pen-down anywhere but its balloon (the stroke goes on as normal), **Got it**, Android back, or the gate done, the runner moving on or the stage's play ending: 0.35 s back to the runner, then an ink splash |
 | Misses and waits | a stroke that wouldn't do the job is wiped and Dot steps out worried with why (the wipe's tip); 7 s waiting with nothing drawn and Dot knocks twice on the glass ("Hello? Draw along the dotted line...") unless it's already out explaining |
-| Welcome | the very first launch, 1 s after the title appears: Dot steps off the title (a plain dot left there) over a veil, looking at the player, in four pages (hello; it rolls, you draw; pressure makes the ink; first your touch, then a few lessons), any tap (or Android back) moving on. Then the lessons, which can't be skipped, then 1-1 (see [Tutorial](#tutorial)). Never again once the lessons are done (saved as `metDot`) |
+| Welcome | the very first launch, 1 s after the title appears: Dot steps off the title (a dashed outline left there) over a veil, looking at the player, in four pages (hello; it rolls, you draw; pressure makes the ink; first your touch, then a few lessons), any tap (or Android back) moving on. Then the lessons, which can't be skipped, then 1-1 (see [Tutorial](#tutorial)). Never again once the lessons are done (saved as `metDot`) |
 | Title | sat at the end of the name (it rolls in), looking about, at the pen when it hovers, pleased while a button is held; "Hi! Grab your S Pen." after 1.1 s, then a tip every 8.5 s; dozes after 30 s alone |
 | Pause | peeks over the top of the pause card with a line ("Take your time."), dozes after 6 s |
 | Ending | rolls along the line wide-mouthed, then "We did it!" and a wink |

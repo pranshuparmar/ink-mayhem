@@ -28,8 +28,26 @@ interface Platform {
     /** Short haptic pulse; [amplitude] is 1..255. */
     fun vibrate(millis: Int, amplitude: Int)
 
+    /**
+     * A patterned buzz: [timings] alternate off and on (ms, starting with a pause), [amplitudes]
+     * one per timing (0 for the pauses, 1..255 for the pulses). Desktop: nothing.
+     */
+    fun vibratePattern(timings: LongArray, amplitudes: IntArray) = Unit
+
+    /**
+     * Saves a picture (a page torn out, a result card) where the player can find it and offers
+     * the share sheet. [title] names it in the share sheet. Desktop: nothing.
+     */
+    fun shareImage(file: File, title: String) = Unit
+
     /** Where settings, calibration and scores are kept. A replay substitutes the recorded ones. */
     fun preferences(): Preferences = Gdx.app.getPreferences("ink-mayhem")
+
+    /**
+     * Whether this build may send anonymous play counts ([PlayCounts]): Android release builds
+     * only. Debug builds, the desktop launcher, replays and tests never do.
+     */
+    val countsPlays: Boolean get() = false
 
     /** Version name for recordings, e.g. "0.1.0-debug (42)". */
     val appVersion: String get() = ""

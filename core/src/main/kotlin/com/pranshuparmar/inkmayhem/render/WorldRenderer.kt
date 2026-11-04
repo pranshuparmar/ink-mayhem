@@ -44,6 +44,12 @@ class WorldRenderer(
      * [guideTok], or a dashed ring round (x0, y0) when [guideRing]. Off when [guideOn] is false.
      */
     var guideOn = false
+
+    /**
+     * Ask Dot: the next strokes of the stage's scripted solution, shown as dotted lines in their
+     * ink's colour (world metres). Only drawn, never touched by the simulation.
+     */
+    val hints = ArrayList<com.pranshuparmar.inkmayhem.game.StageLayout.Stroke>()
     var guideRing = false
     val guide = FloatArray(4)
     var guideTok = Tok.ROPE
@@ -197,6 +203,7 @@ class WorldRenderer(
         drawCrumbles(sim, pal, vx0, vx1, px)
         drawWarps(sim, pal, vx0, vx1, px)
         drawGates(sim, pal, px)
+        if (hints.isNotEmpty()) drawHints(sim, pal)
         if (guideOn) drawGuide(sim, pal, px)
         drawLifts(sim, pal, px)
         drawSeesaws(sim, pal, px)
@@ -339,7 +346,11 @@ class WorldRenderer(
             shapes.color(pal[Tok.GRAPHITE], 0.32f)
             val a0 = max(r.x, vx0)
             val a1 = min(r.x + r.w, vx1)
-            var d = floor((a0 - h - r.x) / HATCH) * HATCH + r.x
+            // each hatch is a line x + y = k on the block's own grid (k from its top-left corner),
+            // so the hatching stays put while the screen's bottom edge cuts the block off
+            val base = r.y + h
+            val k0 = r.x + r.y
+            var d = floor((a0 - h + base - k0) / HATCH) * HATCH + k0 - base
             while (d < a1) {
                 hatch(d, r.y + h, h, r.x, r.x + r.w, px)
                 d += HATCH
@@ -431,7 +442,9 @@ class WorldRenderer(
         val h = bottom - min(r.y, r.yR)
         val a0 = max(r.x, vx0)
         val a1 = min(x1, vx1)
-        var d = floor((a0 - h - r.x) / HATCH) * HATCH + r.x
+        // on the slope's own grid (lines x + y = k), so the screen's bottom edge doesn't drag it
+        val k0 = r.x + r.y
+        var d = floor((a0 - h + bottom - k0) / HATCH) * HATCH + k0 - bottom
         while (d < a1) {
             // the hatch rises from (d, bottom) at 45° until it meets the slope
             val xm = (bottom + d - r.y + k * r.x) / (1f + k)
@@ -447,26 +460,33 @@ class WorldRenderer(
         sideEdge(x1, r.yR, bottom, r.edgeRTo, r.edgeRFrom, lw)
     }
 
-    /** Castle masonry: mortar rows every 0.5 m, joints every 1 m, offset on alternate rows. */
-    private fun bricks(x: Float, y: Float, w: Float, h: Float, a0: Float, a1: Float, pal: Palette, px: Float) {
+    /**
+     * Castle masonry over (x, y, w, h): mortar rows every 0.5 m, joints every 1 m, offset on
+     * alternate rows. The courses are laid from [oy], the wall's own top, so a wall cut off by the
+     * screen's edge (a roof running up off screen) keeps its bricks still as the camera moves.
+     */
+    private fun bricks(x: Float, y: Float, w: Float, h: Float, a0: Float, a1: Float, pal: Palette, px: Float, oy: Float = y) {
         shapes.color(pal[Tok.GRAPHITE], 0.3f)
         val rowH = 0.5f
-        var row = 0
-        var yy = y + rowH
-        while (yy < y + h) {
-            shapes.rect(a0, yy - px / 2f, a1 - a0, px)
-            yy += rowH
+        val bottom = y + h
+        val first = floor((y - oy) / rowH).toInt()
+        var k = first + 1
+        while (oy + k * rowH < bottom) {
+            val yy = oy + k * rowH
+            if (yy > y) shapes.rect(a0, yy - px / 2f, a1 - a0, px)
+            k++
         }
-        yy = y
-        while (yy < y + h) {
-            val off = if (row % 2 == 0) 0f else 0.5f
+        k = first
+        while (oy + k * rowH < bottom) {
+            val r0 = max(y, oy + k * rowH)
+            val r1 = min(bottom, oy + (k + 1) * rowH)
+            val off = if (Math.floorMod(k, 2) == 0) 0f else 0.5f
             var xx = floor((a0 - x - off) / 1f) * 1f + x + off
             while (xx < a1) {
-                if (xx > x && xx < x + w) shapes.rect(xx - px / 2f, yy, px, min(rowH, y + h - yy))
+                if (xx > x && xx < x + w && r1 > r0) shapes.rect(xx - px / 2f, r0, px, r1 - r0)
                 xx += 1f
             }
-            yy += rowH
-            row++
+            k++
         }
     }
 
@@ -485,10 +505,11 @@ class WorldRenderer(
         if (h <= 0f) return
         shapes.color(pal[Tok.ROCK]).rect(c.x, top, c.w, h)
         if (brick) {
-            bricks(c.x, top, c.w, h, max(c.x, vx0), min(c.x + c.w, vx1), pal, px)
+            bricks(c.x, top, c.w, h, max(c.x, vx0), min(c.x + c.w, vx1), pal, px, oy = c.y)
         } else {
             shapes.color(pal[Tok.GRAPHITE], 0.32f)
-            var d = c.x - h
+            // on the roof's own grid (its underside doesn't move), however much of it is on screen
+            var d = floor((-h) / HATCH) * HATCH + c.x
             while (d < c.x + c.w) {
                 hatch(d, top + h, h, c.x, c.x + c.w, px)
                 d += HATCH
@@ -814,7 +835,7 @@ class WorldRenderer(
         val sq = run.squash
         val sy = 1f - sq * 0.2f
         val r = run.r
-        // just lost Bold: it blinks while nothing can hurt it
+        // just stopped being a Glob: it blinks while nothing can hurt it
         val a = if (sim.simT < run.safeUntil && sin(sim.simT * 30f) > 0f) 0.35f else 1f
         // the character: upright whatever way the ball rolls, its face set by what's going on
         buddy.draw(pal, persona.state, cx, cy, r, run.dir.toFloat(), px, a, extraSquash = sq * 0.5f, stretch = persona.stretch, bold = run.bold, faceless = dotOut)
@@ -855,13 +876,51 @@ class WorldRenderer(
         Ink.BEAM -> Tok.BEAM
     }
 
-    /** A hint fades in as the runner nears it and out once it is passed. */
+    /**
+     * A hint fades in as the runner nears it and out once it is passed; the one the runner is
+     * waiting at shows in full, however far ahead it is (a boulder's runway can stop the runner
+     * well short of the gap).
+     */
     private fun gateAlpha(sim: GameSim, g: com.pranshuparmar.inkmayhem.game.Gate): Float {
         if (g.passed) return (1f - (sim.simT - g.passedAt) / 0.5f).coerceIn(0f, 1f)
+        if (sim.waitingAt === g) return 1f
         val pending = sim.pendingGate
         if (pending != null && g.x0 > pending.x1) return 0f
         val ahead = g.gx0 - sim.runner.body.position.x
         return (1f - (ahead - GATE_SHOW) / 3f).coerceIn(0f, 1f)
+    }
+
+    /** Ask Dot's dotted lines: each scripted stroke ahead, dots every 0.28 m and an arrow at its end. */
+    private fun drawHints(sim: GameSim, pal: Palette) {
+        val pulse = 0.55f + 0.35f * sin(sim.realTime.toFloat() * 4f)
+        hints.fastEach { h ->
+            val xs = h.xs
+            val ys = h.ys
+            if (xs.size < 2) return@fastEach
+            shapes.color(pal[inkTok(h.ink)], pulse)
+            var carry = 0f
+            for (i in 1 until xs.size) {
+                val dx = xs[i] - xs[i - 1]
+                val dy = ys[i] - ys[i - 1]
+                val len = kotlin.math.hypot(dx, dy)
+                if (len <= 0f) continue
+                var d = carry
+                while (d <= len) {
+                    shapes.circle(xs[i - 1] + dx * d / len, ys[i - 1] + dy * d / len, 0.08f)
+                    d += 0.28f
+                }
+                carry = d - len
+            }
+            val n = xs.size - 1
+            val dx = xs[n] - xs[n - 1]
+            val dy = ys[n] - ys[n - 1]
+            val len = kotlin.math.hypot(dx, dy).coerceAtLeast(1e-4f)
+            val ux = dx / len
+            val uy = dy / len
+            val ax = xs[n] + ux * 0.35f
+            val ay = ys[n] + uy * 0.35f
+            shapes.triangle(ax, ay, ax - ux * 0.35f - uy * 0.22f, ay - uy * 0.35f + ux * 0.22f, ax - ux * 0.35f + uy * 0.22f, ay - uy * 0.35f - ux * 0.22f)
+        }
     }
 
     /** The hints: a dotted guide in the ink's colour with an arrow, where to draw it. */

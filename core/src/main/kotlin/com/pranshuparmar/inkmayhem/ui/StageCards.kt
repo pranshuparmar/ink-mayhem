@@ -45,7 +45,12 @@ internal fun drawGoldMarks(shapes: Shapes, pal: Palette, x: Float, cy: Float, r:
  * tab opens, locked or not, so its stages can be looked over (a padlock marks a locked world);
  * only open stages play.
  */
-class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
+class StageSelectCard(
+    private val fonts: Fonts,
+    private val store: StageStore,
+    /** Debug builds: every stage plays, cleared before it or not (for testing). */
+    private val unlockAll: Boolean = false,
+) {
     val box = Box()
     /** Picks up where the player left off: the next stage not yet cleared. */
     val play = Box()
@@ -70,7 +75,7 @@ class StageSelectCard(private val fonts: Fonts, private val store: StageStore) {
 
     fun refresh() {
         for (i in all.indices) {
-            open[i] = StageSession.unlocked(all[i], store)
+            open[i] = unlockAll || StageSession.unlocked(all[i], store)
             stars[i] = store.stars(all[i].id)
             gold[i] = store.gold(all[i].id)
             val best = store.best(all[i].id)
@@ -293,6 +298,8 @@ class GameOverCard(private val fonts: Fonts) {
  */
 class ClearCard(private val fonts: Fonts) {
     val box = Box()
+    /** Saves a result card for this clear and offers the share sheet. */
+    val share = Box()
     val next = Box()
     val retry = Box()
     val stages = Box()
@@ -317,6 +324,8 @@ class ClearCard(private val fonts: Fonts) {
         stages.set(box.right - 20f - sw, y, sw, 42f)
         retry.set(stages.x - 8f - rw, y, rw, 42f)
         next.set(retry.x - 8f - nw, y, nw, 42f)
+        val shw = text.width(fonts.get(Face.UI_BOLD, 13f), SHARE) + 26f
+        share.set(box.right - 20f - shw, box.y + 22f, shw, 32f)
         // stars pop in from 0.4 s, 0.45 s apart (0 → 1.25 → 1)
         for (i in 0 until 3) {
             val u = (t - STAR_T0 - i * STAR_DT) / 0.25f
@@ -347,6 +356,7 @@ class ClearCard(private val fonts: Fonts) {
 
     fun targetAt(x: Float, y: Float): Any? = when {
         next.contains(x, y) -> next
+        share.contains(x, y) -> share
         retry.contains(x, y) -> retry
         stages.contains(x, y) -> stages
         else -> null
@@ -371,6 +381,7 @@ class ClearCard(private val fonts: Fonts) {
             }
         }
         Widgets.button(shapes, pal, next, primary = true, enabled = true, pressed = press.isPressed(next))
+        Widgets.button(shapes, pal, share, primary = false, enabled = true, pressed = press.isPressed(share))
         Widgets.button(shapes, pal, retry, primary = false, enabled = true, pressed = press.isPressed(retry))
         Widgets.button(shapes, pal, stages, primary = false, enabled = true, pressed = press.isPressed(stages))
     }
@@ -412,6 +423,7 @@ class ClearCard(private val fonts: Fonts) {
         Widgets.buttonLabel(text, font, pal, next, if (hasNext) "Next" else LAST, primary = true, enabled = true)
         Widgets.buttonLabel(text, font, pal, retry, "Retry", primary = false, enabled = true)
         Widgets.buttonLabel(text, font, pal, stages, "Stages", primary = false, enabled = true)
+        Widgets.buttonLabel(text, fonts.get(Face.UI_BOLD, 13f), pal, share, SHARE, primary = false, enabled = true)
     }
 
     companion object {
@@ -424,6 +436,7 @@ class ClearCard(private val fonts: Fonts) {
         private const val TOTAL = "TOTAL"
         private const val TOTAL_BEST = "TOTAL · NEW BEST"
         private const val GOLD = "GOLD STARS"
+        const val SHARE = "Share"
         /** After the last stage the way on is the ending. */
         private const val LAST = "The end"
     }

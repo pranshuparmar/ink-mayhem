@@ -53,6 +53,9 @@ interface GameEvents {
     /** Stages: the runner passed the midway bookmark. */
     fun checkpoint() {}
 
+    /** The player rubbed out a stroke with the side button or the eraser end. */
+    fun erased() {}
+
     /** Stages: the runner crossed the finish line. */
     fun stageCleared() {}
 

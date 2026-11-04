@@ -203,12 +203,17 @@ class BuddyDrawer(private val shapes: Shapes) {
         // the body sits on its base: squashing lowers its top, not its bottom
         val by = cy + r * (1f - sy)
         val ink = pal[Tok.INK]
+        if (faceless) {
+            // Dot has stepped out of the page: the spot it left is an empty, dashed outline of it
+            // and a faint pool of ink (a solid blank ball read oddly, a white one on a dark page)
+            shapes.color(ink, a * 0.3f).ellipse(cx, by + r * sy * 0.82f, r * sx * 0.78f, r * sy * 0.22f)
+            shapes.color(ink, a * 0.8f).ring(cx, by, r, 1.8f * lw, 4.5f * lw, 3.5f * lw)
+            return
+        }
         if (bold) shapes.color(pal[Tok.ACCENT], a).ellipse(cx, by, r * sx + 2.4f * lw, r * sy + 2.4f * lw)
         shapes.color(ink, a).ellipse(cx, by, r * sx, r * sy)
         // a little ink pooled at the base, so it reads as a blot rather than a ball
         shapes.color(ink, a).ellipse(cx, by + r * sy * 0.82f, r * sx * 0.78f, r * sy * 0.22f)
-        // Dot has stepped out of the page: what's left rolling is just a dot of ink
-        if (faceless) return
 
         val fx = cx + dir * r * 0.14f * sx
         val ey = by - r * 0.5f * sy

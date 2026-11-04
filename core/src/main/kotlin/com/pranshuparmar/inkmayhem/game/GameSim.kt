@@ -132,7 +132,7 @@ class GameSim(
         private set
     var happyUntil = -10f
         private set
-    /** simT the runner last lost Bold or squashed something (the face reacts). */
+    /** simT the runner last stopped being a Glob or squashed something (the face reacts). */
     var ouchAt = -10f
         private set
     /** How many rope, spring and beam fixtures the runner is touching (by ink weight). */
@@ -208,6 +208,19 @@ class GameSim(
     var camRunnerY = 0.6f
     /** Tutorial: strokes cost nothing. */
     var unlimitedInk = false
+
+    /**
+     * Doodle mode: powers held for the whole run, a bit per [ItemKind] ordinal. A held Gold nib,
+     * Cloud chalk or Star nib works as if just picked up; a held Highlighter shows everything
+     * hidden from the start (strokes stay ink, so the page can still be drawn on).
+     */
+    var keptPowers = 0
+
+    /** Doodle mode: the runner is a Glob from the start and stays a Glob through every hit. */
+    var keepBold = false
+
+    /** The power is on: picked up, or held by Doodle mode. */
+    fun powered(kind: ItemKind): Boolean = runner.power == kind || keptPowers and (1 shl kind.ordinal) != 0
 
     // ---------------------------------------------------------------- stages
 
@@ -515,7 +528,24 @@ class GameSim(
         runnerHeld = true
         camFocusX = Float.NaN
         state = GameState.RUN
+        if (keepBold) setBold(true)
+        if (keptPowers and (1 shl ItemKind.HIGHLIGHTER.ordinal) != 0) revealAll()
         snapCamera()
+    }
+
+    /** Doodle mode's held Highlighter: everything hidden on the page shows from the start. */
+    private fun revealAll() {
+        stars.fastEach { it.hidden = false }
+        golds.fastEach { it.hidden = false }
+        warps.fastEach { it.hidden = false }
+        hiddenBlocks.fastEach { b ->
+            val r = ink.addRect(b.x, b.top, b.w, b.depth)
+            r.level = b.top
+            blocks += r
+        }
+        hiddenBlocks.clear()
+        hiddenBoxes.fastEach { addBox(it) }
+        hiddenBoxes.clear()
     }
 
     /**
@@ -566,7 +596,16 @@ class GameSim(
         }
         // and so does the ink tide, though less: there's drawing to do ahead
         tides.fastEach { t -> if (t.up && t.ebbAt.isNaN()) frac = max(frac, min(TIDE_FRAC, (runnerX - t.x + 1.2f) / vw)) }
-        return runnerX - vw * frac
+        var x = runnerX - vw * frac
+        // waiting at a first run's stop: its whole guide comes into view, however far ahead it is
+        // (a narrow screen that can't show both lets the runner slip off the left edge meanwhile)
+        val g = waitingAt
+        if (g != null) {
+            val left = min(g.gx0, g.gx1) - GATE_VIEW_MARGIN
+            val right = max(g.gx0, g.gx1) + GATE_VIEW_MARGIN
+            if (right > x + vw) x = min(right - vw, left)
+        }
+        return x
     }
 
     private fun die(why: String, kind: DeathKind) {
@@ -717,14 +756,14 @@ class GameSim(
             return
         }
         val highlighting = runner.power == ItemKind.HIGHLIGHTER
-        if (inkLeft <= 0.5f && !highlighting && runner.power != ItemKind.GOLD_NIB) {
+        if (inkLeft <= 0.5f && !highlighting && !powered(ItemKind.GOLD_NIB) && !unlimitedInk) {
             events.toast(OUT_OF_INK)
             return
         }
         drawing = Drawing(pointer).also { d ->
             d.highlight = highlighting
-            d.goldNib = runner.power == ItemKind.GOLD_NIB
-            d.chalk = runner.power == ItemKind.CHALK
+            d.goldNib = powered(ItemKind.GOLD_NIB)
+            d.chalk = powered(ItemKind.CHALK)
             d.gate = if (learning || gateTuning) gateAt(x) else null
             d.forced = d.gate?.takeIf { gateTuning && it.tunes }
         }
@@ -944,16 +983,16 @@ class GameSim(
         Creature.BEETLE -> FixtureTag.BEETLE
     }
 
-    /** A pickup caught: the marker cap makes the runner Bold; the others are timed powers. */
+    /** A pickup caught: the marker cap makes the runner a Glob; the others are timed powers. */
     private fun applyPower(kind: ItemKind, x: Float, y: Float) {
         happyUntil = simT + HAPPY_S * 2f
         events.burst(x, y, 16, 2.4f, Tok.ACCENT)
         if (kind == ItemKind.CAP) {
             if (!runner.bold) setBold(true)
             score += CAP_POINTS
-            events.pop(x, y - 1.2f, "Bold! +$CAP_POINTS", Tok.ACCENT)
+            events.pop(x, y - 1.2f, "Glob! +$CAP_POINTS", Tok.ACCENT)
             events.sound(Sfx.BOLD)
-            events.toast("Bold: you survive one hit and flatten Blots.", force = true)
+            events.toast("Glob: you survive one hit and flatten Blots.", force = true)
             return
         }
         runner.power = kind
@@ -1025,6 +1064,7 @@ class GameSim(
         inkLeft = min(INK_MAX, inkLeft + s.cost * 0.5f)
         events.burst(x, y, 10, 2f, Tok.MUTED)
         events.sound(Sfx.ERASE)
+        events.erased()
         ink.removeStroke(s)
     }
 
@@ -1275,7 +1315,7 @@ class GameSim(
         return n >= 2 && d.startAnchored && tipHooks
     }
 
-    // ---------------------------------------------------------------- stars, Blots, boxes, Bold
+    // ---------------------------------------------------------------- stars, Blots, boxes, the Glob
 
     // ---------------------------------------------------------------- bosses
 
@@ -1488,13 +1528,13 @@ class GameSim(
     }
 
     /**
-     * A Blot or spikes got the runner. Bold takes the hit: the runner shrinks back and nothing
+     * A Blot or spikes got the runner. A Glob takes the hit: the runner shrinks back and nothing
      * hurts for [SAFE_S]. Otherwise it's a life.
      */
     private fun hurt(why: String, kind: DeathKind) {
         if (state != GameState.RUN || simT < runner.safeUntil) return
         // the Star nib: nothing hurts
-        if (runner.power == ItemKind.STAR_NIB) return
+        if (powered(ItemKind.STAR_NIB)) return
         val rb = runner.body
         val p = rb.position
         if (!runner.bold) {
@@ -1502,7 +1542,7 @@ class GameSim(
             die(why, kind)
             return
         }
-        setBold(false)
+        if (!keepBold) setBold(false)
         runner.safeUntil = simT + SAFE_S
         ouchAt = simT
         events.burst(p.x, p.y, 12, 2.5f, Tok.ACCENT)
@@ -1528,7 +1568,7 @@ class GameSim(
         return above
     }
 
-    /** The marker cap on or off: Bold is a bigger runner of the same weight. */
+    /** The marker cap on or off: a Glob is a bigger runner of the same weight. */
     private fun setBold(on: Boolean) {
         runner.bold = on
         runner.r = if (on) BOLD_R else RUNNER_R
@@ -1565,7 +1605,7 @@ class GameSim(
 
     /**
      * Blots wake when the runner comes within [BLOT_WAKE], then walk at it (pacing their patrol,
-     * turning round at walls). Touching one from above squashes it and bounces the runner; a Bold
+     * turning round at walls). Touching one from above squashes it and bounces the runner; a Glob
      * runner flattens it whatever the angle; any other touch hurts.
      */
     private fun updateBlots(px: Float, py: Float) {
@@ -1599,7 +1639,7 @@ class GameSim(
             val stomp = (rv.y > 0.5f && py < q.y - 0.15f) || simT - bounceAt < BOUNCE_STOMP_S
             if (d > runner.r + b.kind.r + if (stomp) STOMP_SLACK else 0.04f) return@fastEach
             when {
-                runner.power == ItemKind.STAR_NIB -> squash(b, "Zap! +$BLOT_POINTS", atRunner = true)
+                powered(ItemKind.STAR_NIB) -> squash(b, "Zap! +$BLOT_POINTS", atRunner = true)
                 // an Eraser is too rubbery to squash: the runner bounces off it
                 stomp && b.kind == Creature.ERASER -> {
                     rb.setLinearVelocity(rv.x, STOMP_VY)
@@ -1643,7 +1683,7 @@ class GameSim(
             val rv = rb.linearVelocity
             val bouncing = simT - bounceAt < BOUNCE_STOMP_S || (rv.y > 0.5f && py < q.y - 0.15f)
             when {
-                bouncing || runner.bold || runner.power == ItemKind.STAR_NIB -> crumplePlane(pl, "Crumpled! +$PLANE_POINTS")
+                bouncing || runner.bold || powered(ItemKind.STAR_NIB) -> crumplePlane(pl, "Crumpled! +$PLANE_POINTS")
                 simT < runner.safeUntil -> Unit
                 else -> {
                     crumplePlane(pl, null)
@@ -2211,7 +2251,7 @@ class GameSim(
         const val STOMP_SLACK = 0.3f
         /** A spring bounce (about 1.9 s in the air) squashes any Blot met this long after it. */
         const val BOUNCE_STOMP_S = 2.3f
-        /** The marker cap and Bold: cap size, slide speed and hop, points, Bold's radius and the safe time after a hit. */
+        /** The marker cap and the Glob: cap size, slide speed and hop, points, the Glob's radius and the safe time after a hit. */
         const val CAP_R = 0.24f
         const val CAP_SPEED = 2.2f
         const val CAP_HOP = -4f
@@ -2281,6 +2321,8 @@ class GameSim(
         const val NUDGE_S = 7f
         /** A bridge's hook counts for a side if it is within this of that side's end of the guide. */
         const val EDGE_REACH = 0.9f
+        /** Room kept round a waited-at gate's guide when the camera brings it into view. */
+        const val GATE_VIEW_MARGIN = 0.8f
         const val TIP_IDLE = "Draw along the dotted line with the S Pen."
         const val TIP_BRIDGE = "That one fell. Start on the ground on this side and end on the ground on the far side."
         const val TIP_PAD = "Lay the spring flat on the ground, along the dotted line."
