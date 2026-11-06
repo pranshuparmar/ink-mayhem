@@ -13,6 +13,16 @@ press decides what your ink becomes.
   <sub>No ads, no account, plays offline · S Pen only: fingers tap buttons but never draw · Android 9 or newer</sub>
 </p>
 
+## Why an S Pen game
+
+I like having an S Pen in my phone, but like a lot of Galaxy owners, I hardly use it. Most days
+it's easy to forget it's even there. I wanted to do something with it: something only an S Pen
+can do, and fingers can't. That's when the idea hit me: **Ink Mayhem, a game you can only play
+with an S Pen.**
+
+A finger can't tell the screen how hard it's pressing, so that became the whole game: how hard
+you press decides what your ink becomes.
+
 ## How it plays
 
 You never steer Dot. It rolls by itself, and the only thing you control is the ink:
